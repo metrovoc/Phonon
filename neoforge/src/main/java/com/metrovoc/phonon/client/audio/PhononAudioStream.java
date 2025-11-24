@@ -24,6 +24,7 @@ import java.nio.file.StandardOpenOption;
  */
 public class PhononAudioStream implements AudioStream {
     private final long decoder;
+    private final ByteBuffer fileBuffer;  // MUST keep reference for STBVorbis
     private final AudioFormat format;
     private final int channels;
     private final int sampleRate;
@@ -33,9 +34,8 @@ public class PhononAudioStream implements AudioStream {
 
     public PhononAudioStream(Path oggFile) throws IOException {
         // Read entire file into memory (required by STBVorbis)
-        ByteBuffer fileBuffer;
         try (FileChannel channel = FileChannel.open(oggFile, StandardOpenOption.READ)) {
-            fileBuffer = MemoryUtil.memAlloc((int) channel.size());
+            this.fileBuffer = MemoryUtil.memAlloc((int) channel.size());
             channel.read(fileBuffer);
             fileBuffer.flip();
         }
@@ -62,8 +62,6 @@ public class PhononAudioStream implements AudioStream {
                 channels, sampleRate, totalSamples);
         }
 
-        MemoryUtil.memFree(fileBuffer);
-
         // Output format: ALWAYS MONO, 16-bit signed
         this.format = new AudioFormat(
             sampleRate,
@@ -82,13 +80,13 @@ public class PhononAudioStream implements AudioStream {
     @Override
     public ByteBuffer read(int bufferSize) throws IOException {
         if (closed) {
-            return ByteBuffer.allocate(0);
+            return MemoryUtil.memAlloc(0);  // Empty direct buffer
         }
 
         // Calculate samples to read (2 bytes per sample)
         int samplesToRead = bufferSize / 2;
 
-        ByteBuffer outputBuffer = ByteBuffer.allocate(samplesToRead * 2);
+        ByteBuffer outputBuffer = MemoryUtil.memAlloc(samplesToRead * 2);  // MUST be direct memory
         ShortBuffer outputShorts = outputBuffer.asShortBuffer();
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -166,6 +164,7 @@ public class PhononAudioStream implements AudioStream {
     public void close() {
         if (!closed) {
             STBVorbis.stb_vorbis_close(decoder);
+            MemoryUtil.memFree(fileBuffer);  // Release the file buffer
             closed = true;
         }
     }

@@ -45,8 +45,8 @@ public class AudioPlayer {
         // Check if audio is cached
         Path cachedAudio = AudioCache.getInstance().getCachedAudio(resourceId).orElse(null);
         if (cachedAudio == null || !Files.exists(cachedAudio)) {
-            Phonon.LOGGER.warn("Audio {} not cached yet, requesting download", resourceId);
-            // TODO: Send RequestAudioPacket to server
+            // This should never happen - ClientSpeakerManager should download before calling play()
+            Phonon.LOGGER.error("Audio {} not cached (caller should have downloaded first)", resourceId);
             return;
         }
 

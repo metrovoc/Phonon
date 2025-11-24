@@ -39,7 +39,11 @@ public class SpeakerBlockEntity extends BlockEntity {
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.saveAdditional(tag, provider);
-        tag.putUUID("resourceId", playback.resourceId());
+
+        // Save null-safe: only write UUID if not null
+        if (playback.resourceId() != null) {
+            tag.putUUID("resourceId", playback.resourceId());
+        }
         tag.putLong("startTime", playback.startTimeMs());
         tag.putFloat("volume", playback.volume());
         tag.putBoolean("playing", playback.playing());
@@ -49,16 +53,32 @@ public class SpeakerBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.loadAdditional(tag, provider);
 
-        // Handle empty/first-time blocks gracefully
-        if (!tag.contains("resourceId")) {
-            playback = PlaybackState.STOPPED;
-            return;
-        }
+        // Defensive loading: gracefully handle missing or corrupt data
+        try {
+            // If no playing state or not playing, reset to STOPPED
+            if (!tag.contains("playing") || !tag.getBoolean("playing")) {
+                playback = PlaybackState.STOPPED;
+                return;
+            }
 
-        UUID resourceId = tag.getUUID("resourceId");
-        long startTime = tag.getLong("startTime");
-        float volume = tag.getFloat("volume");
-        boolean playing = tag.getBoolean("playing");
-        playback = new PlaybackState(resourceId, startTime, volume, playing);
+            // Playing state requires valid resourceId
+            if (!tag.contains("resourceId")) {
+                playback = PlaybackState.STOPPED;
+                return;
+            }
+
+            UUID resourceId = tag.getUUID("resourceId");
+            if (resourceId == null) {
+                playback = PlaybackState.STOPPED;
+                return;
+            }
+
+            long startTime = tag.getLong("startTime");
+            float volume = tag.getFloat("volume");
+            playback = new PlaybackState(resourceId, startTime, volume, true);
+        } catch (Exception e) {
+            // Corrupt data: reset to STOPPED rather than crash world loading
+            playback = PlaybackState.STOPPED;
+        }
     }
 }

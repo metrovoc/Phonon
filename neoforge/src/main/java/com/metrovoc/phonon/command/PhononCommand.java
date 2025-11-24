@@ -42,6 +42,22 @@ public class PhononCommand {
         String name = StringArgumentType.getString(ctx, "name");
         String url = StringArgumentType.getString(ctx, "url");
 
+        // MVP: Only accept .ogg direct URLs
+        if (!url.toLowerCase().endsWith(".ogg")) {
+            ctx.getSource().sendFailure(Component.literal(
+                "MVP only supports direct .ogg URLs. Example: https://example.com/music.ogg"
+            ));
+            return 0;
+        }
+
+        // Validate URL format
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            ctx.getSource().sendFailure(Component.literal(
+                "URL must start with http:// or https://"
+            ));
+            return 0;
+        }
+
         AudioManager manager = AudioManager.getInstance();
         if (manager.getResourceByName(name).isPresent()) {
             ctx.getSource().sendFailure(Component.literal("Resource '" + name + "' already exists"));

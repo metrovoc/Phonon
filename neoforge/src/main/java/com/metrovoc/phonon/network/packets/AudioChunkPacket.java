@@ -15,7 +15,7 @@ import java.util.UUID;
  * Audio file chunk transfer (server -> client).
  * For MVP, we send URL instead of actual chunks.
  */
-public record AudioChunkPacket(UUID resourceId, String url) implements CustomPacketPayload {
+public record AudioChunkPacket(UUID resourceId, byte[] data, int chunkIndex, int totalChunks) implements CustomPacketPayload {
 
     public static final Type<AudioChunkPacket> TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "audio_chunk"));
@@ -23,8 +23,12 @@ public record AudioChunkPacket(UUID resourceId, String url) implements CustomPac
     public static final StreamCodec<ByteBuf, AudioChunkPacket> CODEC = StreamCodec.composite(
         UUIDCodec.STREAM_CODEC,
         AudioChunkPacket::resourceId,
-        ByteBufCodecs.STRING_UTF8,
-        AudioChunkPacket::url,
+        ByteBufCodecs.BYTE_ARRAY,
+        AudioChunkPacket::data,
+        ByteBufCodecs.VAR_INT,
+        AudioChunkPacket::chunkIndex,
+        ByteBufCodecs.VAR_INT,
+        AudioChunkPacket::totalChunks,
         AudioChunkPacket::new
     );
 
@@ -35,7 +39,7 @@ public record AudioChunkPacket(UUID resourceId, String url) implements CustomPac
 
     public static void handle(AudioChunkPacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
-            AudioCache.getInstance().downloadAudio(packet.resourceId, packet.url);
+            AudioCache.getInstance().receiveChunk(packet.resourceId, packet.data, packet.chunkIndex, packet.totalChunks);
         });
     }
 }

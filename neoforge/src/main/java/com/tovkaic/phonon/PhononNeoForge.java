@@ -39,9 +39,7 @@ public class PhononNeoForge {
             .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
             .resolve("phonon_audio.json");
 
-        for (AudioResource resource : AudioPersistence.load(dataFile)) {
-            AudioManager.getInstance().addResource(resource);
-        }
+        AudioManager.getInstance().loadResources(AudioPersistence.load(dataFile));
 
         Phonon.LOGGER.info("Loaded {} audio resources", AudioManager.getInstance().getAllResources().size());
     }

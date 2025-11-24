@@ -27,6 +27,14 @@ public class ClientSpeakerManager {
     public void updateSpeaker(BlockPos pos, PlaybackState playback) {
         if (playback.playing()) {
             speakers.put(pos, playback);
+
+            // Trigger audio download if not cached
+            if (!AudioCache.getInstance().getCachedAudio(playback.resourceId()).isPresent()) {
+                ClientAudioManager.getInstance().getResource(playback.resourceId()).ifPresent(resource -> {
+                    AudioCache.getInstance().downloadAudio(resource.id(), resource.url());
+                });
+            }
+
             com.tovkaic.phonon.client.audio.AudioPlayer.getInstance()
                 .play(pos, playback, playback.resourceId());
         } else {

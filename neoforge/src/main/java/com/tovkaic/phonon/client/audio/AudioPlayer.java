@@ -3,25 +3,27 @@ package com.tovkaic.phonon.client.audio;
 import com.tovkaic.phonon.Phonon;
 import com.tovkaic.phonon.audio.PlaybackState;
 import com.tovkaic.phonon.client.AudioCache;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Audio player using OpenAL for 3D positioned playback.
+ * Audio player using Minecraft's SoundManager.
  *
  * Features:
- * - Direct OpenAL control for precise 3D positioning
- * - Automatic stereo-to-mono downmix (SPR compatible)
+ * - Plays through official audio pipeline (SPR compatible)
+ * - Automatic stereo-to-mono downmix (handled by PhononAudioStream)
  * - Timestamp-based seeking for perfect sync
- * - Distance attenuation matching Minecraft
+ * - Respects Minecraft volume settings
  */
 public class AudioPlayer {
     private static AudioPlayer instance;
-    private final Map<BlockPos, OpenALAudioSource> playingSources = new ConcurrentHashMap<>();
+    private final Map<BlockPos, SpeakerSoundInstance> playingSounds = new ConcurrentHashMap<>();
 
     private AudioPlayer() {}
 
@@ -42,7 +44,7 @@ public class AudioPlayer {
     public void play(BlockPos pos, PlaybackState playback, UUID resourceId) {
         // Check if audio is cached
         Path cachedAudio = AudioCache.getInstance().getCachedAudio(resourceId).orElse(null);
-        if (cachedAudio == null) {
+        if (cachedAudio == null || !Files.exists(cachedAudio)) {
             Phonon.LOGGER.warn("Audio {} not cached yet, requesting download", resourceId);
             // TODO: Send RequestAudioPacket to server
             return;
@@ -56,16 +58,19 @@ public class AudioPlayer {
             long currentTime = System.currentTimeMillis();
             long playbackPosition = playback.getCurrentPositionMs(currentTime);
 
-            // Create and start OpenAL source
-            OpenALAudioSource source = new OpenALAudioSource(
-                cachedAudio,
-                pos,
-                playback.volume(),
-                playbackPosition
-            );
+            // Create audio stream
+            PhononAudioStream stream = new PhononAudioStream(cachedAudio);
 
-            source.play();
-            playingSources.put(pos, source);
+            // Seek to correct position
+            if (playbackPosition > 0) {
+                stream.seekMs(playbackPosition);
+            }
+
+            // Create sound instance and play through SoundManager
+            SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, playback.volume());
+            Minecraft.getInstance().getSoundManager().play(sound);
+
+            playingSounds.put(pos, sound);
 
             Phonon.LOGGER.info("Started playing audio {} at {} (seek {}ms)",
                 resourceId, pos, playbackPosition);
@@ -79,10 +84,9 @@ public class AudioPlayer {
      * Stop playback at a speaker position.
      */
     public void stop(BlockPos pos) {
-        OpenALAudioSource source = playingSources.remove(pos);
-        if (source != null) {
-            source.stop();
-            source.cleanup();
+        SpeakerSoundInstance sound = playingSounds.remove(pos);
+        if (sound != null) {
+            Minecraft.getInstance().getSoundManager().stop(sound);
             Phonon.LOGGER.info("Stopped audio at {}", pos);
         }
     }
@@ -91,9 +95,10 @@ public class AudioPlayer {
      * Update volume for a playing speaker.
      */
     public void setVolume(BlockPos pos, float volume) {
-        OpenALAudioSource source = playingSources.get(pos);
-        if (source != null) {
-            source.setVolume(volume);
+        SpeakerSoundInstance sound = playingSounds.get(pos);
+        if (sound != null) {
+            // Volume changes require restart (limitation of current implementation)
+            Phonon.LOGGER.warn("Volume change requires sound restart (not implemented yet)");
         }
     }
 
@@ -101,32 +106,24 @@ public class AudioPlayer {
      * Check if a speaker is currently playing.
      */
     public boolean isPlaying(BlockPos pos) {
-        OpenALAudioSource source = playingSources.get(pos);
-        return source != null && source.isPlaying();
+        return playingSounds.containsKey(pos);
     }
 
     /**
      * Stop all playback (called on disconnect).
      */
     public void stopAll() {
-        for (OpenALAudioSource source : playingSources.values()) {
-            source.stop();
-            source.cleanup();
+        for (SpeakerSoundInstance sound : playingSounds.values()) {
+            Minecraft.getInstance().getSoundManager().stop(sound);
         }
-        playingSources.clear();
+        playingSounds.clear();
         Phonon.LOGGER.info("Stopped all audio playback");
     }
 
     /**
-     * Cleanup sources that have finished playing.
+     * Cleanup sounds that have finished playing.
      */
     public void tick() {
-        playingSources.entrySet().removeIf(entry -> {
-            if (!entry.getValue().isPlaying()) {
-                entry.getValue().cleanup();
-                return true;
-            }
-            return false;
-        });
+        // SoundManager handles cleanup automatically
     }
 }

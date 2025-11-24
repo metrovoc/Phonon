@@ -33,6 +33,15 @@ public class AudioManager {
         }
     }
 
+    public void loadResources(List<AudioResource> resourceList) {
+        resources.clear();
+        nameIndex.clear();
+        for (AudioResource resource : resourceList) {
+            resources.put(resource.id(), resource);
+            nameIndex.put(resource.name().toLowerCase(), resource.id());
+        }
+    }
+
     public Optional<AudioResource> getResource(UUID id) {
         return Optional.ofNullable(resources.get(id));
     }

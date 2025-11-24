@@ -48,6 +48,13 @@ public class SpeakerBlockEntity extends BlockEntity {
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.loadAdditional(tag, provider);
+
+        // Handle empty/first-time blocks gracefully
+        if (!tag.contains("resourceId")) {
+            playback = PlaybackState.STOPPED;
+            return;
+        }
+
         UUID resourceId = tag.getUUID("resourceId");
         long startTime = tag.getLong("startTime");
         float volume = tag.getFloat("volume");

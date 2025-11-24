@@ -3,6 +3,8 @@ package com.tovkaic.phonon.menu;
 import com.tovkaic.phonon.audio.AudioResource;
 import com.tovkaic.phonon.audio.PlaybackState;
 import com.tovkaic.phonon.block.SpeakerBlockEntity;
+import com.tovkaic.phonon.network.packets.SyncSpeakerStatePacket;
+import com.tovkaic.phonon.platform.PlatformHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -23,7 +25,7 @@ public class SpeakerMenu extends AbstractContainerMenu {
     private final Level level;
 
     public SpeakerMenu(int containerId, Inventory playerInv, BlockPos speakerPos) {
-        super(null, containerId); // TODO: Register MenuType
+        super(com.tovkaic.phonon.registry.PhononRegistry.SPEAKER_MENU.get(), containerId);
         this.speakerPos = speakerPos;
         this.level = playerInv.player.level();
     }
@@ -39,15 +41,21 @@ public class SpeakerMenu extends AbstractContainerMenu {
         if (level.isClientSide) return;
 
         if (level.getBlockEntity(speakerPos) instanceof SpeakerBlockEntity speaker) {
+            long serverTime = System.currentTimeMillis();
             PlaybackState playback = new PlaybackState(
                 resourceId,
-                System.currentTimeMillis(),
+                serverTime,
                 volume,
                 true
             );
             speaker.setPlayback(playback);
 
-            // TODO: Send sync packet to all tracking players
+            // Send sync packet with server timestamp for clock sync
+            PlatformHelper.INSTANCE.sendToAllTracking(
+                level,
+                speakerPos,
+                new SyncSpeakerStatePacket(speakerPos, playback, serverTime)
+            );
         }
     }
 
@@ -60,7 +68,12 @@ public class SpeakerMenu extends AbstractContainerMenu {
         if (level.getBlockEntity(speakerPos) instanceof SpeakerBlockEntity speaker) {
             speaker.setPlayback(PlaybackState.STOPPED);
 
-            // TODO: Send sync packet to all tracking players
+            // Send sync packet with current server time
+            PlatformHelper.INSTANCE.sendToAllTracking(
+                level,
+                speakerPos,
+                new SyncSpeakerStatePacket(speakerPos, PlaybackState.STOPPED, System.currentTimeMillis())
+            );
         }
     }
 

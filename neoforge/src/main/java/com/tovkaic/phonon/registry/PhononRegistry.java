@@ -1,0 +1,48 @@
+package com.tovkaic.phonon.registry;
+
+import com.tovkaic.phonon.Constants;
+import com.tovkaic.phonon.block.SpeakerBlock;
+import com.tovkaic.phonon.block.SpeakerBlockEntity;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+import java.util.function.Supplier;
+
+public class PhononRegistry {
+    private static final DeferredRegister<Block> BLOCKS =
+        DeferredRegister.create(BuiltInRegistries.BLOCK, Constants.MOD_ID);
+
+    private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
+        DeferredRegister.create(BuiltInRegistries.BLOCK_ENTITY_TYPE, Constants.MOD_ID);
+
+    private static final DeferredRegister<Item> ITEMS =
+        DeferredRegister.create(BuiltInRegistries.ITEM, Constants.MOD_ID);
+
+    public static final Supplier<Block> SPEAKER_BLOCK =
+        BLOCKS.register("speaker", SpeakerBlock::new);
+
+    public static final Supplier<BlockEntityType<SpeakerBlockEntity>> SPEAKER_BLOCK_ENTITY =
+        BLOCK_ENTITIES.register("speaker", () ->
+            BlockEntityType.Builder.of(
+                SpeakerBlockEntity::new,
+                SPEAKER_BLOCK.get()
+            ).build(null)
+        );
+
+    public static final Supplier<Item> SPEAKER_ITEM =
+        ITEMS.register("speaker", () ->
+            new BlockItem(SPEAKER_BLOCK.get(), new Item.Properties())
+        );
+
+    public static void register(IEventBus modBus) {
+        SpeakerBlockEntity.setTypeSupplier(SPEAKER_BLOCK_ENTITY);
+        BLOCKS.register(modBus);
+        BLOCK_ENTITIES.register(modBus);
+        ITEMS.register(modBus);
+    }
+}

@@ -29,10 +29,4 @@ public class PhononClient {
     }
 }
 
-@EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
-class PhononClientTick {
-    @SubscribeEvent
-    public static void onClientTick(ClientTickEvent.Post event) {
-        com.tovkaic.phonon.client.audio.OpenALAudioPlayer.getInstance().tick();
-    }
-}
+

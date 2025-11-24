@@ -148,6 +148,49 @@ public class AudioCache {
         });
     }
 
+    public void receiveChunk(UUID resourceId, byte[] data, int chunkIndex, int totalChunks) {
+        try {
+            Path tempDir = cacheDir.resolve("temp");
+            Files.createDirectories(tempDir);
+            Path tempFile = tempDir.resolve(resourceId + ".part" + chunkIndex);
+            Files.write(tempFile, data);
+            
+            // Check if all chunks are received
+            boolean allReceived = true;
+            for (int i = 0; i < totalChunks; i++) {
+                if (!Files.exists(tempDir.resolve(resourceId + ".part" + i))) {
+                    allReceived = false;
+                    break;
+                }
+            }
+            
+            if (allReceived) {
+                Path finalFile = cacheDir.resolve(resourceId + ".ogg");
+                try (java.io.OutputStream out = Files.newOutputStream(finalFile)) {
+                    for (int i = 0; i < totalChunks; i++) {
+                        Path part = tempDir.resolve(resourceId + ".part" + i);
+                        Files.copy(part, out);
+                        Files.delete(part);
+                    }
+                }
+                cache.put(resourceId, finalFile);
+                Phonon.LOGGER.info("Reassembled audio {} from {} chunks", resourceId, totalChunks);
+                
+                // Notify waiting callbacks (if any)
+                // Note: In a real implementation, we'd track callbacks per resource
+            } else {
+                // Request next chunk
+                if (chunkIndex + 1 < totalChunks) {
+                    com.tovkaic.phonon.network.packets.RequestAudioPacket packet = 
+                        new com.tovkaic.phonon.network.packets.RequestAudioPacket(resourceId, chunkIndex + 1);
+                    net.neoforged.neoforge.network.PacketDistributor.sendToServer(packet);
+                }
+            }
+        } catch (IOException e) {
+            Phonon.LOGGER.error("Failed to handle chunk {} for {}", chunkIndex, resourceId, e);
+        }
+    }
+
     public void shutdown() {
         downloadExecutor.shutdown();
     }

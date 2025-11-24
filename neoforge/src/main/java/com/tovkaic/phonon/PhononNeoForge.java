@@ -28,6 +28,13 @@ public class PhononNeoForge {
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onPlayerJoin);
+
+        AudioManager.getInstance().setPacketSender((player, resourceId, data, chunkIndex, totalChunks) -> {
+            if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+                var packet = new com.tovkaic.phonon.network.packets.AudioChunkPacket(resourceId, data, chunkIndex, totalChunks);
+                net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer, packet);
+            }
+        });
     }
 
     private void onRegisterCommands(RegisterCommandsEvent event) {

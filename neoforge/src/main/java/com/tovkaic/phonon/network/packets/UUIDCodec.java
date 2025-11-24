@@ -3,20 +3,33 @@ package com.tovkaic.phonon.network.packets;
 import com.mojang.serialization.Codec;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
 /**
  * UUID codec for network serialization.
+ * Supports nullable UUIDs (used for stopped playback state).
  */
 public class UUIDCodec {
     public static final Codec<UUID> CODEC = Codec.STRING.xmap(UUID::fromString, UUID::toString);
 
     public static final StreamCodec<ByteBuf, UUID> STREAM_CODEC = StreamCodec.of(
         (buf, uuid) -> {
-            buf.writeLong(uuid.getMostSignificantBits());
-            buf.writeLong(uuid.getLeastSignificantBits());
+            if (uuid == null) {
+                buf.writeBoolean(false);
+            } else {
+                buf.writeBoolean(true);
+                buf.writeLong(uuid.getMostSignificantBits());
+                buf.writeLong(uuid.getLeastSignificantBits());
+            }
         },
-        buf -> new UUID(buf.readLong(), buf.readLong())
+        buf -> {
+            boolean present = buf.readBoolean();
+            if (!present) {
+                return null;
+            }
+            return new UUID(buf.readLong(), buf.readLong());
+        }
     );
 }

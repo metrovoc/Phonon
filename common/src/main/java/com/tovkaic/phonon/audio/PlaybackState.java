@@ -1,5 +1,7 @@
 package com.tovkaic.phonon.audio;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.UUID;
 
 /**
@@ -7,13 +9,13 @@ import java.util.UUID;
  * Contains everything needed to know "what's playing and where".
  */
 public record PlaybackState(
-    UUID resourceId,
+    @Nullable UUID resourceId,  // null when stopped
     long startTimeMs,
     float volume,
     boolean playing
 ) {
     public static final PlaybackState STOPPED = new PlaybackState(
-        UUID.randomUUID(), 0, 0, false
+        null, 0, 0, false
     );
 
     /**

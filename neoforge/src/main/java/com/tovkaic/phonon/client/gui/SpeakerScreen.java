@@ -3,6 +3,8 @@ package com.tovkaic.phonon.client.gui;
 import com.tovkaic.phonon.audio.AudioResource;
 import com.tovkaic.phonon.client.ClientAudioManager;
 import com.tovkaic.phonon.menu.SpeakerMenu;
+import com.tovkaic.phonon.network.packets.SpeakerControlPacket;
+import com.tovkaic.phonon.platform.PlatformHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -19,43 +21,54 @@ import java.util.List;
  */
 public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     private static final int LIST_ITEM_HEIGHT = 24;
-    private List<AudioResource> resources;
-    private int scrollOffset = 0;
 
     public SpeakerScreen(SpeakerMenu menu, Inventory playerInv, Component title) {
         super(menu, playerInv, title);
         this.imageWidth = 256;
         this.imageHeight = 200;
-        this.resources = ClientAudioManager.getInstance().getAllResources();
+    }
+
+    /**
+     * Get current resource list from manager.
+     * Always returns fresh data, no caching.
+     */
+    private List<AudioResource> getResources() {
+        return ClientAudioManager.getInstance().getAllResources();
     }
 
     @Override
     protected void init() {
         super.init();
 
+        List<AudioResource> resources = getResources();
+
         // Stop button
         addRenderableWidget(Button.builder(
             Component.literal("Stop"),
-            btn -> menu.stopAudio()
+            btn -> PlatformHelper.INSTANCE.sendToServer(
+                new SpeakerControlPacket(menu.getSpeakerPos(), SpeakerControlPacket.Action.STOP, null, 0)
+            )
         ).bounds(leftPos + 10, topPos + imageHeight - 30, 60, 20).build());
 
-        // Refresh list button
+        // Refresh button (triggers reinit to rebuild button list)
         addRenderableWidget(Button.builder(
             Component.literal("Refresh"),
             btn -> {
-                resources = ClientAudioManager.getInstance().getAllResources();
+                clearWidgets();
+                init();
             }
         ).bounds(leftPos + 80, topPos + imageHeight - 30, 60, 20).build());
 
         // Play buttons for each audio resource (MVP: show first 5)
         int maxVisible = Math.min(5, resources.size());
         for (int i = 0; i < maxVisible; i++) {
-            final int index = i;
             AudioResource resource = resources.get(i);
 
             addRenderableWidget(Button.builder(
                 Component.literal("▶ " + resource.name()),
-                btn -> menu.playAudio(resource.id(), 1.0f)
+                btn -> PlatformHelper.INSTANCE.sendToServer(
+                    new SpeakerControlPacket(menu.getSpeakerPos(), SpeakerControlPacket.Action.PLAY, resource.id(), 1.0f)
+                )
             ).bounds(
                 leftPos + 10,
                 topPos + 30 + i * LIST_ITEM_HEIGHT,
@@ -74,6 +87,8 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
+
+        List<AudioResource> resources = getResources();
 
         // Title
         graphics.drawString(

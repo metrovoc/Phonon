@@ -1,18 +1,10 @@
 package com.tovkaic.phonon.menu;
 
-import com.tovkaic.phonon.audio.AudioResource;
-import com.tovkaic.phonon.audio.PlaybackState;
-import com.tovkaic.phonon.block.SpeakerBlockEntity;
-import com.tovkaic.phonon.network.packets.SyncSpeakerStatePacket;
-import com.tovkaic.phonon.platform.PlatformHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.level.Level;
-
-import java.util.UUID;
 
 /**
  * Container menu for speaker block.
@@ -32,49 +24,6 @@ public class SpeakerMenu extends AbstractContainerMenu {
 
     public BlockPos getSpeakerPos() {
         return speakerPos;
-    }
-
-    /**
-     * Start playback of a resource.
-     */
-    public void playAudio(UUID resourceId, float volume) {
-        if (level.isClientSide) return;
-
-        if (level.getBlockEntity(speakerPos) instanceof SpeakerBlockEntity speaker) {
-            long serverTime = System.currentTimeMillis();
-            PlaybackState playback = new PlaybackState(
-                resourceId,
-                serverTime,
-                volume,
-                true
-            );
-            speaker.setPlayback(playback);
-
-            // Send sync packet with server timestamp for clock sync
-            PlatformHelper.INSTANCE.sendToAllTracking(
-                level,
-                speakerPos,
-                new SyncSpeakerStatePacket(speakerPos, playback, serverTime)
-            );
-        }
-    }
-
-    /**
-     * Stop playback.
-     */
-    public void stopAudio() {
-        if (level.isClientSide) return;
-
-        if (level.getBlockEntity(speakerPos) instanceof SpeakerBlockEntity speaker) {
-            speaker.setPlayback(PlaybackState.STOPPED);
-
-            // Send sync packet with current server time
-            PlatformHelper.INSTANCE.sendToAllTracking(
-                level,
-                speakerPos,
-                new SyncSpeakerStatePacket(speakerPos, PlaybackState.STOPPED, System.currentTimeMillis())
-            );
-        }
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.tovkaic.phonon.client;
 
 import com.tovkaic.phonon.Phonon;
+import net.minecraft.client.Minecraft;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -23,6 +24,15 @@ import java.util.concurrent.Executors;
  * Downloads and stores OGG files permanently (MVP: no cleanup).
  */
 public class AudioCache {
+
+    /**
+     * Callback interface for async download operations.
+     */
+    public interface DownloadCallback {
+        void onComplete(UUID resourceId, Path file);
+        void onError(UUID resourceId, Exception e);
+    }
+
     private static AudioCache instance;
     private final Map<UUID, Path> cache = new ConcurrentHashMap<>();
     private final ExecutorService downloadExecutor = Executors.newFixedThreadPool(2);
@@ -69,12 +79,35 @@ public class AudioCache {
         return Optional.ofNullable(cache.get(resourceId));
     }
 
+    /**
+     * Download audio file (legacy method without callback).
+     * @deprecated Use {@link #downloadAudio(UUID, String, DownloadCallback)} instead.
+     */
+    @Deprecated
     public void downloadAudio(UUID resourceId, String url) {
+        downloadAudio(resourceId, url, null);
+    }
+
+    /**
+     * Download audio file with callback.
+     * If already cached, callback fires immediately.
+     *
+     * @param resourceId Audio resource ID
+     * @param url Download URL
+     * @param callback Completion callback (may be null)
+     */
+    public void downloadAudio(UUID resourceId, String url, DownloadCallback callback) {
+        // Already cached - invoke callback immediately
         if (cache.containsKey(resourceId)) {
             Phonon.LOGGER.info("Audio {} already cached", resourceId);
+            if (callback != null) {
+                // Callback must run on main thread
+                Minecraft.getInstance().tell(() -> callback.onComplete(resourceId, cache.get(resourceId)));
+            }
             return;
         }
 
+        // Download in background thread
         downloadExecutor.submit(() -> {
             try {
                 Path targetFile = cacheDir.resolve(resourceId + ".ogg");
@@ -94,11 +127,23 @@ public class AudioCache {
                     Files.copy(response.body(), targetFile, StandardCopyOption.REPLACE_EXISTING);
                     cache.put(resourceId, targetFile);
                     Phonon.LOGGER.info("Downloaded audio {} to cache", resourceId);
+
+                    if (callback != null) {
+                        // Callback must run on main thread
+                        Minecraft.getInstance().tell(() -> callback.onComplete(resourceId, targetFile));
+                    }
                 } else {
                     Phonon.LOGGER.error("Failed to download audio: HTTP {}", response.statusCode());
+                    if (callback != null) {
+                        Exception error = new IOException("HTTP " + response.statusCode());
+                        Minecraft.getInstance().tell(() -> callback.onError(resourceId, error));
+                    }
                 }
             } catch (Exception e) {
                 Phonon.LOGGER.error("Failed to download audio {}", resourceId, e);
+                if (callback != null) {
+                    Minecraft.getInstance().tell(() -> callback.onError(resourceId, e));
+                }
             }
         });
     }

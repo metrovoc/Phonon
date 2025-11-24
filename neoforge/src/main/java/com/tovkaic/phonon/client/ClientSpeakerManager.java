@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -25,21 +26,42 @@ public class ClientSpeakerManager {
     }
 
     public void updateSpeaker(BlockPos pos, PlaybackState playback) {
-        if (playback.playing()) {
+        if (playback.playing() && playback.resourceId() != null) {
             speakers.put(pos, playback);
 
-            // Trigger audio download if not cached
-            if (!AudioCache.getInstance().getCachedAudio(playback.resourceId()).isPresent()) {
-                ClientAudioManager.getInstance().getResource(playback.resourceId()).ifPresent(resource -> {
-                    AudioCache.getInstance().downloadAudio(resource.id(), resource.url());
+            UUID resourceId = playback.resourceId();
+
+            // Check if audio is already cached
+            if (AudioCache.getInstance().getCachedAudio(resourceId).isPresent()) {
+                // Already cached - play immediately
+                com.tovkaic.phonon.client.audio.OpenALAudioPlayer.getInstance()
+                    .play(pos, playback, resourceId);
+            } else {
+                // Not cached - download first, then play
+                ClientAudioManager.getInstance().getResource(resourceId).ifPresent(resource -> {
+                    AudioCache.getInstance().downloadAudio(resource.id(), resource.url(),
+                        new AudioCache.DownloadCallback() {
+                            @Override
+                            public void onComplete(UUID id, java.nio.file.Path file) {
+                                // Download complete - now play
+                                com.tovkaic.phonon.client.audio.OpenALAudioPlayer.getInstance()
+                                    .play(pos, playback, resourceId);
+                            }
+
+                            @Override
+                            public void onError(UUID id, Exception e) {
+                                // Download failed - log error
+                                com.tovkaic.phonon.Phonon.LOGGER.error(
+                                    "Failed to download audio for speaker at {}", pos, e
+                                );
+                            }
+                        }
+                    );
                 });
             }
-
-            com.tovkaic.phonon.client.audio.AudioPlayer.getInstance()
-                .play(pos, playback, playback.resourceId());
         } else {
             speakers.remove(pos);
-            com.tovkaic.phonon.client.audio.AudioPlayer.getInstance().stop(pos);
+            com.tovkaic.phonon.client.audio.OpenALAudioPlayer.getInstance().stop(pos);
         }
     }
 
@@ -49,6 +71,6 @@ public class ClientSpeakerManager {
 
     public void removeSpeaker(BlockPos pos) {
         speakers.remove(pos);
-        com.tovkaic.phonon.client.audio.AudioPlayer.getInstance().stop(pos);
+        com.tovkaic.phonon.client.audio.OpenALAudioPlayer.getInstance().stop(pos);
     }
 }

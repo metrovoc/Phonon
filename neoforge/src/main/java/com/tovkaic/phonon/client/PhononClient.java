@@ -6,6 +6,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 @EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class PhononClient {
@@ -25,5 +26,13 @@ public class PhononClient {
                 ));
             });
         });
+    }
+}
+
+@EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.GAME, value = Dist.CLIENT)
+class PhononClientTick {
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        com.tovkaic.phonon.client.audio.OpenALAudioPlayer.getInstance().tick();
     }
 }

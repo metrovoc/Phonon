@@ -5,9 +5,13 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.tovkaic.phonon.audio.AudioManager;
 import com.tovkaic.phonon.audio.AudioResource;
+import com.tovkaic.phonon.network.packets.SyncAudioResourcesPacket;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.List;
 
@@ -66,6 +70,10 @@ public class PhononCommand {
 
         AudioResource resource = new AudioResource(name, url);
         manager.addResource(resource);
+
+        // Broadcast updated resource list to all online players
+        broadcastResourceList(ctx.getSource().getServer());
+
         ctx.getSource().sendSuccess(
             () -> Component.literal("Added audio resource: " + name),
             true
@@ -105,6 +113,10 @@ public class PhononCommand {
         return manager.getResourceByName(name)
             .map(resource -> {
                 manager.removeResource(resource.id());
+
+                // Broadcast updated resource list to all online players
+                broadcastResourceList(ctx.getSource().getServer());
+
                 ctx.getSource().sendSuccess(
                     () -> Component.literal("Removed audio resource: " + name),
                     true
@@ -115,5 +127,16 @@ public class PhononCommand {
                 ctx.getSource().sendFailure(Component.literal("Resource '" + name + "' not found"));
                 return 0;
             });
+    }
+
+    /**
+     * Broadcast current resource list to all online players.
+     * Called after add/remove operations.
+     */
+    private static void broadcastResourceList(MinecraftServer server) {
+        var packet = new SyncAudioResourcesPacket(AudioManager.getInstance().getAllResources());
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            PacketDistributor.sendToPlayer(player, packet);
+        }
     }
 }

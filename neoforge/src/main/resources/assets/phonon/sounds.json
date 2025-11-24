@@ -1,0 +1,11 @@
+{
+  "speaker": {
+    "category": "record",
+    "sounds": [
+      {
+        "name": "phonon:speaker",
+        "stream": true
+      }
+    ]
+  }
+}

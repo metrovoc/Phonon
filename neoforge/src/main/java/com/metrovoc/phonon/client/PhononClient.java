@@ -14,7 +14,9 @@ public class PhononClient {
     @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
-            AudioCache.getInstance().initialize(Minecraft.getInstance().gameDirectory.toPath());
+            var gameDir = Minecraft.getInstance().gameDirectory.toPath();
+            AudioCache.getInstance().initialize(gameDir);
+            AudioReceiver.getInstance().initialize(gameDir);
 
             // Register GUI opener
             com.metrovoc.phonon.block.SpeakerBlock.setGuiOpener(pos -> {

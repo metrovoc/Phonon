@@ -1,5 +1,8 @@
 package com.metrovoc.phonon.webui;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioResource;
@@ -262,27 +265,10 @@ public class PhononWebServer extends NanoHTTPD {
     }
 
     private TrackRequest parseTrackRequest(String json) {
-        // Minimal JSON parsing - production would use a proper parser
-        String name = extractJsonString(json, "name");
-        String url = extractJsonString(json, "url");
+        JsonObject obj = JsonParser.parseString(json).getAsJsonObject();
+        String name = obj.has("name") ? obj.get("name").getAsString() : null;
+        String url = obj.has("url") ? obj.get("url").getAsString() : null;
         return new TrackRequest(name, url);
-    }
-
-    private String extractJsonString(String json, String key) {
-        String search = "\"" + key + "\"";
-        int keyIdx = json.indexOf(search);
-        if (keyIdx < 0) return null;
-
-        int colonIdx = json.indexOf(':', keyIdx);
-        if (colonIdx < 0) return null;
-
-        int startQuote = json.indexOf('"', colonIdx);
-        if (startQuote < 0) return null;
-
-        int endQuote = json.indexOf('"', startQuote + 1);
-        if (endQuote < 0) return null;
-
-        return json.substring(startQuote + 1, endQuote);
     }
 
     private String escapeJson(String s) {

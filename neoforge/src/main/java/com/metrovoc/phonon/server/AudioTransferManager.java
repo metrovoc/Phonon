@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Server-side audio transfer manager with flow control.
- * Schedules chunk transfers across multiple players to protect TPS.
+ * Schedules chunk transfers across multiple players for QoS purposes.
  * Flow control values are configurable via phonon-server.toml.
  */
 public class AudioTransferManager {
@@ -55,7 +55,7 @@ public class AudioTransferManager {
         long fileSize = com.metrovoc.phonon.server.ServerAudioStorage.getInstance().getAudioSize(resourceId);
         int totalChunks = (int) Math.ceil((double) fileSize / PhononServerConfig.getChunkSize());
 
-        PendingTransfer transfer = new PendingTransfer(resourceId, audioPath, totalChunks, fileSize);
+        PendingTransfer transfer = new PendingTransfer(resourceId, audioPath, totalChunks);
         queue.add(transfer);
 
         synchronized (activePlayerOrder) {
@@ -213,14 +213,12 @@ public class AudioTransferManager {
         final UUID resourceId;
         final Path audioPath;
         final int totalChunks;
-        final long fileSize;
         int nextChunkIndex = 0;
 
-        PendingTransfer(UUID resourceId, Path audioPath, int totalChunks, long fileSize) {
+        PendingTransfer(UUID resourceId, Path audioPath, int totalChunks) {
             this.resourceId = resourceId;
             this.audioPath = audioPath;
             this.totalChunks = totalChunks;
-            this.fileSize = fileSize;
         }
     }
 }

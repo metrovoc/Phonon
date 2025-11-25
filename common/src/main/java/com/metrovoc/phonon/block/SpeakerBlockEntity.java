@@ -34,6 +34,15 @@ public class SpeakerBlockEntity extends BlockEntity {
     public void setPlayback(PlaybackState playback) {
         this.playback = playback;
         setChanged();
+
+        // Sync PLAYING blockstate for visual effects (light + particles)
+        if (level != null) {
+            BlockState state = getBlockState();
+            boolean shouldPlay = playback.playing();
+            if (state.getValue(SpeakerBlock.PLAYING) != shouldPlay) {
+                level.setBlock(worldPosition, state.setValue(SpeakerBlock.PLAYING, shouldPlay), 3);
+            }
+        }
     }
 
     @Override

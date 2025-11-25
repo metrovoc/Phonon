@@ -7,14 +7,16 @@ import net.minecraft.util.Mth;
 import java.util.function.Consumer;
 
 /**
- * Volume slider widget.
- * Range: 0.0 to 1.0, displayed as 0% to 100%.
+ * Volume slider widget with perceptual (quadratic) volume curve.
+ * Display: 0% to 100% (linear slider position)
+ * Actual volume: displayValue² (matches human hearing perception)
  */
 public class VolumeSlider extends AbstractSliderButton {
     private final Consumer<Float> onChange;
 
     public VolumeSlider(int x, int y, int width, int height, float initialValue, Consumer<Float> onChange) {
-        super(x, y, width, height, Component.empty(), Mth.clamp(initialValue, 0.0, 1.0));
+        // Convert actual volume to display value: sqrt(actualVolume)
+        super(x, y, width, height, Component.empty(), Mth.clamp(Math.sqrt(initialValue), 0.0, 1.0));
         this.onChange = onChange;
         updateMessage();
     }
@@ -27,15 +29,19 @@ public class VolumeSlider extends AbstractSliderButton {
 
     @Override
     protected void applyValue() {
-        onChange.accept((float) this.value);
+        // Apply quadratic curve: actualVolume = displayValue²
+        float actualVolume = (float) (this.value * this.value);
+        onChange.accept(actualVolume);
     }
 
     public float getVolume() {
-        return (float) this.value;
+        // Return actual volume (squared)
+        return (float) (this.value * this.value);
     }
 
-    public void setVolume(float volume) {
-        this.value = Mth.clamp(volume, 0.0, 1.0);
+    public void setVolume(float actualVolume) {
+        // Convert actual volume to display value
+        this.value = Mth.clamp(Math.sqrt(actualVolume), 0.0, 1.0);
         updateMessage();
     }
 }

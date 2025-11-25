@@ -2,6 +2,7 @@ package com.metrovoc.phonon;
 
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioPersistence;
+import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.command.PhononCommand;
 import com.metrovoc.phonon.network.PhononNetwork;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
@@ -51,7 +52,27 @@ public class PhononNeoForge {
         Path dataFile = worldDir.resolve("phonon_audio.json");
         AudioManager.getInstance().loadResources(AudioPersistence.load(dataFile));
 
+        // Re-probe duration for resources with missing/invalid duration
+        reprobeMissingDurations();
+
         Phonon.LOGGER.info("Loaded {} audio resources", AudioManager.getInstance().getAllResources().size());
+    }
+
+    private void reprobeMissingDurations() {
+        AudioManager manager = AudioManager.getInstance();
+        ServerAudioStorage storage = ServerAudioStorage.getInstance();
+
+        for (AudioResource resource : manager.getAllResources()) {
+            if (resource.durationMs() <= 0 && storage.hasAudio(resource.id())) {
+                storage.probeDuration(resource.id()).ifPresent(duration -> {
+                    AudioResource updated = new AudioResource(
+                        resource.id(), resource.name(), resource.url(), duration
+                    );
+                    manager.updateResource(updated);
+                    Phonon.LOGGER.info("Updated duration for '{}': {}ms", resource.name(), duration);
+                });
+            }
+        }
     }
 
     private void onServerStopping(ServerStoppingEvent event) {

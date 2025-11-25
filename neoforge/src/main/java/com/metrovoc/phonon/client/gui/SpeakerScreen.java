@@ -36,7 +36,8 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     private static final int BUTTON_HEIGHT = 20;
     private static final int PROGRESS_HEIGHT = 24;
 
-    private static final float DEFAULT_VOLUME = 0.5f;
+    // Default: display 50%, actual volume = 0.5² = 0.25
+    private static final float DEFAULT_VOLUME = 0.25f;
     private static final float LEFT_RATIO = 0.55f;
 
     private EditBox searchBox;
@@ -58,6 +59,13 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     @Override
     protected void init() {
         super.init();
+
+        // Initialize volume from current playback state, or use default
+        currentVolume = ClientSpeakerManager.getInstance()
+            .getSpeakerState(menu.getSpeakerPos())
+            .filter(PlaybackState::playing)
+            .map(PlaybackState::volume)
+            .orElse(DEFAULT_VOLUME);
 
         int leftWidth = (int) ((imageWidth - PADDING * 3) * LEFT_RATIO);
         int rightWidth = imageWidth - PADDING * 3 - leftWidth;
@@ -312,5 +320,15 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             return searchBox.charTyped(c, modifiers);
         }
         return super.charTyped(c, modifiers);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        // AbstractContainerScreen.mouseDragged handles slot dragging but doesn't call super,
+        // so widgets never receive drag events. We must dispatch manually.
+        if (getFocused() != null && isDragging() && button == 0) {
+            return getFocused().mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 }

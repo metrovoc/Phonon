@@ -6,17 +6,14 @@ import java.util.UUID;
 
 /**
  * Playback state synchronized across server and clients.
- * Contains everything needed to know "what's playing and where".
+ * Contains what's playing and when it started. Volume is separate (per-speaker property).
  */
 public record PlaybackState(
     @Nullable UUID resourceId,  // null when stopped
     long startTimeMs,
-    float volume,
     boolean playing
 ) {
-    public static final PlaybackState STOPPED = new PlaybackState(
-        null, 0, 0, false
-    );
+    public static final PlaybackState STOPPED = new PlaybackState(null, 0, false);
 
     /**
      * Calculate current playback position based on current time.

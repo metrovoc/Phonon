@@ -37,6 +37,12 @@ public class PhononNetwork {
             AudioChunkPacket::handle
         );
 
+        registrar.playToClient(
+            SyncSpeakerVolumePacket.TYPE,
+            SyncSpeakerVolumePacket.CODEC,
+            SyncSpeakerVolumePacket::handle
+        );
+
         // Client -> Server packets
         registrar.playToServer(
             RequestAudioPacket.TYPE,
@@ -54,6 +60,12 @@ public class PhononNetwork {
             SpeakerSeekPacket.TYPE,
             SpeakerSeekPacket.CODEC,
             SpeakerSeekPacket::handle
+        );
+
+        registrar.playToServer(
+            SpeakerVolumePacket.TYPE,
+            SpeakerVolumePacket.CODEC,
+            SpeakerVolumePacket::handle
         );
     }
 }

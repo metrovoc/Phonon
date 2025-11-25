@@ -16,9 +16,6 @@ public class FFmpegHelper {
 
     private static volatile Boolean available;
 
-    /**
-     * Check if ffprobe is available on the system.
-     */
     public static boolean isAvailable() {
         if (available == null) {
             available = checkAvailability();
@@ -43,12 +40,6 @@ public class FFmpegHelper {
         return false;
     }
 
-    /**
-     * Get audio duration in milliseconds using ffprobe.
-     *
-     * @param audioFile Path to the audio file
-     * @return Duration in milliseconds, or empty if unavailable
-     */
     public static Optional<Long> getDurationMs(Path audioFile) {
         if (!isAvailable()) {
             return Optional.empty();

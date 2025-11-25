@@ -61,24 +61,14 @@ public class AudioCache {
         return Optional.ofNullable(cache.get(resourceId));
     }
 
-    /**
-     * Register a file that was received via packet transfer.
-     * Called by AudioReceiver after assembling chunks.
-     */
     public void registerCachedFile(UUID resourceId, Path file) {
         cache.put(resourceId, file);
     }
 
-    /**
-     * Check if audio is cached.
-     */
     public boolean isCached(UUID resourceId) {
         return cache.containsKey(resourceId);
     }
 
-    /**
-     * Get cache directory path.
-     */
     public Path getCacheDir() {
         return cacheDir;
     }

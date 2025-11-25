@@ -4,20 +4,28 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.MenuType;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+
+import java.util.function.Supplier;
 
 /**
  * Container menu for speaker block.
- * Handles server-side logic for speaker control.
- *
  * MVP: Simple menu without slots, just data sync.
  */
 public class SpeakerMenu extends AbstractContainerMenu {
+    private static Supplier<MenuType<SpeakerMenu>> typeSupplier;
+
     private final BlockPos speakerPos;
     private final Level level;
 
+    public static void setTypeSupplier(Supplier<MenuType<SpeakerMenu>> supplier) {
+        typeSupplier = supplier;
+    }
+
     public SpeakerMenu(int containerId, Inventory playerInv, BlockPos speakerPos) {
-        super(com.metrovoc.phonon.registry.PhononRegistry.SPEAKER_MENU.get(), containerId);
+        super(typeSupplier.get(), containerId);
         this.speakerPos = speakerPos;
         this.level = playerInv.player.level();
     }
@@ -36,7 +44,7 @@ public class SpeakerMenu extends AbstractContainerMenu {
     }
 
     @Override
-    public net.minecraft.world.item.ItemStack quickMoveStack(Player player, int index) {
-        return net.minecraft.world.item.ItemStack.EMPTY;
+    public ItemStack quickMoveStack(Player player, int index) {
+        return ItemStack.EMPTY;
     }
 }

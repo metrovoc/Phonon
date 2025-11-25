@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.client;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.config.PhononClientConfig;
 import com.metrovoc.phonon.platform.PlatformHelper;
 
 import java.io.ByteArrayOutputStream;
@@ -32,7 +33,7 @@ public class AudioReceiver {
     }
 
     public void initialize(Path gameDir) {
-        this.cacheDir = gameDir.resolve("phonon_cache");
+        this.cacheDir = gameDir.resolve(PhononClientConfig.getCacheDirectory());
         try {
             Files.createDirectories(cacheDir);
         } catch (IOException e) {

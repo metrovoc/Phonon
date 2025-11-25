@@ -1,7 +1,7 @@
 package com.tovkaic.phonon.mixin;
 
 import com.tovkaic.phonon.Phonon;
-import com.tovkaic.phonon.client.audio.SpeakerSoundInstance;
+import com.tovkaic.phonon.client.audio.PhononSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.client.sounds.SoundEngine;
 import org.spongepowered.asm.mixin.Mixin;
@@ -26,9 +26,9 @@ public class SoundEngineMixin {
      */
     @Inject(method = "play", at = @At("HEAD"))
     private void onPlay(SoundInstance soundInstance, CallbackInfo ci) {
-        if (soundInstance instanceof SpeakerSoundInstance speaker) {
-            Phonon.LOGGER.info("SoundEngine intercepted SpeakerSoundInstance at {}",
-                speaker.getPosition());
+        if (soundInstance instanceof PhononSoundInstance phonon) {
+            Phonon.LOGGER.info("SoundEngine intercepted PhononSoundInstance for resource {}",
+                phonon.getResourceId());
             // The actual audio stream handling is done in the resource loading phase
             // We just log here for debugging
         }

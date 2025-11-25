@@ -92,13 +92,12 @@ public class AudioPlayer {
     }
 
     /**
-     * Update volume for a playing speaker.
+     * Update volume for a playing speaker (takes effect on next tick).
      */
     public void setVolume(BlockPos pos, float volume) {
         SpeakerSoundInstance sound = playingSounds.get(pos);
         if (sound != null) {
-            // Volume changes require restart (limitation of current implementation)
-            Phonon.LOGGER.warn("Volume change requires sound restart (not implemented yet)");
+            sound.setVolume(volume);
         }
     }
 

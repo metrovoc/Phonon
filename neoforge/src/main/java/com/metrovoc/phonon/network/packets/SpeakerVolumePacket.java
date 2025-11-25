@@ -1,7 +1,6 @@
 package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
-import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import io.netty.buffer.ByteBuf;
@@ -14,22 +13,23 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Client -> Server: Seek to position in current track.
+ * Client -> Server: Update speaker volume.
+ * Volume is a per-speaker property, independent of playback state.
  */
-public record SpeakerSeekPacket(
+public record SpeakerVolumePacket(
     BlockPos pos,
-    long seekPositionMs
+    float volume
 ) implements CustomPacketPayload {
 
-    public static final Type<SpeakerSeekPacket> TYPE =
-        new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker_seek"));
+    public static final Type<SpeakerVolumePacket> TYPE =
+        new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker_volume"));
 
-    public static final StreamCodec<ByteBuf, SpeakerSeekPacket> CODEC = StreamCodec.composite(
+    public static final StreamCodec<ByteBuf, SpeakerVolumePacket> CODEC = StreamCodec.composite(
         BlockPos.STREAM_CODEC,
-        SpeakerSeekPacket::pos,
-        ByteBufCodecs.VAR_LONG,
-        SpeakerSeekPacket::seekPositionMs,
-        SpeakerSeekPacket::new
+        SpeakerVolumePacket::pos,
+        ByteBufCodecs.FLOAT,
+        SpeakerVolumePacket::volume,
+        SpeakerVolumePacket::new
     );
 
     @Override
@@ -37,27 +37,20 @@ public record SpeakerSeekPacket(
         return TYPE;
     }
 
-    public static void handle(SpeakerSeekPacket packet, IPayloadContext ctx) {
+    public static void handle(SpeakerVolumePacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
             if (!(ctx.player() instanceof ServerPlayer player)) return;
 
             var level = player.serverLevel();
             if (!(level.getBlockEntity(packet.pos) instanceof SpeakerBlockEntity speaker)) return;
 
-            PlaybackState current = speaker.getPlayback();
-            if (!current.playing() || current.resourceId() == null) return;
+            speaker.setVolume(packet.volume);
 
-            // Calculate new startTime to simulate seek
-            long serverTime = System.currentTimeMillis();
-            long newStartTime = serverTime - packet.seekPositionMs;
-
-            var newPlayback = new PlaybackState(current.resourceId(), newStartTime, true);
-
-            speaker.setPlayback(newPlayback);
+            // Broadcast to all tracking players
             PlatformHelper.INSTANCE.sendToAllTracking(
                 level,
                 packet.pos,
-                new SyncSpeakerStatePacket(packet.pos, newPlayback, speaker.getVolume(), serverTime)
+                new SyncSpeakerVolumePacket(packet.pos, packet.volume)
             );
         });
     }

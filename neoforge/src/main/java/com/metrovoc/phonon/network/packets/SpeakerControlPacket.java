@@ -6,7 +6,6 @@ import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
@@ -21,8 +20,7 @@ import java.util.UUID;
 public record SpeakerControlPacket(
     BlockPos pos,
     Action action,
-    UUID resourceId,
-    float volume
+    UUID resourceId
 ) implements CustomPacketPayload {
 
     public enum Action {
@@ -45,8 +43,6 @@ public record SpeakerControlPacket(
         SpeakerControlPacket::action,
         UUIDCodec.STREAM_CODEC,
         SpeakerControlPacket::resourceId,
-        ByteBufCodecs.FLOAT,
-        SpeakerControlPacket::volume,
         SpeakerControlPacket::new
     );
 
@@ -65,17 +61,12 @@ public record SpeakerControlPacket(
             switch (packet.action) {
                 case PLAY -> {
                     long serverTime = System.currentTimeMillis();
-                    var playback = new PlaybackState(
-                        packet.resourceId,
-                        serverTime,
-                        packet.volume,
-                        true
-                    );
+                    var playback = new PlaybackState(packet.resourceId, serverTime, true);
                     speaker.setPlayback(playback);
                     PlatformHelper.INSTANCE.sendToAllTracking(
                         level,
                         packet.pos,
-                        new SyncSpeakerStatePacket(packet.pos, playback, serverTime)
+                        new SyncSpeakerStatePacket(packet.pos, playback, speaker.getVolume(), serverTime)
                     );
                 }
                 case STOP -> {
@@ -83,7 +74,7 @@ public record SpeakerControlPacket(
                     PlatformHelper.INSTANCE.sendToAllTracking(
                         level,
                         packet.pos,
-                        new SyncSpeakerStatePacket(packet.pos, PlaybackState.STOPPED, System.currentTimeMillis())
+                        new SyncSpeakerStatePacket(packet.pos, PlaybackState.STOPPED, speaker.getVolume(), System.currentTimeMillis())
                     );
                 }
             }

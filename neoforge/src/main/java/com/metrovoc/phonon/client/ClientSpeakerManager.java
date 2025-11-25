@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClientSpeakerManager {
     private static ClientSpeakerManager instance;
     private final Map<BlockPos, PlaybackState> speakers = new ConcurrentHashMap<>();
+    private final Map<BlockPos, Float> speakerVolumes = new ConcurrentHashMap<>();
 
     // Track pending audio requests to avoid duplicates
     private final Set<UUID> pendingRequests = ConcurrentHashMap.newKeySet();
@@ -34,7 +35,9 @@ public class ClientSpeakerManager {
         return instance;
     }
 
-    public void updateSpeaker(BlockPos pos, PlaybackState playback) {
+    public void updateSpeaker(BlockPos pos, PlaybackState playback, float volume) {
+        speakerVolumes.put(pos, volume);
+
         if (playback.playing() && playback.resourceId() != null) {
             speakers.put(pos, playback);
 
@@ -43,14 +46,15 @@ public class ClientSpeakerManager {
             // Check if audio is already cached
             if (AudioCache.getInstance().isCached(resourceId)) {
                 // Already cached - play immediately
-                AudioPlayer.getInstance().play(pos, playback, resourceId);
+                AudioPlayer.getInstance().play(pos, playback, resourceId, volume);
             } else if (AudioReceiver.getInstance().isTransferInProgress(resourceId)) {
                 // Transfer in progress - register callback
                 AudioReceiver.getInstance().onTransferComplete(resourceId, file -> {
                     // Check if speaker is still playing this resource
                     PlaybackState current = speakers.get(pos);
+                    float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
                     if (current != null && current.playing() && resourceId.equals(current.resourceId())) {
-                        AudioPlayer.getInstance().play(pos, current, resourceId);
+                        AudioPlayer.getInstance().play(pos, current, resourceId, currentVolume);
                     }
                 });
             } else if (!pendingRequests.contains(resourceId)) {
@@ -65,8 +69,9 @@ public class ClientSpeakerManager {
                     pendingRequests.remove(resourceId);
                     // Check if speaker is still playing this resource
                     PlaybackState current = speakers.get(pos);
+                    float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
                     if (current != null && current.playing() && resourceId.equals(current.resourceId())) {
-                        AudioPlayer.getInstance().play(pos, current, resourceId);
+                        AudioPlayer.getInstance().play(pos, current, resourceId, currentVolume);
                     }
                 });
             }
@@ -76,8 +81,17 @@ public class ClientSpeakerManager {
         }
     }
 
+    public void updateVolume(BlockPos pos, float volume) {
+        speakerVolumes.put(pos, volume);
+        AudioPlayer.getInstance().setVolume(pos, volume);
+    }
+
     public Optional<PlaybackState> getSpeakerState(BlockPos pos) {
         return Optional.ofNullable(speakers.get(pos));
+    }
+
+    public float getSpeakerVolume(BlockPos pos) {
+        return speakerVolumes.getOrDefault(pos, 0.5f);
     }
 
     public void removeSpeaker(BlockPos pos) {

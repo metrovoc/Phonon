@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioResource;
+import com.metrovoc.phonon.config.NeoForgeServerConfig;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import net.minecraft.commands.CommandSourceStack;
@@ -40,6 +41,9 @@ public class PhononCommand {
                 .then(Commands.argument("name", StringArgumentType.word())
                     .executes(PhononCommand::removeResource)
                 )
+            )
+            .then(Commands.literal("reload")
+                .executes(PhononCommand::reloadConfig)
             )
         );
     }
@@ -171,6 +175,22 @@ public class PhononCommand {
         var packet = new SyncAudioResourcesPacket(AudioManager.getInstance().getAllResources());
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             PacketDistributor.sendToPlayer(player, packet);
+        }
+    }
+
+    private static int reloadConfig(CommandContext<CommandSourceStack> ctx) {
+        try {
+            NeoForgeServerConfig.SPEC.afterReload();
+            NeoForgeServerConfig.bind();
+
+            ctx.getSource().sendSuccess(
+                () -> Component.literal("Phonon server config reloaded"),
+                true
+            );
+            return 1;
+        } catch (Exception e) {
+            ctx.getSource().sendFailure(Component.literal("Failed to reload config: " + e.getMessage()));
+            return 0;
         }
     }
 }

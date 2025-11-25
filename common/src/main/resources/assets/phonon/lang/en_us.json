@@ -1,0 +1,14 @@
+{
+  "block.phonon.speaker": "Speaker",
+  "item.phonon.speaker": "Speaker",
+
+  "config.phonon.title": "Phonon Configuration",
+  "config.phonon.category.client": "Client Settings",
+
+  "config.phonon.client.cacheDirectory": "Cache Directory",
+  "config.phonon.client.cacheDirectory.tooltip": "Directory name for cached audio files (relative to game directory)",
+  "config.phonon.client.maxCacheSizeMB": "Max Cache Size (MB)",
+  "config.phonon.client.maxCacheSizeMB.tooltip": "Maximum cache size in megabytes. Set to 0 for unlimited.",
+  "config.phonon.client.enableDebugLogging": "Debug Logging",
+  "config.phonon.client.enableDebugLogging.tooltip": "Enable verbose debug logging"
+}

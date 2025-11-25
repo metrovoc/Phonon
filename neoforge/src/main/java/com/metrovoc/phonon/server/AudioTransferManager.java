@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.network.packets.AudioChunkPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -15,16 +16,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * Server-side audio transfer manager with flow control.
  * Schedules chunk transfers across multiple players to protect TPS.
- *
- * Flow control strategy:
- * - Max bytes per tick: 128KB total (~2.5MB/s @ 20 TPS)
- * - Max bytes per player per tick: 64KB
- * - Round-robin scheduling across players
+ * Flow control values are configurable via phonon-server.toml.
  */
 public class AudioTransferManager {
-
-    private static final int MAX_BYTES_PER_TICK = 128 * 1024;
-    private static final int MAX_BYTES_PER_PLAYER_PER_TICK = 64 * 1024;
 
     private static AudioTransferManager instance;
 
@@ -59,7 +53,7 @@ public class AudioTransferManager {
         }
 
         long fileSize = com.metrovoc.phonon.server.ServerAudioStorage.getInstance().getAudioSize(resourceId);
-        int totalChunks = (int) Math.ceil((double) fileSize / com.metrovoc.phonon.server.ServerAudioStorage.CHUNK_SIZE);
+        int totalChunks = (int) Math.ceil((double) fileSize / PhononServerConfig.getChunkSize());
 
         PendingTransfer transfer = new PendingTransfer(resourceId, audioPath, totalChunks, fileSize);
         queue.add(transfer);
@@ -96,7 +90,10 @@ public class AudioTransferManager {
             int maxIterations = activePlayerOrder.size() * 10;
             int iterations = 0;
 
-            while (totalBytesSent < MAX_BYTES_PER_TICK && playersProcessed < activePlayerOrder.size() && iterations < maxIterations) {
+            int maxBytesPerTick = PhononServerConfig.getMaxBytesPerTick();
+            int maxBytesPerPlayerPerTick = PhononServerConfig.getMaxBytesPerPlayerPerTick();
+
+            while (totalBytesSent < maxBytesPerTick && playersProcessed < activePlayerOrder.size() && iterations < maxIterations) {
                 iterations++;
 
                 if (roundRobinIndex >= activePlayerOrder.size()) {
@@ -120,7 +117,7 @@ public class AudioTransferManager {
                 }
 
                 int playerBytes = playerBytesSent.getOrDefault(playerId, 0);
-                if (playerBytes >= MAX_BYTES_PER_PLAYER_PER_TICK) {
+                if (playerBytes >= maxBytesPerPlayerPerTick) {
                     roundRobinIndex++;
                     playersProcessed++;
                     continue;
@@ -171,11 +168,12 @@ public class AudioTransferManager {
 
     private byte[] readChunk(Path audioPath, int chunkIndex) {
         try (RandomAccessFile raf = new RandomAccessFile(audioPath.toFile(), "r")) {
-            long offset = (long) chunkIndex * com.metrovoc.phonon.server.ServerAudioStorage.CHUNK_SIZE;
+            int chunkSize = PhononServerConfig.getChunkSize();
+            long offset = (long) chunkIndex * chunkSize;
             raf.seek(offset);
 
             long remaining = raf.length() - offset;
-            int bytesToRead = (int) Math.min(com.metrovoc.phonon.server.ServerAudioStorage.CHUNK_SIZE, remaining);
+            int bytesToRead = (int) Math.min(chunkSize, remaining);
 
             if (bytesToRead <= 0) return null;
 

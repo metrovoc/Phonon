@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.config.PhononServerConfig;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,15 +25,9 @@ import java.util.concurrent.Executors;
  */
 public class ServerAudioStorage {
 
-    public static final int CHUNK_SIZE = 30 * 1024; // 30KB per chunk
-
     private static ServerAudioStorage instance;
 
     private final ExecutorService downloadExecutor = Executors.newFixedThreadPool(2);
-    private final HttpClient httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(30))
-        .followRedirects(HttpClient.Redirect.NORMAL)
-        .build();
 
     private Path storageDir;
 
@@ -62,10 +57,15 @@ public class ServerAudioStorage {
 
                 Phonon.LOGGER.info("Downloading audio from {} to {}", url, targetFile);
 
+                HttpClient httpClient = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(PhononServerConfig.getDownloadConnectTimeoutSeconds()))
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
+
                 HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .GET()
-                    .timeout(Duration.ofMinutes(5))
+                    .timeout(Duration.ofSeconds(PhononServerConfig.getDownloadReadTimeoutSeconds()))
                     .build();
 
                 HttpResponse<InputStream> response = httpClient.send(
@@ -123,7 +123,11 @@ public class ServerAudioStorage {
 
     public int calculateChunkCount(UUID resourceId) {
         long size = getAudioSize(resourceId);
-        return (int) Math.ceil((double) size / CHUNK_SIZE);
+        return (int) Math.ceil((double) size / PhononServerConfig.getChunkSize());
+    }
+
+    public static int getChunkSize() {
+        return PhononServerConfig.getChunkSize();
     }
 
     public long getDurationMs(UUID resourceId) {

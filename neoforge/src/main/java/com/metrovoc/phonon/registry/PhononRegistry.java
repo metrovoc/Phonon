@@ -6,8 +6,6 @@ import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.menu.SpeakerMenu;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
@@ -29,9 +27,6 @@ public class PhononRegistry {
     private static final DeferredRegister<Item> ITEMS =
         DeferredRegister.create(BuiltInRegistries.ITEM, Constants.MOD_ID);
 
-    private static final DeferredRegister<SoundEvent> SOUND_EVENTS =
-        DeferredRegister.create(BuiltInRegistries.SOUND_EVENT, Constants.MOD_ID);
-
     private static final DeferredRegister<MenuType<?>> MENU_TYPES =
         DeferredRegister.create(BuiltInRegistries.MENU, Constants.MOD_ID);
 
@@ -51,13 +46,6 @@ public class PhononRegistry {
             new BlockItem(SPEAKER_BLOCK.get(), new Item.Properties())
         );
 
-    public static final Supplier<SoundEvent> SPEAKER_SOUND =
-        SOUND_EVENTS.register("speaker", () ->
-            SoundEvent.createVariableRangeEvent(
-                ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker")
-            )
-        );
-
     public static final Supplier<MenuType<SpeakerMenu>> SPEAKER_MENU =
         MENU_TYPES.register("speaker", () ->
             new MenuType<>((id, inv) -> new SpeakerMenu(id, inv, BlockPos.ZERO), FeatureFlags.DEFAULT_FLAGS)
@@ -68,7 +56,6 @@ public class PhononRegistry {
         BLOCKS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
         ITEMS.register(modBus);
-        SOUND_EVENTS.register(modBus);
         MENU_TYPES.register(modBus);
     }
 }

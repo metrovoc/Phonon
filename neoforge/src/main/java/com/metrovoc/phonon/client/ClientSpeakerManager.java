@@ -1,6 +1,8 @@
 package com.metrovoc.phonon.client;
 
+import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.client.audio.AudioPlayer;
 import net.minecraft.core.BlockPos;
 
 import java.util.Map;
@@ -33,9 +35,8 @@ public class ClientSpeakerManager {
 
             // Check if audio is already cached
             if (AudioCache.getInstance().getCachedAudio(resourceId).isPresent()) {
-                // Already cached - play immediately
-                com.metrovoc.phonon.client.audio.OpenALAudioPlayer.getInstance()
-                    .play(pos, playback, resourceId);
+                // Already cached - play immediately via SoundManager (SPR compatible)
+                AudioPlayer.getInstance().play(pos, playback, resourceId);
             } else {
                 // Not cached - download first, then play
                 ClientAudioManager.getInstance().getResource(resourceId).ifPresent(resource -> {
@@ -43,17 +44,13 @@ public class ClientSpeakerManager {
                         new AudioCache.DownloadCallback() {
                             @Override
                             public void onComplete(UUID id, java.nio.file.Path file) {
-                                // Download complete - now play
-                                com.metrovoc.phonon.client.audio.OpenALAudioPlayer.getInstance()
-                                    .play(pos, playback, resourceId);
+                                // Download complete - play via SoundManager (SPR compatible)
+                                AudioPlayer.getInstance().play(pos, playback, resourceId);
                             }
 
                             @Override
                             public void onError(UUID id, Exception e) {
-                                // Download failed - log error
-                                com.metrovoc.phonon.Phonon.LOGGER.error(
-                                    "Failed to download audio for speaker at {}", pos, e
-                                );
+                                Phonon.LOGGER.error("Failed to download audio for speaker at {}", pos, e);
                             }
                         }
                     );
@@ -61,7 +58,7 @@ public class ClientSpeakerManager {
             }
         } else {
             speakers.remove(pos);
-            com.metrovoc.phonon.client.audio.OpenALAudioPlayer.getInstance().stop(pos);
+            AudioPlayer.getInstance().stop(pos);
         }
     }
 
@@ -71,6 +68,6 @@ public class ClientSpeakerManager {
 
     public void removeSpeaker(BlockPos pos) {
         speakers.remove(pos);
-        com.metrovoc.phonon.client.audio.OpenALAudioPlayer.getInstance().stop(pos);
+        AudioPlayer.getInstance().stop(pos);
     }
 }

@@ -1,8 +1,9 @@
 package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
-import com.metrovoc.phonon.audio.AudioManager;
-import com.metrovoc.phonon.audio.AudioResource;
+import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.server.AudioTransferManager;
+import com.metrovoc.phonon.server.ServerAudioStorage;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -14,6 +15,7 @@ import java.util.UUID;
 
 /**
  * Client requests audio file from server.
+ * Triggers server-side transfer via AudioTransferManager.
  */
 public record RequestAudioPacket(UUID resourceId) implements CustomPacketPayload {
 
@@ -34,10 +36,16 @@ public record RequestAudioPacket(UUID resourceId) implements CustomPacketPayload
     public static void handle(RequestAudioPacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
             if (ctx.player() instanceof ServerPlayer serverPlayer) {
-                AudioManager.getInstance().getResource(packet.resourceId).ifPresent(resource -> {
-                    // TODO: Download audio from URL and send chunks
-                    // For MVP, we'll send the URL directly to client for download
-                });
+                // Check if audio exists on server
+                if (ServerAudioStorage.getInstance().hasAudio(packet.resourceId)) {
+                    // Queue transfer
+                    AudioTransferManager.getInstance().queueTransfer(serverPlayer, packet.resourceId);
+                    Phonon.LOGGER.debug("Player {} requested audio {}",
+                        serverPlayer.getName().getString(), packet.resourceId);
+                } else {
+                    Phonon.LOGGER.warn("Player {} requested unavailable audio {}",
+                        serverPlayer.getName().getString(), packet.resourceId);
+                }
             }
         });
     }

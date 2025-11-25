@@ -2,7 +2,7 @@ package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.client.AudioReceiver;
-import com.metrovoc.phonon.server.ServerAudioStorage;
+import com.metrovoc.phonon.config.PhononServerConfig;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -22,7 +22,9 @@ public record AudioChunkPacket(
     byte[] data
 ) implements CustomPacketPayload {
 
-    public static final int CHUNK_SIZE = ServerAudioStorage.CHUNK_SIZE;
+    public static int getChunkSize() {
+        return PhononServerConfig.getChunkSize();
+    }
 
     public static final Type<AudioChunkPacket> TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "audio_chunk"));

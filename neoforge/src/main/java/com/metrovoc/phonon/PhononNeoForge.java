@@ -4,6 +4,9 @@ import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.command.PhononCommand;
+import com.metrovoc.phonon.config.ConfigScreenFactory;
+import com.metrovoc.phonon.config.NeoForgeClientConfig;
+import com.metrovoc.phonon.config.NeoForgeServerConfig;
 import com.metrovoc.phonon.network.PhononNetwork;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
 import com.metrovoc.phonon.registry.PhononRegistry;
@@ -12,7 +15,13 @@ import com.metrovoc.phonon.server.FFmpegHelper;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -25,11 +34,22 @@ import java.nio.file.Path;
 @Mod(Constants.MOD_ID)
 public class PhononNeoForge {
 
-    public PhononNeoForge(IEventBus modBus) {
+    public PhononNeoForge(IEventBus modBus, ModContainer modContainer) {
         Phonon.init();
         PhononRegistry.register(modBus);
 
+        // Register configs
+        modContainer.registerConfig(ModConfig.Type.SERVER, NeoForgeServerConfig.SPEC);
+        modContainer.registerConfig(ModConfig.Type.CLIENT, NeoForgeClientConfig.SPEC);
+
+        // Register config screen (Cloth Config, optional) - client only
+        if (FMLEnvironment.dist == Dist.CLIENT) {
+            ConfigScreenFactory.create().ifPresent(factory ->
+                modContainer.registerExtensionPoint(IConfigScreenFactory.class, factory));
+        }
+
         modBus.addListener(PhononNetwork::register);
+        modBus.addListener(this::onConfigLoad);
 
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
@@ -109,5 +129,15 @@ public class PhononNeoForge {
 
     private void onServerTick(ServerTickEvent.Post event) {
         AudioTransferManager.getInstance().tick(event.getServer());
+    }
+
+    private void onConfigLoad(ModConfigEvent event) {
+        if (event.getConfig().getSpec() == NeoForgeServerConfig.SPEC) {
+            NeoForgeServerConfig.bind();
+            Phonon.LOGGER.info("Server config loaded/reloaded");
+        } else if (event.getConfig().getSpec() == NeoForgeClientConfig.SPEC) {
+            NeoForgeClientConfig.bind();
+            Phonon.LOGGER.info("Client config loaded/reloaded");
+        }
     }
 }

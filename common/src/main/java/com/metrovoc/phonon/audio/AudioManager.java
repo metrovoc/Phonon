@@ -8,16 +8,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * Single source of truth for all audio resources.
  */
 public class AudioManager {
-    private static AudioManager instance;
+    private static final AudioManager instance = new AudioManager();
     private final Map<UUID, AudioResource> resources = new ConcurrentHashMap<>();
     private final Map<String, UUID> nameIndex = new ConcurrentHashMap<>();
 
     private AudioManager() {}
 
     public static AudioManager getInstance() {
-        if (instance == null) {
-            instance = new AudioManager();
-        }
         return instance;
     }
 

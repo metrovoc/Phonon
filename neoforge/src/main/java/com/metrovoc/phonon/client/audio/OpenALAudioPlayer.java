@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * - Respects Minecraft's master volume
  */
 public class OpenALAudioPlayer {
-    private static OpenALAudioPlayer instance;
+    private static final OpenALAudioPlayer instance = new OpenALAudioPlayer();
 
     private final Map<BlockPos, PlayingSound> playingSounds = new ConcurrentHashMap<>();
 
@@ -50,9 +50,6 @@ public class OpenALAudioPlayer {
     private OpenALAudioPlayer() {}
 
     public static OpenALAudioPlayer getInstance() {
-        if (instance == null) {
-            instance = new OpenALAudioPlayer();
-        }
         return instance;
     }
 
@@ -191,6 +188,7 @@ public class OpenALAudioPlayer {
                     AL10.alSourceQueueBuffers(sound.sourceId, bufferId);
                 } catch (Exception e) {
                     Phonon.LOGGER.error("Error refilling buffer", e);
+                    AL10.alDeleteBuffers(bufferId);
                     sound.shouldStop = true;
                 }
             }

@@ -100,8 +100,9 @@ public class PhononAudioStream implements AudioStream {
             );
 
             if (samplesRead == 0) {
-                // End of stream
-                return ByteBuffer.allocate(0);
+                // End of stream - free allocated buffer and return empty direct buffer
+                MemoryUtil.memFree(outputBuffer);
+                return MemoryUtil.memAlloc(0);
             }
 
             // Downmix to mono if needed

@@ -33,18 +33,17 @@ public class AudioCache {
         void onError(UUID resourceId, Exception e);
     }
 
-    private static AudioCache instance;
+    private static final AudioCache instance = new AudioCache();
     private final Map<UUID, Path> cache = new ConcurrentHashMap<>();
     private final ExecutorService downloadExecutor = Executors.newFixedThreadPool(2);
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+        .connectTimeout(java.time.Duration.ofSeconds(10))
+        .build();
     private Path cacheDir;
 
     private AudioCache() {}
 
     public static AudioCache getInstance() {
-        if (instance == null) {
-            instance = new AudioCache();
-        }
         return instance;
     }
 

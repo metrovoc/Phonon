@@ -69,9 +69,7 @@ public class PhononCommand {
             return 0;
         }
 
-        // Create resource with UUID
         UUID resourceId = UUID.randomUUID();
-        AudioResource resource = new AudioResource(resourceId, name, url, -1);
 
         ctx.getSource().sendSuccess(
             () -> Component.literal("Downloading audio '" + name + "'..."),
@@ -79,18 +77,24 @@ public class PhononCommand {
         );
 
         // Download to server storage
-        ServerAudioStorage.getInstance().downloadAndStore(resourceId, url)
+        ServerAudioStorage storage = ServerAudioStorage.getInstance();
+        storage.downloadAndStore(resourceId, url)
             .thenAccept(success -> {
                 if (success) {
-                    // Add to manager only after successful download
-                    manager.addResource(resource);
+                    // Get actual duration via ffprobe
+                    long durationMs = storage.getDurationMs(resourceId);
+                    AudioResource finalResource = new AudioResource(resourceId, name, url, durationMs);
+                    manager.addResource(finalResource);
 
                     // Broadcast to all players
                     MinecraftServer server = ctx.getSource().getServer();
                     server.execute(() -> {
                         broadcastResourceList(server);
+                        String durationStr = durationMs > 0
+                            ? String.format(" (%d:%02d)", durationMs / 60000, (durationMs / 1000) % 60)
+                            : "";
                         ctx.getSource().sendSuccess(
-                            () -> Component.literal("Added audio resource: " + name),
+                            () -> Component.literal("Added audio resource: " + name + durationStr),
                             true
                         );
                     });

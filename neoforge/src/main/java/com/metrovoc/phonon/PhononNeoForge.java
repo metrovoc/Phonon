@@ -2,11 +2,13 @@ package com.metrovoc.phonon;
 
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioPersistence;
+import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.command.PhononCommand;
 import com.metrovoc.phonon.network.PhononNetwork;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
 import com.metrovoc.phonon.registry.PhononRegistry;
 import com.metrovoc.phonon.server.AudioTransferManager;
+import com.metrovoc.phonon.server.FFmpegHelper;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
@@ -45,13 +47,40 @@ public class PhononNeoForge {
             .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
 
         // Initialize server audio storage
-        ServerAudioStorage.getInstance().initialize(worldDir);
+        ServerAudioStorage storage = ServerAudioStorage.getInstance();
+        storage.initialize(worldDir);
 
         // Load audio resources
         Path dataFile = worldDir.resolve("phonon_audio.json");
-        AudioManager.getInstance().loadResources(AudioPersistence.load(dataFile));
+        AudioManager manager = AudioManager.getInstance();
+        manager.loadResources(AudioPersistence.load(dataFile));
 
-        Phonon.LOGGER.info("Loaded {} audio resources", AudioManager.getInstance().getAllResources().size());
+        // Repair resources with missing duration
+        repairMissingDurations(manager, storage);
+
+        Phonon.LOGGER.info("Loaded {} audio resources", manager.getAllResources().size());
+    }
+
+    private void repairMissingDurations(AudioManager manager, ServerAudioStorage storage) {
+        if (!FFmpegHelper.isAvailable()) {
+            return;
+        }
+
+        int repaired = 0;
+        for (AudioResource resource : manager.getAllResources()) {
+            if (resource.durationMs() <= 0 && storage.hasAudio(resource.id())) {
+                long duration = storage.getDurationMs(resource.id());
+                if (duration > 0) {
+                    manager.updateResource(new AudioResource(
+                        resource.id(), resource.name(), resource.url(), duration
+                    ));
+                    repaired++;
+                }
+            }
+        }
+        if (repaired > 0) {
+            Phonon.LOGGER.info("Repaired duration for {} audio resources", repaired);
+        }
     }
 
     private void onServerStopping(ServerStoppingEvent event) {

@@ -51,18 +51,13 @@ public record SpeakerSeekPacket(
             long serverTime = System.currentTimeMillis();
             long newStartTime = serverTime - packet.seekPositionMs;
 
-            var newPlayback = new PlaybackState(
-                current.resourceId(),
-                newStartTime,
-                current.volume(),
-                true
-            );
+            var newPlayback = new PlaybackState(current.resourceId(), newStartTime, true);
 
             speaker.setPlayback(newPlayback);
             PlatformHelper.INSTANCE.sendToAllTracking(
                 level,
                 packet.pos,
-                new SyncSpeakerStatePacket(packet.pos, newPlayback, serverTime)
+                new SyncSpeakerStatePacket(packet.pos, newPlayback, speaker.getVolume(), serverTime)
             );
         });
     }

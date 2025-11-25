@@ -4,10 +4,10 @@ import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.ClientAudioManager;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
-import com.metrovoc.phonon.client.audio.AudioPlayer;
 import com.metrovoc.phonon.menu.SpeakerMenu;
 import com.metrovoc.phonon.network.packets.SpeakerControlPacket;
 import com.metrovoc.phonon.network.packets.SpeakerSeekPacket;
+import com.metrovoc.phonon.network.packets.SpeakerVolumePacket;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -59,6 +59,9 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     protected void init() {
         super.init();
 
+        // Initialize volume from speaker (persisted per-speaker, not per-track)
+        currentVolume = ClientSpeakerManager.getInstance().getSpeakerVolume(menu.getSpeakerPos());
+
         int leftWidth = (int) ((imageWidth - PADDING * 3) * LEFT_RATIO);
         int rightWidth = imageWidth - PADDING * 3 - leftWidth;
         int leftX = leftPos + PADDING;
@@ -105,15 +108,19 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         addRenderableWidget(progressSlider);
         y += PROGRESS_HEIGHT + GAP;
 
-        // Volume slider
-        volumeSlider = new VolumeSlider(x, y, width, SLIDER_HEIGHT, currentVolume, this::onVolumeChanged);
+        // Volume slider - onChange for real-time local audio, onCommit for server sync
+        volumeSlider = new VolumeSlider(x, y, width, SLIDER_HEIGHT, currentVolume,
+            this::onVolumeChanged, this::onVolumeCommit);
         addRenderableWidget(volumeSlider);
         y += SLIDER_HEIGHT + GAP;
 
-        // Play/Stop button (dynamic)
-        playStopButton = Button.builder(Component.literal("Play"), btn -> togglePlayback())
+        // Play/Stop button - initialize with correct state to avoid flicker
+        boolean playing = isPlaying();
+        String buttonText = playing ? "\u25A0 Stop" : "\u25B6 Play";
+        playStopButton = Button.builder(Component.literal(buttonText), btn -> togglePlayback())
             .bounds(x, y, width, BUTTON_HEIGHT)
             .build();
+        playStopButton.active = playing || selectedTrack != null;
         addRenderableWidget(playStopButton);
     }
 
@@ -131,6 +138,10 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     private void onTrackSelected(AudioResource track) {
         selectedTrack = track;
+        // Enable play button when a track is selected (if not already playing)
+        if (!isPlaying()) {
+            playStopButton.active = track != null;
+        }
     }
 
     private void onTrackDoubleClicked(AudioResource track) {
@@ -140,8 +151,15 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     private void onVolumeChanged(float volume) {
         currentVolume = volume;
-        // Real-time volume update for playing audio
-        AudioPlayer.getInstance().setVolume(menu.getSpeakerPos(), volume);
+        // Real-time local audio update while dragging
+        ClientSpeakerManager.getInstance().updateVolume(menu.getSpeakerPos(), volume);
+    }
+
+    private void onVolumeCommit() {
+        // Send final volume to server on release (persists and syncs to other players)
+        PlatformHelper.INSTANCE.sendToServer(
+            new SpeakerVolumePacket(menu.getSpeakerPos(), currentVolume)
+        );
     }
 
     private void onSeek(float progress) {
@@ -173,8 +191,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             new SpeakerControlPacket(
                 menu.getSpeakerPos(),
                 SpeakerControlPacket.Action.PLAY,
-                track.id(),
-                currentVolume
+                track.id()
             )
         );
     }
@@ -184,8 +201,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             new SpeakerControlPacket(
                 menu.getSpeakerPos(),
                 SpeakerControlPacket.Action.STOP,
-                null,
-                0
+                null
             )
         );
     }
@@ -207,23 +223,33 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         Optional<PlaybackState> stateOpt = ClientSpeakerManager.getInstance().getSpeakerState(menu.getSpeakerPos());
         boolean playing = stateOpt.map(PlaybackState::playing).orElse(false);
 
-        // Update button text
-        if (playing) {
-            playStopButton.setMessage(Component.literal("\u25A0 Stop"));
-        } else {
-            playStopButton.setMessage(Component.literal("\u25B6 Play"));
-        }
-
-        // Update progress
+        // Update progress and check for playback completion
         if (playing && stateOpt.isPresent()) {
             PlaybackState state = stateOpt.get();
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
             long durationMs = resourceOpt.map(AudioResource::durationMs).orElse(-1L);
             long positionMs = state.getCurrentPositionMs(System.currentTimeMillis());
-            progressSlider.update(positionMs, durationMs);
+
+            // Auto-stop when playback reaches end
+            if (durationMs > 0 && positionMs >= durationMs) {
+                stopPlayback();
+                playing = false;
+                progressSlider.update(durationMs, durationMs);
+            } else {
+                progressSlider.update(positionMs, durationMs);
+            }
         } else {
             progressSlider.update(0, -1);
+        }
+
+        // Update button text and state
+        if (playing) {
+            playStopButton.setMessage(Component.literal("\u25A0 Stop"));
+            playStopButton.active = true;
+        } else {
+            playStopButton.setMessage(Component.literal("\u25B6 Play"));
+            playStopButton.active = selectedTrack != null;
         }
     }
 
@@ -312,5 +338,15 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             return searchBox.charTyped(c, modifiers);
         }
         return super.charTyped(c, modifiers);
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        // AbstractContainerScreen.mouseDragged handles slot dragging but doesn't call super,
+        // so widgets never receive drag events. We must dispatch manually.
+        if (getFocused() != null && isDragging() && button == 0) {
+            return getFocused().mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 }

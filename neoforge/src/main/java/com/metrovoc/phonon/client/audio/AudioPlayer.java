@@ -40,8 +40,9 @@ public class AudioPlayer {
      * @param pos Speaker position
      * @param playback Playback state from server
      * @param resourceId Audio resource ID
+     * @param volume Speaker volume (0.0 - 1.0)
      */
-    public void play(BlockPos pos, PlaybackState playback, UUID resourceId) {
+    public void play(BlockPos pos, PlaybackState playback, UUID resourceId, float volume) {
         // Check if audio is cached
         Path cachedAudio = AudioCache.getInstance().getCachedAudio(resourceId).orElse(null);
         if (cachedAudio == null || !Files.exists(cachedAudio)) {
@@ -67,7 +68,7 @@ public class AudioPlayer {
             }
 
             // Create sound instance and play through SoundManager
-            SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, playback.volume());
+            SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, volume);
             Minecraft.getInstance().getSoundManager().play(sound);
 
             playingSounds.put(pos, sound);

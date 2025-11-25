@@ -9,13 +9,17 @@ import java.util.function.Consumer;
 /**
  * Volume slider widget.
  * Range: 0.0 to 1.0, displayed as 0% to 100%.
+ * Calls onChange during drag for real-time feedback, onCommit on release for persistence.
  */
 public class VolumeSlider extends AbstractSliderButton {
     private final Consumer<Float> onChange;
+    private final Runnable onCommit;
 
-    public VolumeSlider(int x, int y, int width, int height, float initialValue, Consumer<Float> onChange) {
+    public VolumeSlider(int x, int y, int width, int height, float initialValue,
+                        Consumer<Float> onChange, Runnable onCommit) {
         super(x, y, width, height, Component.empty(), Mth.clamp(initialValue, 0.0, 1.0));
         this.onChange = onChange;
+        this.onCommit = onCommit;
         updateMessage();
     }
 
@@ -28,6 +32,12 @@ public class VolumeSlider extends AbstractSliderButton {
     @Override
     protected void applyValue() {
         onChange.accept((float) this.value);
+    }
+
+    @Override
+    public void onRelease(double mouseX, double mouseY) {
+        super.onRelease(mouseX, mouseY);
+        onCommit.run();
     }
 
     public float getVolume() {

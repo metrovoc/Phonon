@@ -16,8 +16,11 @@ import java.util.function.Supplier;
  * No complex logic here - just data storage and sync.
  */
 public class SpeakerBlockEntity extends BlockEntity {
+    private static final float DEFAULT_VOLUME = 0.5f;
+
     private static Supplier<BlockEntityType<SpeakerBlockEntity>> typeSupplier;
     private PlaybackState playback = PlaybackState.STOPPED;
+    private float volume = DEFAULT_VOLUME;
 
     public static void setTypeSupplier(Supplier<BlockEntityType<SpeakerBlockEntity>> supplier) {
         typeSupplier = supplier;
@@ -45,16 +48,27 @@ public class SpeakerBlockEntity extends BlockEntity {
         }
     }
 
+    public float getVolume() {
+        return volume;
+    }
+
+    public void setVolume(float volume) {
+        this.volume = volume;
+        setChanged();
+    }
+
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.saveAdditional(tag, provider);
 
-        // Save null-safe: only write UUID if not null
+        // Speaker volume (independent of playback)
+        tag.putFloat("volume", volume);
+
+        // Playback state
         if (playback.resourceId() != null) {
             tag.putUUID("resourceId", playback.resourceId());
         }
         tag.putLong("startTime", playback.startTimeMs());
-        tag.putFloat("volume", playback.volume());
         tag.putBoolean("playing", playback.playing());
     }
 
@@ -62,15 +76,16 @@ public class SpeakerBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.loadAdditional(tag, provider);
 
-        // Defensive loading: gracefully handle missing or corrupt data
+        // Load speaker volume (always present, fallback to default)
+        volume = tag.contains("volume") ? tag.getFloat("volume") : DEFAULT_VOLUME;
+
+        // Defensive loading for playback state
         try {
-            // If no playing state or not playing, reset to STOPPED
             if (!tag.contains("playing") || !tag.getBoolean("playing")) {
                 playback = PlaybackState.STOPPED;
                 return;
             }
 
-            // Playing state requires valid resourceId
             if (!tag.contains("resourceId")) {
                 playback = PlaybackState.STOPPED;
                 return;
@@ -83,10 +98,8 @@ public class SpeakerBlockEntity extends BlockEntity {
             }
 
             long startTime = tag.getLong("startTime");
-            float volume = tag.getFloat("volume");
-            playback = new PlaybackState(resourceId, startTime, volume, true);
+            playback = new PlaybackState(resourceId, startTime, true);
         } catch (Exception e) {
-            // Corrupt data: reset to STOPPED rather than crash world loading
             playback = PlaybackState.STOPPED;
         }
     }

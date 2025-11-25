@@ -12,10 +12,15 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Sync speaker playback state to clients.
+ * Sync speaker playback state and volume to clients.
  * Includes server timestamp for clock synchronization.
  */
-public record SyncSpeakerStatePacket(BlockPos pos, PlaybackState playback, long serverTimeMs) implements CustomPacketPayload {
+public record SyncSpeakerStatePacket(
+    BlockPos pos,
+    PlaybackState playback,
+    float volume,
+    long serverTimeMs
+) implements CustomPacketPayload {
 
     public static final Type<SyncSpeakerStatePacket> TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "sync_speaker_state"));
@@ -28,13 +33,13 @@ public record SyncSpeakerStatePacket(BlockPos pos, PlaybackState playback, long 
             PlaybackState::resourceId,
             ByteBufCodecs.VAR_LONG,
             PlaybackState::startTimeMs,
-            ByteBufCodecs.FLOAT,
-            PlaybackState::volume,
             ByteBufCodecs.BOOL,
             PlaybackState::playing,
             PlaybackState::new
         ),
         SyncSpeakerStatePacket::playback,
+        ByteBufCodecs.FLOAT,
+        SyncSpeakerStatePacket::volume,
         ByteBufCodecs.VAR_LONG,
         SyncSpeakerStatePacket::serverTimeMs,
         SyncSpeakerStatePacket::new
@@ -55,11 +60,10 @@ public record SyncSpeakerStatePacket(BlockPos pos, PlaybackState playback, long 
             PlaybackState adjusted = new PlaybackState(
                 packet.playback.resourceId(),
                 packet.playback.startTimeMs() - clockOffset,
-                packet.playback.volume(),
                 packet.playback.playing()
             );
 
-            ClientSpeakerManager.getInstance().updateSpeaker(packet.pos, adjusted);
+            ClientSpeakerManager.getInstance().updateSpeaker(packet.pos, adjusted, packet.volume);
         });
     }
 }

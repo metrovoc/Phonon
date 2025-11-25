@@ -34,40 +34,26 @@ public class AudioPlayer {
         return instance;
     }
 
-    /**
-     * Start or update playback at a speaker position.
-     *
-     * @param pos Speaker position
-     * @param playback Playback state from server
-     * @param resourceId Audio resource ID
-     * @param volume Speaker volume (0.0 - 1.0)
-     */
     public void play(BlockPos pos, PlaybackState playback, UUID resourceId, float volume) {
-        // Check if audio is cached
         Path cachedAudio = AudioCache.getInstance().getCachedAudio(resourceId).orElse(null);
         if (cachedAudio == null || !Files.exists(cachedAudio)) {
-            // This should never happen - ClientSpeakerManager should download before calling play()
             Phonon.LOGGER.error("Audio {} not cached (caller should have downloaded first)", resourceId);
             return;
         }
 
-        // Stop existing sound at this position
         stop(pos);
 
         try {
-            // Calculate seek position for sync
             long currentTime = System.currentTimeMillis();
             long playbackPosition = playback.getCurrentPositionMs(currentTime);
 
-            // Create audio stream
-            PhononAudioStream stream = new PhononAudioStream(cachedAudio);
+            com.metrovoc.phonon.client.audio.PhononAudioStream stream =
+                new com.metrovoc.phonon.client.audio.PhononAudioStream(cachedAudio);
 
-            // Seek to correct position
             if (playbackPosition > 0) {
                 stream.seekMs(playbackPosition);
             }
 
-            // Create sound instance and play through SoundManager
             SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, volume);
             Minecraft.getInstance().getSoundManager().play(sound);
 
@@ -81,20 +67,14 @@ public class AudioPlayer {
         }
     }
 
-    /**
-     * Stop playback at a speaker position.
-     */
     public void stop(BlockPos pos) {
         SpeakerSoundInstance sound = playingSounds.remove(pos);
         if (sound != null) {
             Minecraft.getInstance().getSoundManager().stop(sound);
-            Phonon.LOGGER.info("Stopped audio at {}", pos);
+            Phonon.LOGGER.debug("Stopped audio at {}", pos);
         }
     }
 
-    /**
-     * Update volume for a playing speaker (takes effect on next tick).
-     */
     public void setVolume(BlockPos pos, float volume) {
         SpeakerSoundInstance sound = playingSounds.get(pos);
         if (sound != null) {
@@ -102,28 +82,15 @@ public class AudioPlayer {
         }
     }
 
-    /**
-     * Check if a speaker is currently playing.
-     */
     public boolean isPlaying(BlockPos pos) {
         return playingSounds.containsKey(pos);
     }
 
-    /**
-     * Stop all playback (called on disconnect).
-     */
     public void stopAll() {
         for (SpeakerSoundInstance sound : playingSounds.values()) {
             Minecraft.getInstance().getSoundManager().stop(sound);
         }
         playingSounds.clear();
         Phonon.LOGGER.info("Stopped all audio playback");
-    }
-
-    /**
-     * Cleanup sounds that have finished playing.
-     */
-    public void tick() {
-        // SoundManager handles cleanup automatically
     }
 }

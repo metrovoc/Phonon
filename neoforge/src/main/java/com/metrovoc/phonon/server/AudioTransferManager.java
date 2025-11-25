@@ -23,15 +23,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class AudioTransferManager {
 
-    private static final int MAX_BYTES_PER_TICK = 128 * 1024;  // 128KB
-    private static final int MAX_BYTES_PER_PLAYER_PER_TICK = 64 * 1024;  // 64KB
+    private static final int MAX_BYTES_PER_TICK = 128 * 1024;
+    private static final int MAX_BYTES_PER_PLAYER_PER_TICK = 64 * 1024;
 
     private static AudioTransferManager instance;
 
-    // Player UUID -> Queue of pending transfers
     private final Map<UUID, Queue<PendingTransfer>> playerQueues = new ConcurrentHashMap<>();
-
-    // Round-robin index for fair scheduling
     private final List<UUID> activePlayerOrder = new ArrayList<>();
     private int roundRobinIndex = 0;
 
@@ -44,11 +41,8 @@ public class AudioTransferManager {
         return instance;
     }
 
-    /**
-     * Queue a transfer request for a player.
-     */
     public void queueTransfer(ServerPlayer player, UUID resourceId) {
-        Path audioPath = ServerAudioStorage.getInstance().getAudioPath(resourceId).orElse(null);
+        Path audioPath = com.metrovoc.phonon.server.ServerAudioStorage.getInstance().getAudioPath(resourceId).orElse(null);
         if (audioPath == null) {
             Phonon.LOGGER.warn("Cannot queue transfer: audio {} not found on server", resourceId);
             return;
@@ -57,7 +51,6 @@ public class AudioTransferManager {
         UUID playerId = player.getUUID();
         Queue<PendingTransfer> queue = playerQueues.computeIfAbsent(playerId, k -> new ConcurrentLinkedQueue<>());
 
-        // Check if already queued or transferring
         for (PendingTransfer t : queue) {
             if (t.resourceId.equals(resourceId)) {
                 Phonon.LOGGER.debug("Transfer {} already queued for player {}", resourceId, player.getName().getString());
@@ -65,13 +58,12 @@ public class AudioTransferManager {
             }
         }
 
-        long fileSize = ServerAudioStorage.getInstance().getAudioSize(resourceId);
-        int totalChunks = (int) Math.ceil((double) fileSize / AudioChunkPacket.CHUNK_SIZE);
+        long fileSize = com.metrovoc.phonon.server.ServerAudioStorage.getInstance().getAudioSize(resourceId);
+        int totalChunks = (int) Math.ceil((double) fileSize / com.metrovoc.phonon.server.ServerAudioStorage.CHUNK_SIZE);
 
         PendingTransfer transfer = new PendingTransfer(resourceId, audioPath, totalChunks, fileSize);
         queue.add(transfer);
 
-        // Add to round-robin if not already present
         synchronized (activePlayerOrder) {
             if (!activePlayerOrder.contains(playerId)) {
                 activePlayerOrder.add(playerId);
@@ -82,10 +74,6 @@ public class AudioTransferManager {
             resourceId, player.getName().getString(), totalChunks, fileSize);
     }
 
-    /**
-     * Called every server tick to process pending transfers.
-     * Must be called from the server thread.
-     */
     public void tick(net.minecraft.server.MinecraftServer server) {
         if (activePlayerOrder.isEmpty()) return;
 
@@ -93,7 +81,6 @@ public class AudioTransferManager {
         Map<UUID, Integer> playerBytesSent = new HashMap<>();
 
         synchronized (activePlayerOrder) {
-            // Clean up disconnected players
             activePlayerOrder.removeIf(playerId -> {
                 ServerPlayer player = server.getPlayerList().getPlayer(playerId);
                 if (player == null) {
@@ -105,9 +92,8 @@ public class AudioTransferManager {
 
             if (activePlayerOrder.isEmpty()) return;
 
-            // Round-robin through players
             int playersProcessed = 0;
-            int maxIterations = activePlayerOrder.size() * 10; // Safety limit
+            int maxIterations = activePlayerOrder.size() * 10;
             int iterations = 0;
 
             while (totalBytesSent < MAX_BYTES_PER_TICK && playersProcessed < activePlayerOrder.size() && iterations < maxIterations) {
@@ -146,7 +132,6 @@ public class AudioTransferManager {
                     continue;
                 }
 
-                // Send one chunk
                 int chunkIndex = transfer.nextChunkIndex;
                 byte[] chunkData = readChunk(transfer.audioPath, chunkIndex);
 
@@ -166,7 +151,6 @@ public class AudioTransferManager {
                     transfer.nextChunkIndex++;
 
                     if (transfer.nextChunkIndex >= transfer.totalChunks) {
-                        // Transfer complete
                         queue.poll();
                         Phonon.LOGGER.info("Transfer complete: {} to {}", transfer.resourceId, player.getName().getString());
 
@@ -176,7 +160,6 @@ public class AudioTransferManager {
                         }
                     }
                 } else {
-                    // Read error, skip this transfer
                     queue.poll();
                     Phonon.LOGGER.error("Failed to read chunk {} for {}", chunkIndex, transfer.resourceId);
                 }
@@ -188,11 +171,11 @@ public class AudioTransferManager {
 
     private byte[] readChunk(Path audioPath, int chunkIndex) {
         try (RandomAccessFile raf = new RandomAccessFile(audioPath.toFile(), "r")) {
-            long offset = (long) chunkIndex * AudioChunkPacket.CHUNK_SIZE;
+            long offset = (long) chunkIndex * com.metrovoc.phonon.server.ServerAudioStorage.CHUNK_SIZE;
             raf.seek(offset);
 
             long remaining = raf.length() - offset;
-            int bytesToRead = (int) Math.min(AudioChunkPacket.CHUNK_SIZE, remaining);
+            int bytesToRead = (int) Math.min(com.metrovoc.phonon.server.ServerAudioStorage.CHUNK_SIZE, remaining);
 
             if (bytesToRead <= 0) return null;
 
@@ -206,18 +189,12 @@ public class AudioTransferManager {
         }
     }
 
-    /**
-     * Check if a player has a pending transfer for a resource.
-     */
     public boolean hasPendingTransfer(UUID playerId, UUID resourceId) {
         Queue<PendingTransfer> queue = playerQueues.get(playerId);
         if (queue == null) return false;
         return queue.stream().anyMatch(t -> t.resourceId.equals(resourceId));
     }
 
-    /**
-     * Cancel all transfers for a player.
-     */
     public void cancelPlayerTransfers(UUID playerId) {
         playerQueues.remove(playerId);
         synchronized (activePlayerOrder) {
@@ -225,9 +202,6 @@ public class AudioTransferManager {
         }
     }
 
-    /**
-     * Get number of active transfers.
-     */
     public int getActiveTransferCount() {
         return playerQueues.values().stream().mapToInt(Queue::size).sum();
     }
@@ -237,9 +211,6 @@ public class AudioTransferManager {
         activePlayerOrder.clear();
     }
 
-    /**
-     * Represents a pending file transfer to a player.
-     */
     private static class PendingTransfer {
         final UUID resourceId;
         final Path audioPath;

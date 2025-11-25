@@ -46,16 +46,13 @@ public class PhononNeoForge {
         Path worldDir = event.getServer()
             .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
 
-        // Initialize server audio storage
         ServerAudioStorage storage = ServerAudioStorage.getInstance();
         storage.initialize(worldDir);
 
-        // Load audio resources
         Path dataFile = worldDir.resolve("phonon_audio.json");
         AudioManager manager = AudioManager.getInstance();
         manager.loadResources(AudioPersistence.load(dataFile));
 
-        // Repair resources with missing duration
         repairMissingDurations(manager, storage);
 
         Phonon.LOGGER.info("Loaded {} audio resources", manager.getAllResources().size());
@@ -95,14 +92,12 @@ public class PhononNeoForge {
             Phonon.LOGGER.error("Failed to save audio resources", e);
         }
 
-        // Shutdown managers
         ServerAudioStorage.getInstance().shutdown();
         AudioTransferManager.getInstance().shutdown();
     }
 
     private void onPlayerJoin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            // Send all audio resources to joining player
             var resources = AudioManager.getInstance().getAllResources();
             var packet = new SyncAudioResourcesPacket(resources);
 
@@ -113,7 +108,6 @@ public class PhononNeoForge {
     }
 
     private void onServerTick(ServerTickEvent.Post event) {
-        // Process audio transfers with flow control
         AudioTransferManager.getInstance().tick(event.getServer());
     }
 }

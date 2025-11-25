@@ -1,7 +1,7 @@
 package com.metrovoc.phonon.client;
 
 import com.metrovoc.phonon.Phonon;
-import net.minecraft.client.Minecraft;
+import com.metrovoc.phonon.platform.PlatformHelper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -20,10 +20,7 @@ public class AudioReceiver {
 
     private static final AudioReceiver instance = new AudioReceiver();
 
-    // Active transfers: resourceId -> PendingTransfer
     private final Map<UUID, PendingTransfer> pendingTransfers = new ConcurrentHashMap<>();
-
-    // Callbacks waiting for transfer completion
     private final Map<UUID, Consumer<Path>> completionCallbacks = new ConcurrentHashMap<>();
 
     private Path cacheDir;
@@ -43,30 +40,22 @@ public class AudioReceiver {
         }
     }
 
-    /**
-     * Register callback for when a transfer completes.
-     */
     public void onTransferComplete(UUID resourceId, Consumer<Path> callback) {
-        // Check if already cached
         Path cached = cacheDir.resolve(resourceId + ".ogg");
         if (Files.exists(cached)) {
-            Minecraft.getInstance().tell(() -> callback.accept(cached));
+            PlatformHelper.INSTANCE.runOnClient(() -> callback.accept(cached));
             return;
         }
 
-        // Check if transfer already complete
         PendingTransfer transfer = pendingTransfers.get(resourceId);
         if (transfer != null && transfer.isComplete()) {
-            Minecraft.getInstance().tell(() -> callback.accept(transfer.outputPath));
+            PlatformHelper.INSTANCE.runOnClient(() -> callback.accept(transfer.outputPath));
             return;
         }
 
         completionCallbacks.put(resourceId, callback);
     }
 
-    /**
-     * Receive a chunk from server.
-     */
     public void receiveChunk(UUID resourceId, int chunkIndex, int totalChunks, byte[] data) {
         PendingTransfer transfer = pendingTransfers.computeIfAbsent(resourceId,
             id -> new PendingTransfer(id, totalChunks, cacheDir.resolve(id + ".ogg")));
@@ -83,15 +72,13 @@ public class AudioReceiver {
             byte[] completeData = transfer.assemble();
             Files.write(transfer.outputPath, completeData);
 
-            // Register in AudioCache
             AudioCache.getInstance().registerCachedFile(resourceId, transfer.outputPath);
 
             Phonon.LOGGER.info("Audio transfer complete: {} ({} bytes)", resourceId, completeData.length);
 
-            // Trigger callback
             Consumer<Path> callback = completionCallbacks.remove(resourceId);
             if (callback != null) {
-                Minecraft.getInstance().tell(() -> callback.accept(transfer.outputPath));
+                PlatformHelper.INSTANCE.runOnClient(() -> callback.accept(transfer.outputPath));
             }
 
             pendingTransfers.remove(resourceId);
@@ -103,25 +90,16 @@ public class AudioReceiver {
         }
     }
 
-    /**
-     * Check if a transfer is in progress for the given resource.
-     */
     public boolean isTransferInProgress(UUID resourceId) {
         return pendingTransfers.containsKey(resourceId);
     }
 
-    /**
-     * Get transfer progress (0.0 - 1.0).
-     */
     public float getTransferProgress(UUID resourceId) {
         PendingTransfer transfer = pendingTransfers.get(resourceId);
         if (transfer == null) return 0f;
         return transfer.getProgress();
     }
 
-    /**
-     * Tracks chunks for a single file transfer.
-     */
     private static class PendingTransfer {
         final UUID resourceId;
         final int totalChunks;

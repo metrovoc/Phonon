@@ -145,6 +145,15 @@ public class ServerAudioStorage {
     }
 
     /**
+     * Get audio duration in milliseconds using ffprobe.
+     */
+    public long getDurationMs(UUID resourceId) {
+        return getAudioPath(resourceId)
+            .flatMap(FFmpegHelper::getDurationMs)
+            .orElse(-1L);
+    }
+
+    /**
      * Delete audio file.
      */
     public boolean deleteAudio(UUID resourceId) {

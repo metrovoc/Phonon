@@ -10,10 +10,9 @@ public final class PhononServerConfig {
 
     private PhononServerConfig() {}
 
-    // Defaults
-    public static final int DEFAULT_CHUNK_SIZE = 30 * 1024;
-    public static final int DEFAULT_MAX_BYTES_PER_TICK = 128 * 1024;
-    public static final int DEFAULT_MAX_BYTES_PER_PLAYER_PER_TICK = 64 * 1024;
+    public static final int DEFAULT_CHUNK_SIZE = 256 * 1024;
+    public static final int DEFAULT_MAX_BYTES_PER_TICK = 512 * 1024;
+    public static final int DEFAULT_MAX_BYTES_PER_PLAYER_PER_TICK = 256 * 1024;
     public static final int DEFAULT_DOWNLOAD_CONNECT_TIMEOUT = 30;
     public static final int DEFAULT_DOWNLOAD_READ_TIMEOUT = 300;
 

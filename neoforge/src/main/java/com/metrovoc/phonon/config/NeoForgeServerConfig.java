@@ -4,7 +4,7 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import org.apache.commons.lang3.tuple.Pair;
 
 /**
- * NeoForge implementation of server config using ModConfigSpec.
+ * NeoForge server config using ModConfigSpec.
  */
 public class NeoForgeServerConfig {
 
@@ -31,28 +31,27 @@ public class NeoForgeServerConfig {
         builder.push("transfer");
 
         chunkSize = builder
-            .comment("Size of each audio chunk in bytes when transferring to clients")
-            .comment("Larger chunks = fewer packets but more memory per packet")
+            .comment("Audio chunk size in bytes. Larger = fewer packets, faster transfer.")
             .defineInRange("chunkSize",
                 PhononServerConfig.DEFAULT_CHUNK_SIZE,
-                8 * 1024,
-                128 * 1024);
-
-        maxBytesPerTick = builder
-            .comment("Maximum total bytes to send per server tick across all players")
-            .comment("At 20 TPS: 128KB/tick = ~2.5 MB/s, 256KB/tick = ~5 MB/s")
-            .defineInRange("maxBytesPerTick",
-                PhononServerConfig.DEFAULT_MAX_BYTES_PER_TICK,
-                32 * 1024,
+                64 * 1024,
                 1024 * 1024);
 
+        maxBytesPerTick = builder
+            .comment("Max bytes/tick for all audio transfers combined.")
+            .comment("Increase if players experience slow downloads.")
+            .comment("Decrease if audio transfers affect game responsiveness.")
+            .defineInRange("maxBytesPerTick",
+                PhononServerConfig.DEFAULT_MAX_BYTES_PER_TICK,
+                64 * 1024,
+                4 * 1024 * 1024);
+
         maxBytesPerPlayerPerTick = builder
-            .comment("Maximum bytes to send per player per tick")
-            .comment("Prevents one player from consuming all bandwidth")
+            .comment("Max bytes/tick per player. Ensures fair bandwidth sharing.")
             .defineInRange("maxBytesPerPlayerPerTick",
                 PhononServerConfig.DEFAULT_MAX_BYTES_PER_PLAYER_PER_TICK,
-                16 * 1024,
-                512 * 1024);
+                64 * 1024,
+                2 * 1024 * 1024);
 
         builder.pop();
 

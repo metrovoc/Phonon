@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phonon - Audio Manager</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <header>
+        <h1>Phonon</h1>
+        <p class="subtitle">Audio Manager</p>
+    </header>
+
+    <main>
+        <section class="add-track">
+            <h2>Add Track</h2>
+            <form id="add-form">
+                <div class="form-row">
+                    <input type="text" id="track-name" placeholder="Track name" required>
+                    <input type="url" id="track-url" placeholder="URL (.ogg, YouTube, Bilibili...)" required>
+                    <button type="submit">Add</button>
+                </div>
+            </form>
+            <div id="add-status" class="status hidden"></div>
+        </section>
+
+        <section class="downloads hidden" id="downloads-section">
+            <h2>Downloads</h2>
+            <ul id="downloads-list"></ul>
+        </section>
+
+        <section class="tracks">
+            <h2>Tracks</h2>
+            <div class="search-row">
+                <input type="search" id="search" placeholder="Search tracks...">
+            </div>
+            <ul id="tracks-list">
+                <li class="loading">Loading...</li>
+            </ul>
+        </section>
+    </main>
+
+    <footer>
+        <p>Phonon WebUI</p>
+    </footer>
+
+    <script src="/app.js"></script>
+</body>
+</html>

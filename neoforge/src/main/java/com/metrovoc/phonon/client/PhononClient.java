@@ -33,6 +33,7 @@ public class PhononClient {
 class PhononClientTick {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
-        com.metrovoc.phonon.client.audio.OpenALAudioPlayer.getInstance().tick();
+        // SoundManager handles audio lifecycle automatically
+        // No manual tick needed when using proper SoundInstance
     }
 }

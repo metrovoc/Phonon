@@ -80,19 +80,17 @@ public class PhononAudioStream implements AudioStream {
     @Override
     public ByteBuffer read(int bufferSize) throws IOException {
         if (closed) {
-            return MemoryUtil.memAlloc(0);  // Empty direct buffer
+            return MemoryUtil.memAlloc(0);
         }
 
-        // Calculate samples to read (2 bytes per sample)
         int samplesToRead = bufferSize / 2;
 
-        ByteBuffer outputBuffer = MemoryUtil.memAlloc(samplesToRead * 2);  // MUST be direct memory
+        ByteBuffer outputBuffer = MemoryUtil.memAlloc(samplesToRead * 2);
         ShortBuffer outputShorts = outputBuffer.asShortBuffer();
 
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            // Decode interleaved samples
-            ShortBuffer pcmBuffer = stack.mallocShort(samplesToRead * channels);
-
+        // Use heap memory instead of stack (stack is too small for audio buffers)
+        ShortBuffer pcmBuffer = MemoryUtil.memAllocShort(samplesToRead * channels);
+        try {
             int samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(
                 decoder,
                 channels,
@@ -100,30 +98,26 @@ public class PhononAudioStream implements AudioStream {
             );
 
             if (samplesRead == 0) {
-                // End of stream - free allocated buffer and return empty direct buffer
                 MemoryUtil.memFree(outputBuffer);
                 return MemoryUtil.memAlloc(0);
             }
 
-            // Downmix to mono if needed
             if (channels == 1) {
-                // Already mono, direct copy
                 for (int i = 0; i < samplesRead; i++) {
                     outputShorts.put(pcmBuffer.get(i));
                 }
             } else {
-                // Stereo to mono: average left and right
                 for (int i = 0; i < samplesRead; i++) {
                     short left = pcmBuffer.get(i * 2);
                     short right = pcmBuffer.get(i * 2 + 1);
-
-                    // Average and clamp
                     int mixed = (left + right) / 2;
                     outputShorts.put((short) Math.max(-32768, Math.min(32767, mixed)));
                 }
             }
 
             currentSample += samplesRead;
+        } finally {
+            MemoryUtil.memFree(pcmBuffer);
         }
 
         outputBuffer.position(0);

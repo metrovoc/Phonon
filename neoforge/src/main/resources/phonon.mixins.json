@@ -1,6 +1,6 @@
 {
   "required": true,
-  "package": "com.tovkaic.phonon.mixin",
+  "package": "com.metrovoc.phonon.mixin",
   "compatibilityLevel": "JAVA_21",
   "refmap": "phonon.refmap.json",
   "client": [

@@ -49,7 +49,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     public SpeakerSoundInstance(PhononAudioStream stream, BlockPos pos, float volume) {
         super(
             SoundEvent.createVariableRangeEvent(DUMMY_SOUND_LOCATION),
-            SoundSource.RECORDS,
+            SoundSource.BLOCKS,
             SoundInstance.createUnseededRandom()
         );
 

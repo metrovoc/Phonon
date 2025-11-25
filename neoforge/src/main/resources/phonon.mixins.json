@@ -3,9 +3,7 @@
   "package": "com.metrovoc.phonon.mixin",
   "compatibilityLevel": "JAVA_21",
   "refmap": "phonon.refmap.json",
-  "client": [
-    "SoundEngineMixin"
-  ],
+  "client": [],
   "injectors": {
     "defaultRequire": 1
   }

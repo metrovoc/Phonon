@@ -6,6 +6,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
+import com.metrovoc.phonon.server.ServerAudioStorage;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -14,10 +15,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Server commands for managing audio resources.
- * Simple, flat command structure - no nested nonsense.
+ * Simple, flat command structure.
  */
 public class PhononCommand {
 
@@ -46,15 +48,14 @@ public class PhononCommand {
         String name = StringArgumentType.getString(ctx, "name");
         String url = StringArgumentType.getString(ctx, "url");
 
-        // MVP: Only accept .ogg direct URLs
+        // Validate URL format
         if (!url.toLowerCase().endsWith(".ogg")) {
             ctx.getSource().sendFailure(Component.literal(
-                "MVP only supports direct .ogg URLs. Example: https://example.com/music.ogg"
+                "Only .ogg files are supported. Example: https://example.com/music.ogg"
             ));
             return 0;
         }
 
-        // Validate URL format
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             ctx.getSource().sendFailure(Component.literal(
                 "URL must start with http:// or https://"
@@ -68,16 +69,40 @@ public class PhononCommand {
             return 0;
         }
 
-        AudioResource resource = new AudioResource(name, url);
-        manager.addResource(resource);
-
-        // Broadcast updated resource list to all online players
-        broadcastResourceList(ctx.getSource().getServer());
+        // Create resource with UUID
+        UUID resourceId = UUID.randomUUID();
+        AudioResource resource = new AudioResource(resourceId, name, url, -1);
 
         ctx.getSource().sendSuccess(
-            () -> Component.literal("Added audio resource: " + name),
-            true
+            () -> Component.literal("Downloading audio '" + name + "'..."),
+            false
         );
+
+        // Download to server storage
+        ServerAudioStorage.getInstance().downloadAndStore(resourceId, url)
+            .thenAccept(success -> {
+                if (success) {
+                    // Add to manager only after successful download
+                    manager.addResource(resource);
+
+                    // Broadcast to all players
+                    MinecraftServer server = ctx.getSource().getServer();
+                    server.execute(() -> {
+                        broadcastResourceList(server);
+                        ctx.getSource().sendSuccess(
+                            () -> Component.literal("Added audio resource: " + name),
+                            true
+                        );
+                    });
+                } else {
+                    ctx.getSource().getServer().execute(() -> {
+                        ctx.getSource().sendFailure(Component.literal(
+                            "Failed to download audio. Check server logs."
+                        ));
+                    });
+                }
+            });
+
         return 1;
     }
 
@@ -97,9 +122,12 @@ public class PhononCommand {
             () -> Component.literal("Audio resources (" + resources.size() + "):"),
             false
         );
+
         for (AudioResource resource : resources) {
+            boolean cached = ServerAudioStorage.getInstance().hasAudio(resource.id());
+            String status = cached ? "[OK]" : "[MISSING]";
             ctx.getSource().sendSuccess(
-                () -> Component.literal("  - " + resource.name() + ": " + resource.url()),
+                () -> Component.literal("  " + status + " " + resource.name()),
                 false
             );
         }
@@ -114,7 +142,10 @@ public class PhononCommand {
             .map(resource -> {
                 manager.removeResource(resource.id());
 
-                // Broadcast updated resource list to all online players
+                // Delete file from storage
+                ServerAudioStorage.getInstance().deleteAudio(resource.id());
+
+                // Broadcast updated resource list
                 broadcastResourceList(ctx.getSource().getServer());
 
                 ctx.getSource().sendSuccess(
@@ -131,7 +162,6 @@ public class PhononCommand {
 
     /**
      * Broadcast current resource list to all online players.
-     * Called after add/remove operations.
      */
     private static void broadcastResourceList(MinecraftServer server) {
         var packet = new SyncAudioResourcesPacket(AudioManager.getInstance().getAllResources());

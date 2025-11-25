@@ -3,7 +3,6 @@ package com.metrovoc.phonon.network.packets;
 import com.mojang.serialization.Codec;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.StreamCodec;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 

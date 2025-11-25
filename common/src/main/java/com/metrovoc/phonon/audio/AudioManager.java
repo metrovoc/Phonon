@@ -23,6 +23,10 @@ public class AudioManager {
         nameIndex.put(resource.name().toLowerCase(), resource.id());
     }
 
+    public void updateResource(AudioResource resource) {
+        resources.put(resource.id(), resource);
+    }
+
     public void removeResource(UUID id) {
         AudioResource resource = resources.remove(id);
         if (resource != null) {

@@ -1,6 +1,8 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.audio.FFmpegBinary;
+import com.metrovoc.phonon.audio.FFprobe;
 import com.metrovoc.phonon.network.packets.AudioChunkPacket;
 
 import java.io.IOException;
@@ -14,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -49,16 +52,46 @@ public class ServerAudioStorage {
         try {
             Files.createDirectories(storageDir);
             Phonon.LOGGER.info("Server audio storage initialized at {}", storageDir);
+
+            // Set up ffmpeg binary location
+            Path binDir = worldDir.resolve("phonon_bin");
+            FFmpegBinary.setInstallDir(binDir);
+
+            // Check if ffprobe is available (either downloaded or system)
+            if (!FFprobe.isAvailable()) {
+                Phonon.LOGGER.info("ffprobe not found locally or in PATH. Downloading...");
+                FFmpegBinary.download(progress -> {
+                    int pct = (int) (progress * 100);
+                    Phonon.LOGGER.info("Downloading ffmpeg: {}%", pct);
+                }).thenAccept(success -> {
+                    if (success) {
+                        FFprobe.resetCache();
+                        Phonon.LOGGER.info("ffmpeg downloaded successfully");
+                    } else {
+                        Phonon.LOGGER.warn("Failed to download ffmpeg. Audio duration detection will be unavailable.");
+                    }
+                });
+            }
         } catch (IOException e) {
             Phonon.LOGGER.error("Failed to create audio storage directory", e);
         }
     }
 
     /**
-     * Download audio from URL and store locally.
-     * Returns the resource UUID on success.
+     * Re-probe duration for an existing audio file.
+     * Used to update resources with missing/incorrect duration.
      */
-    public CompletableFuture<Boolean> downloadAndStore(UUID resourceId, String url) {
+    public OptionalLong probeDuration(UUID resourceId) {
+        return getAudioPath(resourceId)
+            .map(FFprobe::getDurationMs)
+            .orElse(OptionalLong.empty());
+    }
+
+    /**
+     * Download audio from URL and store locally.
+     * Returns duration in ms on success, empty on failure.
+     */
+    public CompletableFuture<OptionalLong> downloadAndStore(UUID resourceId, String url) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 Path targetFile = storageDir.resolve(resourceId + ".ogg");
@@ -79,15 +112,17 @@ public class ServerAudioStorage {
                 if (response.statusCode() == 200) {
                     Files.copy(response.body(), targetFile, StandardCopyOption.REPLACE_EXISTING);
                     long size = Files.size(targetFile);
-                    Phonon.LOGGER.info("Downloaded audio {} ({} bytes)", resourceId, size);
-                    return true;
+
+                    long durationMs = FFprobe.getDurationMs(targetFile).orElse(-1L);
+                    Phonon.LOGGER.info("Downloaded audio {} ({} bytes, {}ms)", resourceId, size, durationMs);
+                    return OptionalLong.of(durationMs);
                 } else {
                     Phonon.LOGGER.error("Failed to download audio: HTTP {}", response.statusCode());
-                    return false;
+                    return OptionalLong.empty();
                 }
             } catch (Exception e) {
                 Phonon.LOGGER.error("Failed to download audio {}", resourceId, e);
-                return false;
+                return OptionalLong.empty();
             }
         }, downloadExecutor);
     }

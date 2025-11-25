@@ -2,6 +2,7 @@ package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.client.AudioReceiver;
+import com.metrovoc.phonon.server.ServerAudioStorage;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -13,7 +14,6 @@ import java.util.UUID;
 
 /**
  * Binary audio chunk transfer (server -> client).
- * Carries actual audio data, not URLs.
  */
 public record AudioChunkPacket(
     UUID resourceId,
@@ -22,7 +22,7 @@ public record AudioChunkPacket(
     byte[] data
 ) implements CustomPacketPayload {
 
-    public static final int CHUNK_SIZE = 30 * 1024; // 30KB per chunk
+    public static final int CHUNK_SIZE = ServerAudioStorage.CHUNK_SIZE;
 
     public static final Type<AudioChunkPacket> TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "audio_chunk"));

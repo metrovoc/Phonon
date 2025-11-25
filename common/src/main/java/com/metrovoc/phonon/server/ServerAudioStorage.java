@@ -1,7 +1,6 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
-import com.metrovoc.phonon.network.packets.AudioChunkPacket;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,6 +23,8 @@ import java.util.concurrent.Executors;
  * Downloads and stores OGG files for distribution via packets.
  */
 public class ServerAudioStorage {
+
+    public static final int CHUNK_SIZE = 30 * 1024; // 30KB per chunk
 
     private static ServerAudioStorage instance;
 
@@ -54,10 +55,6 @@ public class ServerAudioStorage {
         }
     }
 
-    /**
-     * Download audio from URL and store locally.
-     * Returns the resource UUID on success.
-     */
     public CompletableFuture<Boolean> downloadAndStore(UUID resourceId, String url) {
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -92,26 +89,17 @@ public class ServerAudioStorage {
         }, downloadExecutor);
     }
 
-    /**
-     * Check if audio file exists in storage.
-     */
     public boolean hasAudio(UUID resourceId) {
         if (storageDir == null) return false;
         return Files.exists(storageDir.resolve(resourceId + ".ogg"));
     }
 
-    /**
-     * Get audio file path.
-     */
     public Optional<Path> getAudioPath(UUID resourceId) {
         if (storageDir == null) return Optional.empty();
         Path file = storageDir.resolve(resourceId + ".ogg");
         return Files.exists(file) ? Optional.of(file) : Optional.empty();
     }
 
-    /**
-     * Read audio file as bytes.
-     */
     public Optional<byte[]> readAudio(UUID resourceId) {
         return getAudioPath(resourceId).flatMap(path -> {
             try {
@@ -123,9 +111,6 @@ public class ServerAudioStorage {
         });
     }
 
-    /**
-     * Get audio file size in bytes.
-     */
     public long getAudioSize(UUID resourceId) {
         return getAudioPath(resourceId).map(path -> {
             try {
@@ -136,26 +121,17 @@ public class ServerAudioStorage {
         }).orElse(0L);
     }
 
-    /**
-     * Calculate number of chunks needed for a file.
-     */
     public int calculateChunkCount(UUID resourceId) {
         long size = getAudioSize(resourceId);
-        return (int) Math.ceil((double) size / AudioChunkPacket.CHUNK_SIZE);
+        return (int) Math.ceil((double) size / CHUNK_SIZE);
     }
 
-    /**
-     * Get audio duration in milliseconds using ffprobe.
-     */
     public long getDurationMs(UUID resourceId) {
         return getAudioPath(resourceId)
             .flatMap(FFmpegHelper::getDurationMs)
             .orElse(-1L);
     }
 
-    /**
-     * Delete audio file.
-     */
     public boolean deleteAudio(UUID resourceId) {
         return getAudioPath(resourceId).map(path -> {
             try {

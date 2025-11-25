@@ -24,7 +24,7 @@ import java.nio.file.StandardOpenOption;
  */
 public class PhononAudioStream implements AudioStream {
     private final long decoder;
-    private final ByteBuffer fileBuffer;  // MUST keep reference for STBVorbis
+    private final ByteBuffer fileBuffer;
     private final AudioFormat format;
     private final int channels;
     private final int sampleRate;
@@ -33,14 +33,12 @@ public class PhononAudioStream implements AudioStream {
     private boolean closed = false;
 
     public PhononAudioStream(Path oggFile) throws IOException {
-        // Read entire file into memory (required by STBVorbis)
         try (FileChannel channel = FileChannel.open(oggFile, StandardOpenOption.READ)) {
             this.fileBuffer = MemoryUtil.memAlloc((int) channel.size());
             channel.read(fileBuffer);
             fileBuffer.flip();
         }
 
-        // Initialize STBVorbis decoder
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer error = stack.mallocInt(1);
             this.decoder = STBVorbis.stb_vorbis_open_memory(fileBuffer, error, null);
@@ -50,7 +48,6 @@ public class PhononAudioStream implements AudioStream {
                 throw new IOException("Failed to open OGG file: error code " + error.get(0));
             }
 
-            // Get audio info
             STBVorbisInfo info = STBVorbisInfo.malloc(stack);
             STBVorbis.stb_vorbis_get_info(decoder, info);
 
@@ -58,15 +55,14 @@ public class PhononAudioStream implements AudioStream {
             this.sampleRate = info.sample_rate();
             this.totalSamples = STBVorbis.stb_vorbis_stream_length_in_samples(decoder);
 
-            Phonon.LOGGER.info("Loaded OGG: {} channels, {}Hz, {} samples",
+            Phonon.LOGGER.debug("Loaded OGG: {} channels, {}Hz, {} samples",
                 channels, sampleRate, totalSamples);
         }
 
-        // Output format: ALWAYS MONO, 16-bit signed
         this.format = new AudioFormat(
             sampleRate,
             16,
-            1, // MONO (not stereo!)
+            1, // MONO
             true,
             false
         );
@@ -88,7 +84,6 @@ public class PhononAudioStream implements AudioStream {
         ByteBuffer outputBuffer = MemoryUtil.memAlloc(samplesToRead * 2);
         ShortBuffer outputShorts = outputBuffer.asShortBuffer();
 
-        // Use heap memory instead of stack (stack is too small for audio buffers)
         ShortBuffer pcmBuffer = MemoryUtil.memAllocShort(samplesToRead * channels);
         try {
             int samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(
@@ -125,9 +120,6 @@ public class PhononAudioStream implements AudioStream {
         return outputBuffer;
     }
 
-    /**
-     * Seek to a specific sample position (for timestamp sync).
-     */
     public void seek(int samplePosition) {
         if (!closed && samplePosition >= 0 && samplePosition < totalSamples) {
             STBVorbis.stb_vorbis_seek(decoder, samplePosition);
@@ -135,9 +127,6 @@ public class PhononAudioStream implements AudioStream {
         }
     }
 
-    /**
-     * Seek to a specific time in milliseconds.
-     */
     public void seekMs(long milliseconds) {
         int samplePosition = (int) ((milliseconds * sampleRate) / 1000);
         seek(samplePosition);
@@ -159,7 +148,7 @@ public class PhononAudioStream implements AudioStream {
     public void close() {
         if (!closed) {
             STBVorbis.stb_vorbis_close(decoder);
-            MemoryUtil.memFree(fileBuffer);  // Release the file buffer
+            MemoryUtil.memFree(fileBuffer);
             closed = true;
         }
     }

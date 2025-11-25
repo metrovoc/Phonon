@@ -15,7 +15,6 @@ import java.util.UUID;
 
 /**
  * Client requests audio file from server.
- * Triggers server-side transfer via AudioTransferManager.
  */
 public record RequestAudioPacket(UUID resourceId) implements CustomPacketPayload {
 
@@ -36,9 +35,7 @@ public record RequestAudioPacket(UUID resourceId) implements CustomPacketPayload
     public static void handle(RequestAudioPacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
             if (ctx.player() instanceof ServerPlayer serverPlayer) {
-                // Check if audio exists on server
                 if (ServerAudioStorage.getInstance().hasAudio(packet.resourceId)) {
-                    // Queue transfer
                     AudioTransferManager.getInstance().queueTransfer(serverPlayer, packet.resourceId);
                     Phonon.LOGGER.debug("Player {} requested audio {}",
                         serverPlayer.getName().getString(), packet.resourceId);

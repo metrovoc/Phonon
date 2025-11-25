@@ -52,11 +52,9 @@ public record SyncSpeakerStatePacket(
 
     public static void handle(SyncSpeakerStatePacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
-            // Calculate clock offset between server and client
             long clientTimeMs = System.currentTimeMillis();
             long clockOffset = packet.serverTimeMs - clientTimeMs;
 
-            // Adjust playback time to client's clock
             PlaybackState adjusted = new PlaybackState(
                 packet.playback.resourceId(),
                 packet.playback.startTimeMs() - clockOffset,

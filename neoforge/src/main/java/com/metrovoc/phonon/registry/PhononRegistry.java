@@ -53,6 +53,7 @@ public class PhononRegistry {
 
     public static void register(IEventBus modBus) {
         SpeakerBlockEntity.setTypeSupplier(SPEAKER_BLOCK_ENTITY);
+        SpeakerMenu.setTypeSupplier(SPEAKER_MENU);
         BLOCKS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
         ITEMS.register(modBus);

@@ -34,19 +34,19 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker");
     private static final Sound DUMMY_SOUND = new Sound(
         DUMMY_SOUND_LOCATION,
-        ConstantFloat.of(1.0f),  // volume (identity at 1.0)
-        ConstantFloat.of(1.0f),  // pitch (identity at 1.0)
-        1,                        // weight
+        ConstantFloat.of(1.0f),
+        ConstantFloat.of(1.0f),
+        1,
         Sound.Type.FILE,
-        true,                     // stream (important for long audio)
-        false,                    // preload
-        16                        // attenuation distance
+        true,
+        false,
+        16
     );
 
-    private final PhononAudioStream stream;
+    private final com.metrovoc.phonon.client.audio.PhononAudioStream stream;
     private final BlockPos sourcePos;
 
-    public SpeakerSoundInstance(PhononAudioStream stream, BlockPos pos, float volume) {
+    public SpeakerSoundInstance(com.metrovoc.phonon.client.audio.PhononAudioStream stream, BlockPos pos, float volume) {
         super(
             SoundEvent.createVariableRangeEvent(DUMMY_SOUND_LOCATION),
             SoundSource.BLOCKS,
@@ -56,7 +56,6 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         this.stream = stream;
         this.sourcePos = pos;
 
-        // 3D positioning (required for SPR)
         this.x = pos.getX() + 0.5;
         this.y = pos.getY() + 0.5;
         this.z = pos.getZ() + 0.5;
@@ -69,30 +68,17 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         Phonon.LOGGER.debug("Created SpeakerSoundInstance at {} with volume {}", pos, volume);
     }
 
-    /**
-     * Override to bypass sounds.json resolution entirely.
-     * Returns our dummy Sound object directly.
-     */
     @Override
     public Sound getSound() {
         return DUMMY_SOUND;
     }
 
-    /**
-     * Override to bypass SoundManager's sound event lookup.
-     * This prevents "Unknown sound" warnings in logs.
-     * CRITICAL: Must set this.sound field - getVolume() reads it directly, not via getSound()
-     */
     @Override
     public WeighedSoundEvents resolve(net.minecraft.client.sounds.SoundManager soundManager) {
         this.sound = DUMMY_SOUND;
         return new WeighedSoundEvents(DUMMY_SOUND_LOCATION, null);
     }
 
-    /**
-     * Override to provide our custom audio stream instead of loading from resource pack.
-     * This is the key to SPR compatibility - Minecraft's SoundEngine will use this stream.
-     */
     @Override
     public CompletableFuture<AudioStream> getStream(SoundBufferLibrary soundBuffers, Sound sound, boolean looping) {
         return CompletableFuture.completedFuture(this.stream);

@@ -49,5 +49,11 @@ public class PhononNetwork {
             SpeakerControlPacket.CODEC,
             SpeakerControlPacket::handle
         );
+
+        registrar.playToServer(
+            SpeakerSeekPacket.TYPE,
+            SpeakerSeekPacket.CODEC,
+            SpeakerSeekPacket::handle
+        );
     }
 }

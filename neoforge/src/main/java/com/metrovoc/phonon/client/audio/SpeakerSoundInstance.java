@@ -120,4 +120,8 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     public BlockPos getPosition() {
         return sourcePos;
     }
+
+    public void setVolume(float newVolume) {
+        this.volume = newVolume;
+    }
 }

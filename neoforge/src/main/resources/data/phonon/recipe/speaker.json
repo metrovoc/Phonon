@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "ICI",
+    "RNR",
+    "ICR"
+  ],
+  "key": {
+    "I": {"item": "minecraft:iron_block"},
+    "C": {"item": "minecraft:copper_block"},
+    "R": {"item": "minecraft:redstone"},
+    "N": {"item": "minecraft:note_block"}
+  },
+  "result": {
+    "id": "phonon:speaker",
+    "count": 1
+  }
+}

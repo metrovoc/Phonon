@@ -27,6 +27,11 @@ public class NeoForgeServerConfig {
     public final ModConfigSpec.IntValue downloadConnectTimeoutSeconds;
     public final ModConfigSpec.IntValue downloadReadTimeoutSeconds;
 
+    // WebUI settings
+    public final ModConfigSpec.BooleanValue webUiEnabled;
+    public final ModConfigSpec.IntValue webUiPort;
+    public final ModConfigSpec.ConfigValue<String> webUiToken;
+
     private NeoForgeServerConfig(ModConfigSpec.Builder builder) {
         builder.push("transfer");
 
@@ -72,6 +77,30 @@ public class NeoForgeServerConfig {
                 600);
 
         builder.pop();
+
+        builder.push("webui");
+
+        webUiEnabled = builder
+            .comment("Enable the WebUI for managing audio tracks.")
+            .comment("WARNING: The WebUI binds to 0.0.0.0 and is accessible from any network interface.")
+            .comment("If your server is exposed to the internet, ensure you set a strong token below,")
+            .comment("or use a firewall to restrict access to trusted IPs only.")
+            .define("enabled", PhononServerConfig.DEFAULT_WEBUI_ENABLED);
+
+        webUiPort = builder
+            .comment("Port for the WebUI. If in use, will try incrementing ports up to +10.")
+            .defineInRange("port",
+                PhononServerConfig.DEFAULT_WEBUI_PORT,
+                1024,
+                65535);
+
+        webUiToken = builder
+            .comment("Authentication token for WebUI API access.")
+            .comment("Leave empty to disable authentication (not recommended for public servers).")
+            .comment("Clients must send 'Authorization: Bearer <token>' header.")
+            .define("token", PhononServerConfig.DEFAULT_WEBUI_TOKEN);
+
+        builder.pop();
     }
 
     /**
@@ -84,5 +113,8 @@ public class NeoForgeServerConfig {
         PhononServerConfig.setMaxBytesPerPlayerPerTick(INSTANCE.maxBytesPerPlayerPerTick::get);
         PhononServerConfig.setDownloadConnectTimeoutSeconds(INSTANCE.downloadConnectTimeoutSeconds::get);
         PhononServerConfig.setDownloadReadTimeoutSeconds(INSTANCE.downloadReadTimeoutSeconds::get);
+        PhononServerConfig.setWebUiEnabled(INSTANCE.webUiEnabled::get);
+        PhononServerConfig.setWebUiPort(INSTANCE.webUiPort::get);
+        PhononServerConfig.setWebUiToken(INSTANCE.webUiToken::get);
     }
 }

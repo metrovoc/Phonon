@@ -47,7 +47,26 @@ repositories {
     maven { url "https://maven.shedaniel.me/" }
 }
 
+// Configuration for libraries that need to be on dev runtime classpath
+configurations {
+    devRuntime
+}
+
 dependencies {
     // Cloth Config - optional, for config GUI
     implementation "me.shedaniel.cloth:cloth-config-neoforge:15.0.140"
+
+    // NanoHTTPD - must be included for runtime (jar-in-jar for production, devRuntime for dev)
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    jarJar('org.nanohttpd:nanohttpd:2.3.1')
+    devRuntime 'org.nanohttpd:nanohttpd:2.3.1'
+}
+
+// Add devRuntime to the classpath for run tasks
+neoForge {
+    runs {
+        configureEach {
+            additionalRuntimeClasspathConfiguration.extendsFrom(configurations.devRuntime)
+        }
+    }
 }

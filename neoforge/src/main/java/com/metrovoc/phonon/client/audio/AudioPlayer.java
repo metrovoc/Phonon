@@ -2,28 +2,22 @@ package com.metrovoc.phonon.client.audio;
 
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.block.SpeakerBlock;
 import com.metrovoc.phonon.client.AudioCache;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.state.BlockState;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Audio player using Minecraft's SoundManager.
- *
- * Features:
- * - Plays through official audio pipeline (SPR compatible)
- * - Automatic stereo-to-mono downmix (handled by PhononAudioStream)
- * - Timestamp-based seeking for perfect sync
- * - Respects Minecraft volume settings
+ * Audio player using direct OpenAL via PhononAudioEngine.
  */
 public class AudioPlayer {
     private static AudioPlayer instance;
-    private final Map<BlockPos, SpeakerSoundInstance> playingSounds = new ConcurrentHashMap<>();
 
     private AudioPlayer() {}
 
@@ -37,60 +31,41 @@ public class AudioPlayer {
     public void play(BlockPos pos, PlaybackState playback, UUID resourceId, float volume) {
         Path cachedAudio = AudioCache.getInstance().getCachedAudio(resourceId).orElse(null);
         if (cachedAudio == null || !Files.exists(cachedAudio)) {
-            Phonon.LOGGER.error("Audio {} not cached (caller should have downloaded first)", resourceId);
+            Phonon.LOGGER.error("Audio {} not cached", resourceId);
             return;
         }
 
-        stop(pos);
+        Direction facing = getFacing(pos);
+        long currentTime = System.currentTimeMillis();
+        long seekMs = playback.getCurrentPositionMs(currentTime);
 
-        try {
-            long currentTime = System.currentTimeMillis();
-            long playbackPosition = playback.getCurrentPositionMs(currentTime);
-
-            com.metrovoc.phonon.client.audio.PhononAudioStream stream =
-                new com.metrovoc.phonon.client.audio.PhononAudioStream(cachedAudio);
-
-            if (playbackPosition > 0) {
-                stream.seekMs(playbackPosition);
-            }
-
-            SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, volume);
-            Minecraft.getInstance().getSoundManager().play(sound);
-
-            playingSounds.put(pos, sound);
-
-            Phonon.LOGGER.info("Started playing audio {} at {} (seek {}ms)",
-                resourceId, pos, playbackPosition);
-
-        } catch (Exception e) {
-            Phonon.LOGGER.error("Failed to play audio at {}", pos, e);
-        }
+        PhononAudioEngine.getInstance().play(pos, facing, cachedAudio, seekMs, volume);
     }
 
     public void stop(BlockPos pos) {
-        SpeakerSoundInstance sound = playingSounds.remove(pos);
-        if (sound != null) {
-            Minecraft.getInstance().getSoundManager().stop(sound);
-            Phonon.LOGGER.debug("Stopped audio at {}", pos);
-        }
+        PhononAudioEngine.getInstance().stop(pos);
     }
 
     public void setVolume(BlockPos pos, float volume) {
-        SpeakerSoundInstance sound = playingSounds.get(pos);
-        if (sound != null) {
-            sound.setVolume(volume);
-        }
+        PhononAudioEngine.getInstance().setVolume(pos, volume);
     }
 
     public boolean isPlaying(BlockPos pos) {
-        return playingSounds.containsKey(pos);
+        return PhononAudioEngine.getInstance().isPlaying(pos);
     }
 
     public void stopAll() {
-        for (SpeakerSoundInstance sound : playingSounds.values()) {
-            Minecraft.getInstance().getSoundManager().stop(sound);
+        PhononAudioEngine.getInstance().stopAll();
+    }
+
+    private Direction getFacing(BlockPos pos) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return Direction.NORTH;
+
+        BlockState state = mc.level.getBlockState(pos);
+        if (state.hasProperty(SpeakerBlock.FACING)) {
+            return state.getValue(SpeakerBlock.FACING);
         }
-        playingSounds.clear();
-        Phonon.LOGGER.info("Stopped all audio playback");
+        return Direction.NORTH;
     }
 }

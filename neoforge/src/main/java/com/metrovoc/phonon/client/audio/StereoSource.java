@@ -115,6 +115,12 @@ public class StereoSource {
 
         fillBuffers();
 
+        Vec3 sourceCenter = Vec3.atCenterOf(pos);
+        float newOcclusion = OcclusionCalculator.calculate(listenerPos, sourceCenter, pos);
+        if (Math.abs(newOcclusion - occlusionGain) > 0.01f) {
+            setOcclusion(newOcclusion);
+        }
+
         int stateL = AL10.alGetSourcei(sourceL, AL10.AL_SOURCE_STATE);
         int stateR = AL10.alGetSourcei(sourceR, AL10.AL_SOURCE_STATE);
 

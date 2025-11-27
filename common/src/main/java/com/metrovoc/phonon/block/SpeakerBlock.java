@@ -1,5 +1,6 @@
 package com.metrovoc.phonon.block;
 
+import com.metrovoc.phonon.client.ClientSpeakerManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.particles.ParticleTypes;
@@ -75,6 +76,16 @@ public class SpeakerBlock extends Block implements EntityBlock {
             openGui(pos);
         }
         return InteractionResult.SUCCESS;
+    }
+
+    @Override
+    protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+        if (!state.is(newState.getBlock())) {
+            if (level.isClientSide) {
+                ClientSpeakerManager.getInstance().removeSpeaker(pos);
+            }
+        }
+        super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
     /**

@@ -7,10 +7,6 @@
         "facing=east,playing=false": { "model": "phonon:block/speaker", "y": 90 },
         "facing=east,playing=true": { "model": "phonon:block/speaker", "y": 90 },
         "facing=west,playing=false": { "model": "phonon:block/speaker", "y": 270 },
-        "facing=west,playing=true": { "model": "phonon:block/speaker", "y": 270 },
-        "facing=up,playing=false": { "model": "phonon:block/speaker", "x": 270 },
-        "facing=up,playing=true": { "model": "phonon:block/speaker", "x": 270 },
-        "facing=down,playing=false": { "model": "phonon:block/speaker", "x": 90 },
-        "facing=down,playing=true": { "model": "phonon:block/speaker", "x": 90 }
+        "facing=west,playing=true": { "model": "phonon:block/speaker", "y": 270 }
     }
 }

@@ -1,15 +1,16 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "ICI",
-    "RNR",
-    "ICR"
+    "IPI",
+    "CJC",
+    "RRR"
   ],
   "key": {
-    "I": {"item": "minecraft:iron_block"},
-    "C": {"item": "minecraft:copper_block"},
-    "R": {"item": "minecraft:redstone"},
-    "N": {"item": "minecraft:note_block"}
+    "I": {"item": "minecraft:iron_ingot"},
+    "P": {"item": "minecraft:paper"},
+    "C": {"item": "minecraft:copper_ingot"},
+    "J": {"item": "minecraft:jukebox"},
+    "R": {"item": "minecraft:redstone"}
   },
   "result": {
     "id": "phonon:speaker",

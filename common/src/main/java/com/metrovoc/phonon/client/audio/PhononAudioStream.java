@@ -18,21 +18,31 @@ import java.nio.file.StandardOpenOption;
 
 /**
  * OGG Vorbis audio stream using LWJGL's STBVorbis.
- *
- * CRITICAL: Always outputs MONO for 3D positioning (SPR compatibility).
- * Stereo files are automatically downmixed.
+ * Supports multiple output modes for different use cases.
  */
 public class PhononAudioStream implements AudioStream {
+
+    public enum ChannelMode {
+        MONO,   // Mix to mono (for legacy/fallback)
+        LEFT,   // Left channel only
+        RIGHT   // Right channel only
+    }
+
     private final long decoder;
     private final ByteBuffer fileBuffer;
     private final AudioFormat format;
     private final int channels;
     private final int sampleRate;
     private final int totalSamples;
+    private final ChannelMode channelMode;
     private int currentSample = 0;
     private boolean closed = false;
 
     public PhononAudioStream(Path oggFile) throws IOException {
+        this(oggFile, ChannelMode.MONO);
+    }
+
+    public PhononAudioStream(Path oggFile, ChannelMode mode) throws IOException {
         try (FileChannel channel = FileChannel.open(oggFile, StandardOpenOption.READ)) {
             this.fileBuffer = MemoryUtil.memAlloc((int) channel.size());
             channel.read(fileBuffer);
@@ -55,17 +65,20 @@ public class PhononAudioStream implements AudioStream {
             this.sampleRate = info.sample_rate();
             this.totalSamples = STBVorbis.stb_vorbis_stream_length_in_samples(decoder);
 
-            Phonon.LOGGER.debug("Loaded OGG: {} channels, {}Hz, {} samples",
-                channels, sampleRate, totalSamples);
+            Phonon.LOGGER.debug("Loaded OGG: {} channels, {}Hz, {} samples, mode={}",
+                channels, sampleRate, totalSamples, mode);
         }
 
-        this.format = new AudioFormat(
-            sampleRate,
-            16,
-            1, // MONO
-            true,
-            false
-        );
+        this.channelMode = mode;
+        this.format = new AudioFormat(sampleRate, 16, 1, true, false);
+    }
+
+    public int getChannels() {
+        return channels;
+    }
+
+    public int getSampleRate() {
+        return sampleRate;
     }
 
     @Override
@@ -105,8 +118,12 @@ public class PhononAudioStream implements AudioStream {
                 for (int i = 0; i < samplesRead; i++) {
                     short left = pcmBuffer.get(i * 2);
                     short right = pcmBuffer.get(i * 2 + 1);
-                    int mixed = (left + right) / 2;
-                    outputShorts.put((short) Math.max(-32768, Math.min(32767, mixed)));
+                    short output = switch (channelMode) {
+                        case LEFT -> left;
+                        case RIGHT -> right;
+                        case MONO -> (short) ((left + right) / 2);
+                    };
+                    outputShorts.put(output);
                 }
             }
 

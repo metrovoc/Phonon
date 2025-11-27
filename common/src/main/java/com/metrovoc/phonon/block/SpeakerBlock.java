@@ -10,6 +10,7 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -25,7 +26,9 @@ public class SpeakerBlock extends Block implements EntityBlock {
 
     public SpeakerBlock() {
         super(Properties.of()
-            .strength(1.5f)
+            .strength(4.0f, 6.0f)
+            .sound(SoundType.LANTERN)
+            .requiresCorrectToolForDrops()
             .noOcclusion()
             .lightLevel(state -> state.getValue(PLAYING) ? 7 : 0)
         );

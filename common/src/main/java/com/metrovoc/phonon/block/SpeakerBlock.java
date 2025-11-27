@@ -55,11 +55,9 @@ public class SpeakerBlock extends Block implements EntityBlock {
     @Override
     public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
         if (state.getValue(PLAYING)) {
-            // Note particle above the speaker, like a jukebox
-            double x = pos.getX() + 0.5;
+            double x = pos.getX() + 0.5 + (random.nextDouble() - 0.5) * 0.4;
             double y = pos.getY() + 1.2;
-            double z = pos.getZ() + 0.5;
-            // Color cycles through 0-24 range
+            double z = pos.getZ() + 0.5 + (random.nextDouble() - 0.5) * 0.4;
             level.addParticle(ParticleTypes.NOTE, x, y, z, random.nextInt(25) / 24.0, 0, 0);
         }
     }

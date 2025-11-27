@@ -20,7 +20,7 @@ import net.minecraft.world.phys.BlockHitResult;
 
 public class SpeakerBlock extends Block implements EntityBlock {
 
-    public static final DirectionProperty FACING = BlockStateProperties.FACING;
+    public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     public static final BooleanProperty PLAYING = BooleanProperty.create("playing");
 
     public SpeakerBlock() {
@@ -41,7 +41,7 @@ public class SpeakerBlock extends Block implements EntityBlock {
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return defaultBlockState().setValue(FACING, context.getNearestLookingDirection().getOpposite());
+        return defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
     }
 
     @Override

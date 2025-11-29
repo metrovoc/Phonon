@@ -40,6 +40,15 @@ public class ClothConfigScreen {
             .setSaveConsumer(val -> NeoForgeClientConfig.INSTANCE.maxCacheSizeMB.set(val))
             .build());
 
+        client.addEntry(entryBuilder.startDoubleField(
+                Component.translatable("config.phonon.client.maxAudioDistance"),
+                NeoForgeClientConfig.INSTANCE.maxAudioDistance.get())
+            .setDefaultValue(PhononClientConfig.DEFAULT_MAX_AUDIO_DISTANCE)
+            .setMin(16.0).setMax(256.0)
+            .setTooltip(Component.translatable("config.phonon.client.maxAudioDistance.tooltip"))
+            .setSaveConsumer(val -> NeoForgeClientConfig.INSTANCE.maxAudioDistance.set(val))
+            .build());
+
         client.addEntry(entryBuilder.startBooleanToggle(
                 Component.translatable("config.phonon.client.enableDebugLogging"),
                 NeoForgeClientConfig.INSTANCE.enableDebugLogging.get())

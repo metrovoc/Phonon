@@ -3,7 +3,9 @@ package com.metrovoc.phonon;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.audio.AudioResource;
+import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
+import com.metrovoc.phonon.platform.PlatformHelper;
 import com.metrovoc.phonon.command.PhononCommand;
 import com.metrovoc.phonon.config.ConfigScreenFactory;
 import com.metrovoc.phonon.config.NeoForgeClientConfig;
@@ -85,6 +87,14 @@ public class PhononNeoForge {
 
         serverTickCount = 0;
 
+        // 设置 speaker 停止回调
+        ServerSpeakerManager.getInstance().setStopCallback((level, pos, speaker) -> {
+            var packet = new com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket(
+                pos, PlaybackState.STOPPED, speaker.getVolume(), System.currentTimeMillis()
+            );
+            PlatformHelper.INSTANCE.sendToAllTracking(level, pos, packet);
+        });
+
         Phonon.LOGGER.info("Loaded {} audio resources", manager.getAllResources().size());
     }
 
@@ -129,12 +139,33 @@ public class PhononNeoForge {
 
     private void onPlayerJoin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            // 同步音频资源列表
             var resources = AudioManager.getInstance().getAllResources();
             var packet = new SyncAudioResourcesPacket(resources);
-
             PacketDistributor.sendToPlayer(player, packet);
 
-            Phonon.LOGGER.info("Synced {} audio resources to {}", resources.size(), player.getName().getString());
+            // 同步当前维度中所有活跃 speaker 的播放状态
+            var activeSpeakers = ServerSpeakerManager.getInstance()
+                .getActiveSpeakersInDimension(player.level().dimension());
+
+            for (var entry : activeSpeakers.entrySet()) {
+                var pos = entry.getKey();
+                var syncData = entry.getValue();
+
+                // 获取 speaker 的音量
+                float volume = 0.5f;
+                if (player.level().getBlockEntity(pos) instanceof com.metrovoc.phonon.block.SpeakerBlockEntity speaker) {
+                    volume = speaker.getVolume();
+                }
+
+                var statePacket = new com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket(
+                    pos, syncData.state(), volume, syncData.serverTimeMs()
+                );
+                PacketDistributor.sendToPlayer(player, statePacket);
+            }
+
+            Phonon.LOGGER.info("Synced {} audio resources and {} active speakers to {}",
+                resources.size(), activeSpeakers.size(), player.getName().getString());
         }
     }
 

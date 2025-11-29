@@ -25,6 +25,16 @@ public class ServerSpeakerManager {
 
     private final Map<SpeakerKey, SpeakerInfo> activeSpeakers = new ConcurrentHashMap<>();
 
+    /**
+     * 停止回调，由平台层设置，用于发送网络包。
+     */
+    private StopCallback stopCallback;
+
+    @FunctionalInterface
+    public interface StopCallback {
+        void onSpeakerStopped(ServerLevel level, BlockPos pos, SpeakerBlockEntity speaker);
+    }
+
     private ServerSpeakerManager() {}
 
     public static ServerSpeakerManager getInstance() {
@@ -36,6 +46,10 @@ public class ServerSpeakerManager {
 
     public static void reset() {
         instance = null;
+    }
+
+    public void setStopCallback(StopCallback callback) {
+        this.stopCallback = callback;
     }
 
     /**
@@ -94,8 +108,10 @@ public class ServerSpeakerManager {
 
         speaker.setPlayback(PlaybackState.STOPPED);
 
-        // 广播停止状态给所有追踪玩家 (通过 BlockEntity 原生同步)
-        level.sendBlockUpdated(key.pos, speaker.getBlockState(), speaker.getBlockState(), 3);
+        // 通过回调发送网络包
+        if (stopCallback != null) {
+            stopCallback.onSpeakerStopped(level, key.pos, speaker);
+        }
 
         Phonon.LOGGER.debug("Auto-stopped speaker at {} in {}", key.pos, key.dimension.location());
     }
@@ -107,6 +123,26 @@ public class ServerSpeakerManager {
         Optional<AudioResource> resource = AudioManager.getInstance().getResource(resourceId);
         return resource.map(AudioResource::durationMs).orElse(-1L);
     }
+
+    /**
+     * 获取指定维度中所有活跃 speaker 的状态 (用于新玩家同步)。
+     */
+    public Map<BlockPos, SpeakerSyncData> getActiveSpeakersInDimension(ResourceKey<Level> dimension) {
+        Map<BlockPos, SpeakerSyncData> result = new java.util.HashMap<>();
+        long now = System.currentTimeMillis();
+
+        for (var entry : activeSpeakers.entrySet()) {
+            if (entry.getKey().dimension.equals(dimension)) {
+                result.put(entry.getKey().pos, new SpeakerSyncData(entry.getValue().state, now));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 同步数据记录。
+     */
+    public record SpeakerSyncData(PlaybackState state, long serverTimeMs) {}
 
     private record SpeakerKey(ResourceKey<Level> dimension, BlockPos pos) {}
 

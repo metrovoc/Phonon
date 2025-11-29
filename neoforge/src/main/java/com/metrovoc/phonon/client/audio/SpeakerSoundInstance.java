@@ -54,7 +54,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     private static final float SIDE_WEIGHT = 0.1f;
     private static final float OCCLUSION_LERP_FACTOR = 0.5f;
 
-    private final PhononAudioStream stream;
+    private final AudioStream stream;
     private final BlockPos sourcePos;
     private float baseVolume;
 
@@ -62,7 +62,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     private float occlusionFactor = 1.0f;
     private float targetOcclusion = 1.0f;
 
-    public SpeakerSoundInstance(PhononAudioStream stream, BlockPos pos, float volume) {
+    public SpeakerSoundInstance(AudioStream stream, BlockPos pos, float volume) {
         super(
             SoundEvent.createVariableRangeEvent(DUMMY_SOUND_LOCATION),
             SoundSource.BLOCKS,

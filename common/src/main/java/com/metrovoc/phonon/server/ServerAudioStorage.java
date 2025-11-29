@@ -1,6 +1,8 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.audio.AudioStreamInfo;
+import com.metrovoc.phonon.audio.OggPageScanner;
 import com.metrovoc.phonon.config.PhononServerConfig;
 
 import java.io.IOException;
@@ -13,9 +15,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -28,6 +32,7 @@ public class ServerAudioStorage {
     private static ServerAudioStorage instance;
 
     private final ExecutorService downloadExecutor = Executors.newFixedThreadPool(2);
+    private final Map<UUID, AudioStreamInfo> streamInfoCache = new ConcurrentHashMap<>();
 
     private Path storageDir;
 
@@ -44,10 +49,46 @@ public class ServerAudioStorage {
         this.storageDir = worldDir.resolve("phonon_audio");
         try {
             Files.createDirectories(storageDir);
+            scanExistingAudioFiles();
             Phonon.LOGGER.info("Server audio storage initialized at {}", storageDir);
         } catch (IOException e) {
             Phonon.LOGGER.error("Failed to create audio storage directory", e);
         }
+    }
+
+    private void scanExistingAudioFiles() {
+        try (var files = Files.list(storageDir)) {
+            files.filter(p -> p.toString().endsWith(".ogg"))
+                .forEach(this::scanAndCacheFromPath);
+        } catch (IOException e) {
+            Phonon.LOGGER.error("Failed to scan existing audio files", e);
+        }
+    }
+
+    private void scanAndCacheFromPath(Path audioPath) {
+        String fileName = audioPath.getFileName().toString();
+        String uuidStr = fileName.substring(0, fileName.length() - 4);
+        try {
+            UUID resourceId = UUID.fromString(uuidStr);
+            scanAndCacheStreamInfo(resourceId, audioPath);
+        } catch (IllegalArgumentException e) {
+            Phonon.LOGGER.warn("Skipping invalid audio file name: {}", fileName);
+        }
+    }
+
+    private void scanAndCacheStreamInfo(UUID resourceId, Path audioPath) {
+        OggPageScanner.OggScanResult result = OggPageScanner.scan(audioPath);
+        if (result != null) {
+            streamInfoCache.put(resourceId, new AudioStreamInfo(
+                result.headerBytes(),
+                result.seekTable(),
+                result.sampleRate()
+            ));
+        }
+    }
+
+    public Optional<AudioStreamInfo> getStreamInfo(UUID resourceId) {
+        return Optional.ofNullable(streamInfoCache.get(resourceId));
     }
 
     public CompletableFuture<Boolean> downloadAndStore(UUID resourceId, String url) {
@@ -75,6 +116,7 @@ public class ServerAudioStorage {
 
                 if (response.statusCode() == 200) {
                     Files.copy(response.body(), targetFile, StandardCopyOption.REPLACE_EXISTING);
+                    scanAndCacheStreamInfo(resourceId, targetFile);
                     long size = Files.size(targetFile);
                     Phonon.LOGGER.info("Downloaded audio {} ({} bytes)", resourceId, size);
                     return true;
@@ -137,6 +179,7 @@ public class ServerAudioStorage {
     }
 
     public boolean deleteAudio(UUID resourceId) {
+        streamInfoCache.remove(resourceId);
         return getAudioPath(resourceId).map(path -> {
             try {
                 Files.deleteIfExists(path);

@@ -93,6 +93,7 @@ public class ClientSpeakerManager {
 
     public void removeSpeaker(BlockPos pos) {
         speakers.remove(pos);
+        speakerVolumes.remove(pos);
         PlatformHelper.INSTANCE.stopAudio(pos);
     }
 

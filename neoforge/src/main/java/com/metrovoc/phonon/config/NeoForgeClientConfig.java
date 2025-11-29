@@ -22,6 +22,9 @@ public class NeoForgeClientConfig {
     public final ModConfigSpec.ConfigValue<String> cacheDirectory;
     public final ModConfigSpec.IntValue maxCacheSizeMB;
 
+    // Audio settings
+    public final ModConfigSpec.DoubleValue maxAudioDistance;
+
     // Debug settings
     public final ModConfigSpec.BooleanValue enableDebugLogging;
 
@@ -43,6 +46,18 @@ public class NeoForgeClientConfig {
 
         builder.pop();
 
+        builder.push("audio");
+
+        maxAudioDistance = builder
+            .comment("Maximum distance (in blocks) at which audio can be heard")
+            .comment("Audio volume becomes 0 beyond this distance")
+            .defineInRange("maxDistance",
+                PhononClientConfig.DEFAULT_MAX_AUDIO_DISTANCE,
+                16.0,
+                256.0);
+
+        builder.pop();
+
         builder.push("debug");
 
         enableDebugLogging = builder
@@ -59,6 +74,7 @@ public class NeoForgeClientConfig {
     public static void bind() {
         PhononClientConfig.setCacheDirectory(INSTANCE.cacheDirectory::get);
         PhononClientConfig.setMaxCacheSizeMB(INSTANCE.maxCacheSizeMB::get);
+        PhononClientConfig.setMaxAudioDistance(INSTANCE.maxAudioDistance::get);
         PhononClientConfig.setEnableDebugLogging(INSTANCE.enableDebugLogging::get);
     }
 }

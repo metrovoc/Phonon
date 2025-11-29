@@ -3,6 +3,7 @@ package com.metrovoc.phonon.client.audio;
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
+import com.metrovoc.phonon.config.PhononClientConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.Sound;
@@ -39,11 +40,10 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         Sound.Type.FILE,
         true,
         false,
-        64
+        0
     );
 
     private static final float REFERENCE_DISTANCE = 4.0f;
-    private static final float MAX_DISTANCE = 96.0f;
     private static final float AIR_ABSORPTION_HALF_DISTANCE = 32.0f;
     private static final float AIR_ABSORPTION_FACTOR = 0.9f;
     private static final int RAYCAST_INTERVAL = 4;
@@ -76,12 +76,8 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         this.x = pos.getX() + 0.5;
         this.y = pos.getY() + 0.5;
         this.z = pos.getZ() + 0.5;
-
-        this.looping = false;
         this.volume = volume;
         this.attenuation = Attenuation.NONE;
-        this.delay = 0;
-
         this.tickCounter = pos.hashCode() % RAYCAST_INTERVAL;
     }
 
@@ -117,7 +113,6 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
             return;
         }
 
-        // 检查状态: 必须 isPlaying() 才继续播放
         var state = ClientSpeakerManager.getInstance().getSpeakerState(sourcePos);
         if (state.isEmpty() || !state.get().isPlaying()) {
             super.stop();
@@ -130,8 +125,9 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     private void updateAcoustics(Level level, Vec3 listenerPos) {
         Vec3 sourceVec = new Vec3(x, y, z);
         double dist = listenerPos.distanceTo(sourceVec);
+        float maxDistance = (float) PhononClientConfig.getMaxAudioDistance();
 
-        if (dist > MAX_DISTANCE) {
+        if (dist > maxDistance) {
             this.volume = 0;
             return;
         }

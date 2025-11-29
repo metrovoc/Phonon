@@ -3,6 +3,7 @@ package com.metrovoc.phonon;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.audio.AudioResource;
+import com.metrovoc.phonon.client.ClientSpeakerManager;
 import com.metrovoc.phonon.command.PhononCommand;
 import com.metrovoc.phonon.config.ConfigScreenFactory;
 import com.metrovoc.phonon.config.NeoForgeClientConfig;
@@ -13,7 +14,12 @@ import com.metrovoc.phonon.registry.PhononRegistry;
 import com.metrovoc.phonon.server.AudioTransferManager;
 import com.metrovoc.phonon.server.FFmpegHelper;
 import com.metrovoc.phonon.server.ServerAudioStorage;
+import com.metrovoc.phonon.server.ServerSpeakerManager;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
+import net.minecraft.util.Unit;
+import net.minecraft.util.profiling.ProfilerFiller;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.fml.ModContainer;
@@ -21,6 +27,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -34,18 +41,19 @@ import java.nio.file.Path;
 @Mod(Constants.MOD_ID)
 public class PhononNeoForge {
 
+    private long serverTickCount = 0;
+
     public PhononNeoForge(IEventBus modBus, ModContainer modContainer) {
         Phonon.init();
         PhononRegistry.register(modBus);
 
-        // Register configs
         modContainer.registerConfig(ModConfig.Type.SERVER, NeoForgeServerConfig.SPEC);
         modContainer.registerConfig(ModConfig.Type.CLIENT, NeoForgeClientConfig.SPEC);
 
-        // Register config screen (Cloth Config, optional) - client only
         if (FMLEnvironment.dist == Dist.CLIENT) {
             ConfigScreenFactory.create().ifPresent(factory ->
                 modContainer.registerExtensionPoint(IConfigScreenFactory.class, factory));
+            modBus.addListener(this::onRegisterClientReloadListeners);
         }
 
         modBus.addListener(PhononNetwork::register);
@@ -74,6 +82,8 @@ public class PhononNeoForge {
         manager.loadResources(AudioPersistence.load(dataFile));
 
         repairMissingDurations(manager, storage);
+
+        serverTickCount = 0;
 
         Phonon.LOGGER.info("Loaded {} audio resources", manager.getAllResources().size());
     }
@@ -114,6 +124,7 @@ public class PhononNeoForge {
 
         ServerAudioStorage.getInstance().shutdown();
         AudioTransferManager.getInstance().shutdown();
+        ServerSpeakerManager.reset();
     }
 
     private void onPlayerJoin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
@@ -128,7 +139,9 @@ public class PhononNeoForge {
     }
 
     private void onServerTick(ServerTickEvent.Post event) {
+        serverTickCount++;
         AudioTransferManager.getInstance().tick(event.getServer());
+        ServerSpeakerManager.getInstance().tick(event.getServer(), serverTickCount);
     }
 
     private void onConfigLoad(ModConfigEvent event) {
@@ -139,5 +152,23 @@ public class PhononNeoForge {
             NeoForgeClientConfig.bind();
             Phonon.LOGGER.info("Client config loaded/reloaded");
         }
+    }
+
+    /**
+     * 注册客户端资源重载监听器 (F3+T 恢复)。
+     */
+    private void onRegisterClientReloadListeners(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener(new SimplePreparableReloadListener<Unit>() {
+            @Override
+            protected Unit prepare(ResourceManager resourceManager, ProfilerFiller profiler) {
+                return Unit.INSTANCE;
+            }
+
+            @Override
+            protected void apply(Unit result, ResourceManager resourceManager, ProfilerFiller profiler) {
+                ClientSpeakerManager.getInstance().onResourcesReloaded();
+                Phonon.LOGGER.debug("Resource reload detected, restoring speaker playback");
+            }
+        });
     }
 }

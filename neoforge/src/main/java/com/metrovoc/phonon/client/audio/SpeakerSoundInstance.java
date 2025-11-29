@@ -1,7 +1,6 @@
 package com.metrovoc.phonon.client.audio;
 
 import com.metrovoc.phonon.Constants;
-import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
 import net.minecraft.client.Minecraft;
@@ -15,21 +14,21 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.util.valueproviders.ConstantFloat;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.concurrent.CompletableFuture;
 
-/**
- * SoundInstance that plays through Minecraft's SoundManager.
- *
- * This is the CORRECT way to play audio in Minecraft:
- * - Automatically compatible with Sound Physics Remastered
- * - Respects Minecraft volume settings
- * - Proper resource lifecycle management
- * - Works with F3+S debug screen
- * - No sounds.json dependency - fully programmatic
- */
 public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
+
     private static final ResourceLocation DUMMY_SOUND_LOCATION =
         ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker");
     private static final Sound DUMMY_SOUND = new Sound(
@@ -40,13 +39,30 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         Sound.Type.FILE,
         true,
         false,
-        16
+        64
     );
 
-    private final com.metrovoc.phonon.client.audio.PhononAudioStream stream;
-    private final BlockPos sourcePos;
+    private static final float REFERENCE_DISTANCE = 4.0f;
+    private static final float MAX_DISTANCE = 96.0f;
+    private static final float AIR_ABSORPTION_HALF_DISTANCE = 32.0f;
+    private static final float AIR_ABSORPTION_FACTOR = 0.9f;
+    private static final int RAYCAST_INTERVAL = 4;
+    private static final int MAX_PENETRATION_LAYERS = 8;
+    private static final float MIN_TRANSMISSION = 0.05f;
+    private static final float SAMPLE_OFFSET = 0.5f;
+    private static final float CENTER_WEIGHT = 0.6f;
+    private static final float SIDE_WEIGHT = 0.1f;
+    private static final float OCCLUSION_LERP_FACTOR = 0.5f;
 
-    public SpeakerSoundInstance(com.metrovoc.phonon.client.audio.PhononAudioStream stream, BlockPos pos, float volume) {
+    private final PhononAudioStream stream;
+    private final BlockPos sourcePos;
+    private final float baseVolume;
+
+    private int tickCounter;
+    private float occlusionFactor = 1.0f;
+    private float targetOcclusion = 1.0f;
+
+    public SpeakerSoundInstance(PhononAudioStream stream, BlockPos pos, float volume) {
         super(
             SoundEvent.createVariableRangeEvent(DUMMY_SOUND_LOCATION),
             SoundSource.BLOCKS,
@@ -55,6 +71,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
 
         this.stream = stream;
         this.sourcePos = pos;
+        this.baseVolume = volume;
 
         this.x = pos.getX() + 0.5;
         this.y = pos.getY() + 0.5;
@@ -62,10 +79,10 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
 
         this.looping = false;
         this.volume = volume;
-        this.attenuation = Attenuation.LINEAR;
+        this.attenuation = Attenuation.NONE;
         this.delay = 0;
 
-        Phonon.LOGGER.debug("Created SpeakerSoundInstance at {} with volume {}", pos, volume);
+        this.tickCounter = pos.hashCode() % RAYCAST_INTERVAL;
     }
 
     @Override
@@ -86,8 +103,11 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
 
     @Override
     public void tick() {
-        var level = Minecraft.getInstance().level;
-        if (level == null) {
+        var mc = Minecraft.getInstance();
+        var level = mc.level;
+        var player = mc.player;
+
+        if (level == null || player == null) {
             super.stop();
             return;
         }
@@ -100,7 +120,110 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         var state = ClientSpeakerManager.getInstance().getSpeakerState(sourcePos);
         if (state.isEmpty() || !state.get().playing()) {
             super.stop();
+            return;
         }
+
+        updateAcoustics(level, player.getEyePosition());
+    }
+
+    private void updateAcoustics(Level level, Vec3 listenerPos) {
+        Vec3 sourceVec = new Vec3(x, y, z);
+        double dist = listenerPos.distanceTo(sourceVec);
+
+        if (dist > MAX_DISTANCE) {
+            this.volume = 0;
+            return;
+        }
+
+        float geometric = (float) Math.min(1.0, REFERENCE_DISTANCE / Math.max(dist, 0.1));
+        float airAbsorption = (float) Math.pow(AIR_ABSORPTION_FACTOR, dist / AIR_ABSORPTION_HALF_DISTANCE);
+        float distanceAttenuation = geometric * airAbsorption;
+
+        tickCounter++;
+        if (tickCounter >= RAYCAST_INTERVAL) {
+            tickCounter = 0;
+            targetOcclusion = calculateOcclusion(level, sourceVec, listenerPos);
+        }
+
+        occlusionFactor = Mth.lerp(OCCLUSION_LERP_FACTOR, occlusionFactor, targetOcclusion);
+        this.volume = baseVolume * distanceAttenuation * occlusionFactor;
+    }
+
+    private float calculateOcclusion(Level level, Vec3 source, Vec3 listener) {
+        Vec3 forward = listener.subtract(source).normalize();
+        Vec3 refUp = Math.abs(forward.y) > 0.95 ? new Vec3(1, 0, 0) : new Vec3(0, 1, 0);
+        Vec3 right = forward.cross(refUp).normalize();
+        Vec3 realUp = right.cross(forward).normalize();
+
+        float centerTransmission = traceRay(level, source, listener);
+        float rightTransmission = traceRay(level, source.add(right.scale(SAMPLE_OFFSET)), listener);
+        float leftTransmission = traceRay(level, source.add(right.scale(-SAMPLE_OFFSET)), listener);
+        float upTransmission = traceRay(level, source.add(realUp.scale(SAMPLE_OFFSET)), listener);
+        float downTransmission = traceRay(level, source.add(realUp.scale(-SAMPLE_OFFSET)), listener);
+
+        return centerTransmission * CENTER_WEIGHT
+             + rightTransmission * SIDE_WEIGHT
+             + leftTransmission * SIDE_WEIGHT
+             + upTransmission * SIDE_WEIGHT
+             + downTransmission * SIDE_WEIGHT;
+    }
+
+    private float traceRay(Level level, Vec3 start, Vec3 end) {
+        float transmission = 1.0f;
+        Vec3 current = start;
+
+        for (int layer = 0; layer < MAX_PENETRATION_LAYERS && transmission > MIN_TRANSMISSION; layer++) {
+            BlockHitResult hit = level.clip(new ClipContext(
+                current,
+                end,
+                ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE,
+                CollisionContext.empty()
+            ));
+
+            if (hit.getType() == HitResult.Type.MISS) {
+                break;
+            }
+
+            BlockPos hitPos = hit.getBlockPos();
+            BlockState blockState = level.getBlockState(hitPos);
+
+            if (hitPos.equals(sourcePos)) {
+                Vec3 direction = end.subtract(current).normalize();
+                current = hit.getLocation().add(direction.scale(0.1));
+                continue;
+            }
+
+            transmission *= 1.0f - getBlockSoundOpacity(blockState);
+
+            Vec3 direction = end.subtract(current).normalize();
+            current = hit.getLocation().add(direction.scale(0.1));
+        }
+
+        return transmission;
+    }
+
+    private float getBlockSoundOpacity(BlockState state) {
+        if (state.isAir()) {
+            return 0.0f;
+        }
+
+        if (!state.canOcclude()) {
+            return 0.2f;
+        }
+
+        @SuppressWarnings("deprecation")
+        SoundType soundType = state.getSoundType();
+
+        if (soundType == SoundType.WOOL) return 0.8f;
+        if (soundType == SoundType.SNOW) return 0.9f;
+        if (soundType == SoundType.GLASS) return 0.2f;
+        if (soundType == SoundType.METAL) return 0.6f;
+        if (soundType == SoundType.WOOD) return 0.5f;
+        if (soundType == SoundType.STONE) return 0.8f;
+        if (soundType == SoundType.SAND) return 0.7f;
+
+        return 0.5f;
     }
 
     public BlockPos getPosition() {

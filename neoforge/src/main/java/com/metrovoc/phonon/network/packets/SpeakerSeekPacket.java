@@ -4,6 +4,7 @@ import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.platform.PlatformHelper;
+import com.metrovoc.phonon.server.ServerSpeakerManager;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -14,7 +15,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Client -> Server: Seek to position in current track.
+ * Client -> Server: Seek 到指定位置。
  */
 public record SpeakerSeekPacket(
     BlockPos pos,
@@ -45,19 +46,31 @@ public record SpeakerSeekPacket(
             if (!(level.getBlockEntity(packet.pos) instanceof SpeakerBlockEntity speaker)) return;
 
             PlaybackState current = speaker.getPlayback();
-            if (!current.playing() || current.resourceId() == null) return;
+            if (current.resourceId() == null) return;
 
-            // Calculate new startTime to simulate seek
             long serverTime = System.currentTimeMillis();
-            long newStartTime = serverTime - packet.seekPositionMs;
 
-            var newPlayback = new PlaybackState(current.resourceId(), newStartTime, true);
+            // 创建新状态: anchor=now, position=seekPosition, 保持原有 speed
+            PlaybackState newState = new PlaybackState(
+                current.resourceId(),
+                serverTime,
+                packet.seekPositionMs,
+                current.speed()
+            );
 
-            speaker.setPlayback(newPlayback);
+            speaker.setPlayback(newState);
+
+            // 如果正在播放，更新 ServerSpeakerManager
+            if (newState.isPlaying()) {
+                long durationMs = ServerSpeakerManager.getDurationMs(newState.resourceId());
+                ServerSpeakerManager.getInstance().registerSpeaker(
+                    level.dimension(), packet.pos, newState, durationMs);
+            }
+
             PlatformHelper.INSTANCE.sendToAllTracking(
                 level,
                 packet.pos,
-                new SyncSpeakerStatePacket(packet.pos, newPlayback, speaker.getVolume(), serverTime)
+                new SyncSpeakerStatePacket(packet.pos, newState, speaker.getVolume(), serverTime)
             );
         });
     }

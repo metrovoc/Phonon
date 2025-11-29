@@ -117,8 +117,9 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
             return;
         }
 
+        // 检查状态: 必须 isPlaying() 才继续播放
         var state = ClientSpeakerManager.getInstance().getSpeakerState(sourcePos);
-        if (state.isEmpty() || !state.get().playing()) {
+        if (state.isEmpty() || !state.get().isPlaying()) {
             super.stop();
             return;
         }

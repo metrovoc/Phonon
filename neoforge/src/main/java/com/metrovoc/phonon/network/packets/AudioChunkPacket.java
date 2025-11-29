@@ -2,6 +2,7 @@ package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.client.AudioReceiver;
+import com.metrovoc.phonon.client.StreamingAudioManager;
 import com.metrovoc.phonon.config.PhononServerConfig;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -12,9 +13,6 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.UUID;
 
-/**
- * Binary audio chunk transfer (server -> client).
- */
 public record AudioChunkPacket(
     UUID resourceId,
     int chunkIndex,
@@ -48,12 +46,19 @@ public record AudioChunkPacket(
 
     public static void handle(AudioChunkPacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
-            AudioReceiver.getInstance().receiveChunk(
-                packet.resourceId,
-                packet.chunkIndex,
-                packet.totalChunks,
-                packet.data
-            );
+            if (StreamingAudioManager.getInstance().hasActiveSession(packet.resourceId())) {
+                StreamingAudioManager.getInstance().receiveChunk(
+                    packet.resourceId(),
+                    packet.data()
+                );
+            } else {
+                AudioReceiver.getInstance().receiveChunk(
+                    packet.resourceId(),
+                    packet.chunkIndex(),
+                    packet.totalChunks(),
+                    packet.data()
+                );
+            }
         });
     }
 

@@ -43,6 +43,12 @@ public class PhononNetwork {
             SyncSpeakerVolumePacket::handle
         );
 
+        registrar.playToClient(
+            AudioStreamStartPacket.TYPE,
+            AudioStreamStartPacket.CODEC,
+            AudioStreamStartPacket::handle
+        );
+
         // Client -> Server packets
         registrar.playToServer(
             RequestAudioPacket.TYPE,

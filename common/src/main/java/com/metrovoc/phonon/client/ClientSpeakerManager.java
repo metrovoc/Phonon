@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 
 /**
  * 客户端 Speaker 管理器。
@@ -32,18 +33,30 @@ public class ClientSpeakerManager {
 
     public void updateSpeaker(BlockPos pos, PlaybackState playback, float volume) {
         speakerVolumes.put(pos, volume);
+        PlaybackState oldState = speakers.get(pos);
+
+        // Stop old playback if resource changed
+        if (oldState != null && !java.util.Objects.equals(oldState.resourceId(), playback.resourceId())) {
+            PlatformHelper.INSTANCE.stopAudio(pos);
+            endStreamingSessionIfNeeded(oldState);
+        }
 
         if (playback.isPlaying()) {
             speakers.put(pos, playback);
             startPlayback(pos, playback, volume);
         } else if (playback.isPaused()) {
             speakers.put(pos, playback);
-            // 暂停: 停止音频但保留状态
             PlatformHelper.INSTANCE.stopAudio(pos);
         } else {
-            // 停止
             speakers.remove(pos);
             PlatformHelper.INSTANCE.stopAudio(pos);
+            endStreamingSessionIfNeeded(oldState);
+        }
+    }
+
+    private void endStreamingSessionIfNeeded(PlaybackState state) {
+        if (state != null && state.resourceId() != null) {
+            StreamingAudioManager.getInstance().endSession(state.resourceId());
         }
     }
 
@@ -51,31 +64,57 @@ public class ClientSpeakerManager {
         UUID resourceId = playback.resourceId();
         if (resourceId == null) return;
 
+        // Priority 1: Use cache (fully downloaded file)
         if (AudioCache.getInstance().isCached(resourceId)) {
             PlatformHelper.INSTANCE.playAudio(pos, playback, resourceId, volume);
-        } else if (AudioReceiver.getInstance().isTransferInProgress(resourceId)) {
-            AudioReceiver.getInstance().onTransferComplete(resourceId, file -> {
-                PlaybackState current = speakers.get(pos);
-                float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
-                if (current != null && current.isPlaying() && resourceId.equals(current.resourceId())) {
-                    PlatformHelper.INSTANCE.playAudio(pos, current, resourceId, currentVolume);
-                }
-            });
-        } else if (!pendingRequests.contains(resourceId)) {
-            pendingRequests.add(resourceId);
-            PlatformHelper.INSTANCE.requestAudioFromServer(resourceId);
-
-            Phonon.LOGGER.info("Requesting audio {} from server", resourceId);
-
-            AudioReceiver.getInstance().onTransferComplete(resourceId, file -> {
-                pendingRequests.remove(resourceId);
-                PlaybackState current = speakers.get(pos);
-                float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
-                if (current != null && current.isPlaying() && resourceId.equals(current.resourceId())) {
-                    PlatformHelper.INSTANCE.playAudio(pos, current, resourceId, currentVolume);
-                }
-            });
+            return;
         }
+
+        // Priority 2: Use active streaming session
+        StreamingAudioSession session = StreamingAudioManager.getInstance().getSession(resourceId);
+        if (session != null && session.isReady()) {
+            PlatformHelper.INSTANCE.playStreamingAudio(pos, session, volume);
+            return;
+        }
+
+        // Priority 3: Wait for in-progress transfer
+        if (AudioReceiver.getInstance().isTransferInProgress(resourceId)) {
+            AudioReceiver.getInstance().onTransferComplete(resourceId, file -> {
+                PlaybackState current = speakers.get(pos);
+                float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
+                if (current != null && current.isPlaying() && resourceId.equals(current.resourceId())) {
+                    PlatformHelper.INSTANCE.playAudio(pos, current, resourceId, currentVolume);
+                }
+            });
+            return;
+        }
+
+        // Priority 4: Request new streaming transfer
+        if (pendingRequests.contains(resourceId)) {
+            return;
+        }
+
+        pendingRequests.add(resourceId);
+        long currentPositionMs = playback.getCurrentPositionMs(System.currentTimeMillis());
+        PlatformHelper.INSTANCE.requestAudioFromServer(resourceId, currentPositionMs);
+
+        Phonon.LOGGER.info("Requesting streaming audio {} from position {}ms", resourceId, currentPositionMs);
+
+        StreamingAudioManager.getInstance().setReadyCallback(resourceId, createStreamingCallback(pos, resourceId));
+    }
+
+    private BiConsumer<UUID, StreamingAudioSession> createStreamingCallback(BlockPos pos, UUID resourceId) {
+        return (id, session) -> {
+            if (!id.equals(resourceId)) {
+                return;
+            }
+            pendingRequests.remove(resourceId);
+            PlaybackState current = speakers.get(pos);
+            float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
+            if (current != null && current.isPlaying() && resourceId.equals(current.resourceId())) {
+                PlatformHelper.INSTANCE.playStreamingAudio(pos, session, currentVolume);
+            }
+        };
     }
 
     public void updateVolume(BlockPos pos, float volume) {
@@ -92,9 +131,10 @@ public class ClientSpeakerManager {
     }
 
     public void removeSpeaker(BlockPos pos) {
-        speakers.remove(pos);
+        PlaybackState oldState = speakers.remove(pos);
         speakerVolumes.remove(pos);
         PlatformHelper.INSTANCE.stopAudio(pos);
+        endStreamingSessionIfNeeded(oldState);
     }
 
     public void clearPendingRequests() {

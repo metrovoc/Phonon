@@ -36,6 +36,7 @@ public class AudioReceiver {
         this.cacheDir = gameDir.resolve(PhononClientConfig.getCacheDirectory());
         try {
             Files.createDirectories(cacheDir);
+            StreamingAudioManager.getInstance().setCacheDir(cacheDir);
         } catch (IOException e) {
             Phonon.LOGGER.error("Failed to create cache directory", e);
         }

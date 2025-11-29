@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.platform;
 
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.client.StreamingAudioSession;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
@@ -40,8 +41,14 @@ public interface PlatformHelper {
 
     void stopAllAudio();
 
+    void playStreamingAudio(BlockPos pos, StreamingAudioSession session, float volume);
+
     // Client-side utilities
     void runOnClient(Runnable task);
 
-    void requestAudioFromServer(UUID resourceId);
+    void requestAudioFromServer(UUID resourceId, long startPositionMs);
+
+    default void requestAudioFromServer(UUID resourceId) {
+        requestAudioFromServer(resourceId, 0);
+    }
 }

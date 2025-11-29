@@ -61,6 +61,20 @@ public class SpeakerBlockEntity extends BlockEntity {
     }
 
     @Override
+    public void setLevel(net.minecraft.world.level.Level level) {
+        super.setLevel(level);
+        // 服务端加载时，如果有活跃播放状态，注册到 ServerSpeakerManager
+        if (level != null && !level.isClientSide && (playback.isPlaying() || playback.isPaused())) {
+            com.metrovoc.phonon.server.ServerSpeakerManager.getInstance().registerSpeaker(
+                level.dimension(),
+                worldPosition,
+                playback,
+                com.metrovoc.phonon.server.ServerSpeakerManager.getDurationMs(playback.resourceId())
+            );
+        }
+    }
+
+    @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
     }

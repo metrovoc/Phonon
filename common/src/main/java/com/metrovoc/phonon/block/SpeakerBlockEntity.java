@@ -75,6 +75,20 @@ public class SpeakerBlockEntity extends BlockEntity {
     }
 
     @Override
+    public void setRemoved() {
+        // BlockEntity 被移除时清理状态
+        if (level != null) {
+            if (level.isClientSide) {
+                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().removeSpeaker(worldPosition);
+            } else {
+                com.metrovoc.phonon.server.ServerSpeakerManager.getInstance()
+                    .unregisterSpeaker(level.dimension(), worldPosition);
+            }
+        }
+        super.setRemoved();
+    }
+
+    @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
     }

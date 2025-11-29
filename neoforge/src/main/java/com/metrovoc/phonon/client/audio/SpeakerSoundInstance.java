@@ -56,7 +56,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
 
     private final PhononAudioStream stream;
     private final BlockPos sourcePos;
-    private final float baseVolume;
+    private float baseVolume;
 
     private int tickCounter;
     private float occlusionFactor = 1.0f;
@@ -231,6 +231,6 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     }
 
     public void setVolume(float newVolume) {
-        this.volume = newVolume;
+        this.baseVolume = newVolume;
     }
 }

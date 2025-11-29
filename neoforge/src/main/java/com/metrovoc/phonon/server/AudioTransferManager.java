@@ -1,8 +1,10 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.audio.AudioStreamInfo;
 import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.network.packets.AudioChunkPacket;
+import com.metrovoc.phonon.network.packets.AudioStreamStartPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -13,11 +15,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-/**
- * Server-side audio transfer manager with flow control.
- * Schedules chunk transfers across multiple players for QoS purposes.
- * Flow control values are configurable via phonon-server.toml.
- */
 public class AudioTransferManager {
 
     private static AudioTransferManager instance;
@@ -36,7 +33,12 @@ public class AudioTransferManager {
     }
 
     public void queueTransfer(ServerPlayer player, UUID resourceId) {
-        Path audioPath = com.metrovoc.phonon.server.ServerAudioStorage.getInstance().getAudioPath(resourceId).orElse(null);
+        queueTransfer(player, resourceId, 0);
+    }
+
+    public void queueTransfer(ServerPlayer player, UUID resourceId, long startPositionMs) {
+        ServerAudioStorage storage = ServerAudioStorage.getInstance();
+        Path audioPath = storage.getAudioPath(resourceId).orElse(null);
         if (audioPath == null) {
             Phonon.LOGGER.warn("Cannot queue transfer: audio {} not found on server", resourceId);
             return;
@@ -52,10 +54,21 @@ public class AudioTransferManager {
             }
         }
 
-        long fileSize = com.metrovoc.phonon.server.ServerAudioStorage.getInstance().getAudioSize(resourceId);
-        int totalChunks = (int) Math.ceil((double) fileSize / PhononServerConfig.getChunkSize());
+        long fileSize = storage.getAudioSize(resourceId);
+        AudioStreamInfo streamInfo = storage.getStreamInfo(resourceId).orElse(null);
 
-        PendingTransfer transfer = new PendingTransfer(resourceId, audioPath, totalChunks);
+        int startOffset;
+        long dataSize;
+        if (streamInfo != null) {
+            startOffset = streamInfo.findOffsetForTime(startPositionMs);
+            dataSize = fileSize - startOffset;
+        } else {
+            startOffset = 0;
+            dataSize = fileSize;
+        }
+
+        int totalChunks = (int) Math.ceil((double) dataSize / PhononServerConfig.getChunkSize());
+        PendingTransfer transfer = new PendingTransfer(resourceId, audioPath, totalChunks, startPositionMs, streamInfo, startOffset);
         queue.add(transfer);
 
         synchronized (activePlayerOrder) {
@@ -64,8 +77,8 @@ public class AudioTransferManager {
             }
         }
 
-        Phonon.LOGGER.info("Queued transfer {} for player {} ({} chunks, {} bytes)",
-            resourceId, player.getName().getString(), totalChunks, fileSize);
+        Phonon.LOGGER.info("Queued transfer {} for player {} ({} chunks, startOffset={}, startPositionMs={})",
+            resourceId, player.getName().getString(), totalChunks, startOffset, startPositionMs);
     }
 
     public void tick(net.minecraft.server.MinecraftServer server) {
@@ -129,13 +142,26 @@ public class AudioTransferManager {
                     continue;
                 }
 
-                int chunkIndex = transfer.nextChunkIndex;
-                byte[] chunkData = readChunk(transfer.audioPath, chunkIndex);
+                if (!transfer.headerSent && transfer.streamInfo != null) {
+                    AudioStreamStartPacket startPacket = new AudioStreamStartPacket(
+                        transfer.resourceId,
+                        transfer.streamInfo.headerBytes(),
+                        transfer.streamInfo.sampleRate(),
+                        transfer.startOffset,
+                        transfer.startPositionMs
+                    );
+                    PacketDistributor.sendToPlayer(player, startPacket);
+                    transfer.headerSent = true;
+                }
+
+                int chunkSize = PhononServerConfig.getChunkSize();
+                long readOffset = transfer.startOffset + (long) transfer.nextChunkIndex * chunkSize;
+                byte[] chunkData = readChunkAt(transfer.audioPath, readOffset, chunkSize);
 
                 if (chunkData != null) {
                     AudioChunkPacket packet = new AudioChunkPacket(
                         transfer.resourceId,
-                        chunkIndex,
+                        transfer.nextChunkIndex,
                         transfer.totalChunks,
                         chunkData
                     );
@@ -158,7 +184,7 @@ public class AudioTransferManager {
                     }
                 } else {
                     queue.poll();
-                    Phonon.LOGGER.error("Failed to read chunk {} for {}", chunkIndex, transfer.resourceId);
+                    Phonon.LOGGER.error("Failed to read chunk at offset {} for {}", readOffset, transfer.resourceId);
                 }
 
                 roundRobinIndex++;
@@ -166,16 +192,13 @@ public class AudioTransferManager {
         }
     }
 
-    private byte[] readChunk(Path audioPath, int chunkIndex) {
+    private byte[] readChunkAt(Path audioPath, long offset, int maxSize) {
         try (RandomAccessFile raf = new RandomAccessFile(audioPath.toFile(), "r")) {
-            int chunkSize = PhononServerConfig.getChunkSize();
-            long offset = (long) chunkIndex * chunkSize;
+            if (offset >= raf.length()) return null;
+
             raf.seek(offset);
-
             long remaining = raf.length() - offset;
-            int bytesToRead = (int) Math.min(chunkSize, remaining);
-
-            if (bytesToRead <= 0) return null;
+            int bytesToRead = (int) Math.min(maxSize, remaining);
 
             byte[] buffer = new byte[bytesToRead];
             raf.readFully(buffer);
@@ -213,12 +236,20 @@ public class AudioTransferManager {
         final UUID resourceId;
         final Path audioPath;
         final int totalChunks;
+        final long startPositionMs;
+        final AudioStreamInfo streamInfo;
+        final int startOffset;
         int nextChunkIndex = 0;
+        boolean headerSent = false;
 
-        PendingTransfer(UUID resourceId, Path audioPath, int totalChunks) {
+        PendingTransfer(UUID resourceId, Path audioPath, int totalChunks, long startPositionMs,
+                        AudioStreamInfo streamInfo, int startOffset) {
             this.resourceId = resourceId;
             this.audioPath = audioPath;
             this.totalChunks = totalChunks;
+            this.startPositionMs = startPositionMs;
+            this.streamInfo = streamInfo;
+            this.startOffset = startOffset;
         }
     }
 }

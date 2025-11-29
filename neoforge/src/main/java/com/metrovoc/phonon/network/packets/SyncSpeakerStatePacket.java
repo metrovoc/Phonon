@@ -12,8 +12,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Sync speaker playback state and volume to clients.
- * Includes server timestamp for clock synchronization.
+ * 同步 speaker 播放状态到客户端。
+ * 使用锚点模型: anchorTimeMs + positionAtAnchorMs + speed。
  */
 public record SyncSpeakerStatePacket(
     BlockPos pos,
@@ -32,9 +32,11 @@ public record SyncSpeakerStatePacket(
             UUIDCodec.STREAM_CODEC,
             PlaybackState::resourceId,
             ByteBufCodecs.VAR_LONG,
-            PlaybackState::startTimeMs,
-            ByteBufCodecs.BOOL,
-            PlaybackState::playing,
+            PlaybackState::anchorTimeMs,
+            ByteBufCodecs.VAR_LONG,
+            PlaybackState::positionAtAnchorMs,
+            ByteBufCodecs.FLOAT,
+            PlaybackState::speed,
             PlaybackState::new
         ),
         SyncSpeakerStatePacket::playback,
@@ -55,10 +57,12 @@ public record SyncSpeakerStatePacket(
             long clientTimeMs = System.currentTimeMillis();
             long clockOffset = packet.serverTimeMs - clientTimeMs;
 
+            // 将服务端 anchor 转换为客户端本地时间
             PlaybackState adjusted = new PlaybackState(
                 packet.playback.resourceId(),
-                packet.playback.startTimeMs() - clockOffset,
-                packet.playback.playing()
+                packet.playback.anchorTimeMs() - clockOffset,
+                packet.playback.positionAtAnchorMs(),
+                packet.playback.speed()
             );
 
             ClientSpeakerManager.getInstance().updateSpeaker(packet.pos, adjusted, packet.volume);

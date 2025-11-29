@@ -22,10 +22,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Speaker control GUI with dual-column layout.
- *
- * Left column: Search + Track list
- * Right column: Now playing + Progress + Volume + Play/Stop
+ * Speaker 控制 GUI。
+ * 左栏: 搜索 + 曲目列表
+ * 右栏: 当前播放 + 进度条 + 音量 + Play/Pause/Stop
  */
 public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     private static final int PADDING = 8;
@@ -43,7 +42,8 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     private TrackListWidget trackList;
     private VolumeSlider volumeSlider;
     private ProgressSlider progressSlider;
-    private Button playStopButton;
+    private Button playPauseButton;
+    private Button stopButton;
 
     @Nullable
     private AudioResource selectedTrack;
@@ -59,7 +59,6 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     protected void init() {
         super.init();
 
-        // Initialize volume from speaker (persisted per-speaker, not per-track)
         currentVolume = ClientSpeakerManager.getInstance().getSpeakerVolume(menu.getSpeakerPos());
 
         int leftWidth = (int) ((imageWidth - PADDING * 3) * LEFT_RATIO);
@@ -74,10 +73,8 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     }
 
     private void initLeftColumn(int x, int y, int width) {
-        // Title area (rendered in render())
         y += 14;
 
-        // Search box
         searchBox = new EditBox(font, x, y, width, SEARCH_HEIGHT, Component.literal("Search"));
         searchBox.setHint(Component.literal("Search tracks..."));
         searchBox.setResponder(this::onSearchChanged);
@@ -85,7 +82,6 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         addRenderableWidget(searchBox);
         y += SEARCH_HEIGHT + 4;
 
-        // Track list (fill remaining space)
         int listHeight = imageHeight - (y - topPos) - PADDING;
         trackList = new TrackListWidget(
             minecraft, width, listHeight, y, TRACK_ITEM_HEIGHT,
@@ -97,31 +93,41 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     }
 
     private void initRightColumn(int x, int y, int width) {
-        // "Now Playing" label area (rendered in render())
         y += 14;
-
-        // Now playing info area (rendered in render())
         y += 24;
 
-        // Progress slider
         progressSlider = new ProgressSlider(x, y, width, PROGRESS_HEIGHT, this::onSeek);
         addRenderableWidget(progressSlider);
         y += PROGRESS_HEIGHT + GAP;
 
-        // Volume slider - onChange for real-time local audio, onCommit for server sync
         volumeSlider = new VolumeSlider(x, y, width, SLIDER_HEIGHT, currentVolume,
             this::onVolumeChanged, this::onVolumeCommit);
         addRenderableWidget(volumeSlider);
         y += SLIDER_HEIGHT + GAP;
 
-        // Play/Stop button - initialize with correct state to avoid flicker
-        boolean playing = isPlaying();
-        String buttonText = playing ? "\u25A0 Stop" : "\u25B6 Play";
-        playStopButton = Button.builder(Component.literal(buttonText), btn -> togglePlayback())
-            .bounds(x, y, width, BUTTON_HEIGHT)
+        // Play/Pause 按钮
+        int halfWidth = (width - GAP) / 2;
+        PlaybackState state = getCurrentState();
+
+        String playPauseText = state.isPlaying() ? "\u23F8 Pause" : "\u25B6 Play";
+        playPauseButton = Button.builder(Component.literal(playPauseText), btn -> togglePlayPause())
+            .bounds(x, y, halfWidth, BUTTON_HEIGHT)
             .build();
-        playStopButton.active = playing || selectedTrack != null;
-        addRenderableWidget(playStopButton);
+        playPauseButton.active = state.isPlaying() || state.isPaused() || selectedTrack != null;
+        addRenderableWidget(playPauseButton);
+
+        // Stop 按钮
+        stopButton = Button.builder(Component.literal("\u25A0 Stop"), btn -> stopPlayback())
+            .bounds(x + halfWidth + GAP, y, halfWidth, BUTTON_HEIGHT)
+            .build();
+        stopButton.active = !state.isStopped();
+        addRenderableWidget(stopButton);
+    }
+
+    private PlaybackState getCurrentState() {
+        return ClientSpeakerManager.getInstance()
+            .getSpeakerState(menu.getSpeakerPos())
+            .orElse(PlaybackState.STOPPED);
     }
 
     private void refreshTrackList() {
@@ -138,9 +144,9 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     private void onTrackSelected(AudioResource track) {
         selectedTrack = track;
-        // Enable play button when a track is selected (if not already playing)
-        if (!isPlaying()) {
-            playStopButton.active = track != null;
+        PlaybackState state = getCurrentState();
+        if (!state.isPlaying() && !state.isPaused()) {
+            playPauseButton.active = track != null;
         }
     }
 
@@ -151,22 +157,20 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     private void onVolumeChanged(float volume) {
         currentVolume = volume;
-        // Real-time local audio update while dragging
         ClientSpeakerManager.getInstance().updateVolume(menu.getSpeakerPos(), volume);
     }
 
     private void onVolumeCommit() {
-        // Send final volume to server on release (persists and syncs to other players)
         PlatformHelper.INSTANCE.sendToServer(
             new SpeakerVolumePacket(menu.getSpeakerPos(), currentVolume)
         );
     }
 
     private void onSeek(float progress) {
-        Optional<PlaybackState> stateOpt = ClientSpeakerManager.getInstance().getSpeakerState(menu.getSpeakerPos());
-        if (stateOpt.isEmpty() || !stateOpt.get().playing()) return;
+        PlaybackState state = getCurrentState();
+        if (state.isStopped()) return;
 
-        UUID resourceId = stateOpt.get().resourceId();
+        UUID resourceId = state.resourceId();
         Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
         long durationMs = resourceOpt.map(AudioResource::durationMs).orElse(-1L);
 
@@ -178,10 +182,29 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         );
     }
 
-    private void togglePlayback() {
-        if (isPlaying()) {
-            stopPlayback();
+    private void togglePlayPause() {
+        PlaybackState state = getCurrentState();
+
+        if (state.isPlaying()) {
+            // 正在播放 -> 暂停
+            PlatformHelper.INSTANCE.sendToServer(
+                new SpeakerControlPacket(
+                    menu.getSpeakerPos(),
+                    SpeakerControlPacket.Action.PAUSE,
+                    state.resourceId()
+                )
+            );
+        } else if (state.isPaused()) {
+            // 暂停 -> 恢复播放
+            PlatformHelper.INSTANCE.sendToServer(
+                new SpeakerControlPacket(
+                    menu.getSpeakerPos(),
+                    SpeakerControlPacket.Action.PLAY,
+                    state.resourceId()
+                )
+            );
         } else if (selectedTrack != null) {
+            // 停止状态 -> 播放选中曲目
             playTrack(selectedTrack);
         }
     }
@@ -206,13 +229,6 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         );
     }
 
-    private boolean isPlaying() {
-        return ClientSpeakerManager.getInstance()
-            .getSpeakerState(menu.getSpeakerPos())
-            .map(PlaybackState::playing)
-            .orElse(false);
-    }
-
     @Override
     protected void containerTick() {
         super.containerTick();
@@ -220,48 +236,41 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     }
 
     private void updatePlaybackUI() {
-        Optional<PlaybackState> stateOpt = ClientSpeakerManager.getInstance().getSpeakerState(menu.getSpeakerPos());
-        boolean playing = stateOpt.map(PlaybackState::playing).orElse(false);
+        PlaybackState state = getCurrentState();
 
-        // Update progress and check for playback completion
-        if (playing && stateOpt.isPresent()) {
-            PlaybackState state = stateOpt.get();
+        // 更新进度条
+        if (state.isPlaying() || state.isPaused()) {
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
             long durationMs = resourceOpt.map(AudioResource::durationMs).orElse(-1L);
             long positionMs = state.getCurrentPositionMs(System.currentTimeMillis());
 
-            // Auto-stop when playback reaches end
-            if (durationMs > 0 && positionMs >= durationMs) {
-                stopPlayback();
-                playing = false;
-                progressSlider.update(durationMs, durationMs);
-            } else {
-                progressSlider.update(positionMs, durationMs);
-            }
+            progressSlider.update(positionMs, durationMs);
         } else {
             progressSlider.update(0, -1);
         }
 
-        // Update button text and state
-        if (playing) {
-            playStopButton.setMessage(Component.literal("\u25A0 Stop"));
-            playStopButton.active = true;
+        // 更新 Play/Pause 按钮
+        if (state.isPlaying()) {
+            playPauseButton.setMessage(Component.literal("\u23F8 Pause"));
+            playPauseButton.active = true;
+        } else if (state.isPaused()) {
+            playPauseButton.setMessage(Component.literal("\u25B6 Play"));
+            playPauseButton.active = true;
         } else {
-            playStopButton.setMessage(Component.literal("\u25B6 Play"));
-            playStopButton.active = selectedTrack != null;
+            playPauseButton.setMessage(Component.literal("\u25B6 Play"));
+            playPauseButton.active = selectedTrack != null;
         }
+
+        // 更新 Stop 按钮
+        stopButton.active = !state.isStopped();
     }
 
     @Override
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        // Main background
         graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xE0101820);
-
-        // Border
         renderBorder(graphics);
 
-        // Column divider
         int dividerX = leftPos + PADDING + (int) ((imageWidth - PADDING * 3) * LEFT_RATIO) + PADDING / 2;
         graphics.fill(dividerX, topPos + PADDING, dividerX + 1, topPos + imageHeight - PADDING, 0x40FFFFFF);
     }
@@ -284,13 +293,11 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         int rightX = leftX + leftWidth + PADDING;
         int rightWidth = imageWidth - PADDING * 3 - leftWidth;
 
-        // Left column title
         graphics.drawString(font, "Tracks", leftX, topPos + PADDING, 0xFFFFFF);
         String countText = ClientAudioManager.getInstance().getAllResources().size() + " total";
         int countWidth = font.width(countText);
         graphics.drawString(font, countText, leftX + leftWidth - countWidth, topPos + PADDING, 0x808080);
 
-        // Right column: Now Playing
         renderNowPlaying(graphics, rightX, topPos + PADDING, rightWidth);
     }
 
@@ -298,10 +305,9 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         graphics.drawString(font, "Now Playing", x, y, 0xFFFFFF);
         y += 14;
 
-        Optional<PlaybackState> stateOpt = ClientSpeakerManager.getInstance().getSpeakerState(menu.getSpeakerPos());
+        PlaybackState state = getCurrentState();
 
-        if (stateOpt.isPresent() && stateOpt.get().playing()) {
-            PlaybackState state = stateOpt.get();
+        if (state.isPlaying()) {
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
             String trackName = resourceOpt.map(AudioResource::name).orElse("Unknown");
@@ -310,6 +316,15 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
                 trackName = font.plainSubstrByWidth(trackName, width - 10) + "...";
             }
             graphics.drawString(font, trackName, x, y, 0x40FF40);
+        } else if (state.isPaused()) {
+            UUID resourceId = state.resourceId();
+            Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
+            String trackName = resourceOpt.map(AudioResource::name).orElse("Unknown");
+
+            if (font.width(trackName) > width) {
+                trackName = font.plainSubstrByWidth(trackName, width - 10) + "...";
+            }
+            graphics.drawString(font, trackName + " (Paused)", x, y, 0xFFFF40);
         } else {
             graphics.drawString(font, "Nothing playing", x, y, 0x606060);
         }
@@ -317,7 +332,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     @Override
     protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
-        // Disable default inventory labels
+        // 禁用默认 inventory 标签
     }
 
     @Override
@@ -342,8 +357,6 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        // AbstractContainerScreen.mouseDragged handles slot dragging but doesn't call super,
-        // so widgets never receive drag events. We must dispatch manually.
         if (getFocused() != null && isDragging() && button == 0) {
             return getFocused().mouseDragged(mouseX, mouseY, button, dragX, dragY);
         }

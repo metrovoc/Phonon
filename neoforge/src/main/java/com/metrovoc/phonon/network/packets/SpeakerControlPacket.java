@@ -4,6 +4,7 @@ import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.platform.PlatformHelper;
+import com.metrovoc.phonon.server.ServerSpeakerManager;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.StreamCodec;
@@ -15,7 +16,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import java.util.UUID;
 
 /**
- * Client -> Server: Control speaker (play/stop).
+ * Client -> Server: 控制 speaker (play/pause/stop)。
  */
 public record SpeakerControlPacket(
     BlockPos pos,
@@ -24,8 +25,9 @@ public record SpeakerControlPacket(
 ) implements CustomPacketPayload {
 
     public enum Action {
-        PLAY,
-        STOP
+        PLAY,   // 开始播放 (从头或恢复)
+        PAUSE,  // 暂停
+        STOP    // 停止 (重置到开头)
     }
 
     public static final Type<SpeakerControlPacket> TYPE =
@@ -58,26 +60,53 @@ public record SpeakerControlPacket(
             var level = player.serverLevel();
             if (!(level.getBlockEntity(packet.pos) instanceof SpeakerBlockEntity speaker)) return;
 
+            long serverTime = System.currentTimeMillis();
+            PlaybackState current = speaker.getPlayback();
+            PlaybackState newState;
+
             switch (packet.action) {
                 case PLAY -> {
-                    long serverTime = System.currentTimeMillis();
-                    var playback = new PlaybackState(packet.resourceId, serverTime, true);
-                    speaker.setPlayback(playback);
-                    PlatformHelper.INSTANCE.sendToAllTracking(
-                        level,
-                        packet.pos,
-                        new SyncSpeakerStatePacket(packet.pos, playback, speaker.getVolume(), serverTime)
-                    );
+                    if (current.isPaused() && current.resourceId() != null
+                        && current.resourceId().equals(packet.resourceId)) {
+                        // 从暂停恢复: 更新 anchor 到现在，保持 position
+                        long pausedPos = current.positionAtAnchorMs();
+                        newState = new PlaybackState(current.resourceId(), serverTime, pausedPos, 1.0f);
+                    } else {
+                        // 新播放: 从头开始
+                        newState = new PlaybackState(packet.resourceId, serverTime, 0, 1.0f);
+                    }
+
+                    speaker.setPlayback(newState);
+                    long durationMs = ServerSpeakerManager.getDurationMs(newState.resourceId());
+                    ServerSpeakerManager.getInstance().registerSpeaker(
+                        level.dimension(), packet.pos, newState, durationMs);
+                }
+                case PAUSE -> {
+                    if (!current.isPlaying() || current.resourceId() == null) return;
+
+                    // 计算当前位置并锁定
+                    long currentPos = current.getCurrentPositionMs(serverTime);
+                    newState = new PlaybackState(current.resourceId(), serverTime, currentPos, 0f);
+
+                    speaker.setPlayback(newState);
+                    ServerSpeakerManager.getInstance().registerSpeaker(
+                        level.dimension(), packet.pos, newState, -1);
                 }
                 case STOP -> {
-                    speaker.setPlayback(PlaybackState.STOPPED);
-                    PlatformHelper.INSTANCE.sendToAllTracking(
-                        level,
-                        packet.pos,
-                        new SyncSpeakerStatePacket(packet.pos, PlaybackState.STOPPED, speaker.getVolume(), System.currentTimeMillis())
-                    );
+                    newState = PlaybackState.STOPPED;
+                    speaker.setPlayback(newState);
+                    ServerSpeakerManager.getInstance().unregisterSpeaker(level.dimension(), packet.pos);
+                }
+                default -> {
+                    return;
                 }
             }
+
+            PlatformHelper.INSTANCE.sendToAllTracking(
+                level,
+                packet.pos,
+                new SyncSpeakerStatePacket(packet.pos, newState, speaker.getVolume(), serverTime)
+            );
         });
     }
 }

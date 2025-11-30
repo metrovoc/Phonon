@@ -2,6 +2,7 @@ package com.metrovoc.phonon.client;
 
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import net.minecraft.core.BlockPos;
 
@@ -10,16 +11,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiConsumer;
 
 /**
- * 客户端 Speaker 管理器。
- * 追踪所有活跃 speaker 及其播放状态。
+ * Client-side speaker manager.
+ * Tracks all active speakers and their playback state.
  */
 public class ClientSpeakerManager {
     private static ClientSpeakerManager instance;
+
     private final Map<BlockPos, PlaybackState> speakers = new ConcurrentHashMap<>();
     private final Map<BlockPos, Float> speakerVolumes = new ConcurrentHashMap<>();
+    private final Map<BlockPos, UUID> activeStreams = new ConcurrentHashMap<>();
     private final Set<UUID> pendingRequests = ConcurrentHashMap.newKeySet();
 
     private ClientSpeakerManager() {}
@@ -37,8 +39,7 @@ public class ClientSpeakerManager {
 
         // Stop old playback if resource changed
         if (oldState != null && !java.util.Objects.equals(oldState.resourceId(), playback.resourceId())) {
-            PlatformHelper.INSTANCE.stopAudio(pos);
-            endStreamingSessionIfNeeded(oldState);
+            stopAndCleanup(pos, oldState);
         }
 
         if (playback.isPlaying()) {
@@ -46,17 +47,19 @@ public class ClientSpeakerManager {
             startPlayback(pos, playback, volume);
         } else if (playback.isPaused()) {
             speakers.put(pos, playback);
-            PlatformHelper.INSTANCE.stopAudio(pos);
+            stopAndCleanup(pos, oldState);
         } else {
             speakers.remove(pos);
-            PlatformHelper.INSTANCE.stopAudio(pos);
-            endStreamingSessionIfNeeded(oldState);
+            stopAndCleanup(pos, oldState);
         }
     }
 
-    private void endStreamingSessionIfNeeded(PlaybackState state) {
-        if (state != null && state.resourceId() != null) {
-            StreamingAudioManager.getInstance().endSession(state.resourceId());
+    private void stopAndCleanup(BlockPos pos, PlaybackState state) {
+        PlatformHelper.INSTANCE.stopAudio(pos);
+
+        UUID streamResourceId = activeStreams.remove(pos);
+        if (streamResourceId != null) {
+            StreamingAudioManager.getInstance().releaseDownload(streamResourceId);
         }
     }
 
@@ -70,10 +73,12 @@ public class ClientSpeakerManager {
             return;
         }
 
-        // Priority 2: Use active streaming session
-        StreamingAudioSession session = StreamingAudioManager.getInstance().getSession(resourceId);
-        if (session != null && session.isReady()) {
-            PlatformHelper.INSTANCE.playStreamingAudio(pos, session, volume);
+        long currentPositionMs = playback.getCurrentPositionMs(System.currentTimeMillis());
+        boolean canCache = currentPositionMs == 0;
+
+        // Priority 2: Check if download already in progress and ready
+        if (StreamingAudioManager.getInstance().isReady(resourceId)) {
+            startStreamingPlayback(pos, resourceId, currentPositionMs, volume);
             return;
         }
 
@@ -89,32 +94,56 @@ public class ClientSpeakerManager {
             return;
         }
 
-        // Priority 4: Request new streaming transfer
+        // Priority 4: Start new streaming download
         if (pendingRequests.contains(resourceId)) {
+            // Already requested, just add callback
+            addReadyCallback(pos, resourceId);
             return;
         }
 
         pendingRequests.add(resourceId);
-        long currentPositionMs = playback.getCurrentPositionMs(System.currentTimeMillis());
-        PlatformHelper.INSTANCE.requestAudioFromServer(resourceId, currentPositionMs);
 
+        // Create download session (increments ref count)
+        StreamingAudioManager.getInstance().getOrCreateDownload(resourceId, canCache);
+        activeStreams.put(pos, resourceId);
+
+        // Request from server
+        PlatformHelper.INSTANCE.requestAudioFromServer(resourceId, currentPositionMs);
         Phonon.LOGGER.info("Requesting streaming audio {} from position {}ms", resourceId, currentPositionMs);
 
-        StreamingAudioManager.getInstance().setReadyCallback(resourceId, createStreamingCallback(pos, resourceId));
+        // Add callback for when header is ready
+        addReadyCallback(pos, resourceId);
     }
 
-    private BiConsumer<UUID, StreamingAudioSession> createStreamingCallback(BlockPos pos, UUID resourceId) {
-        return (id, session) -> {
-            if (!id.equals(resourceId)) {
+    private void addReadyCallback(BlockPos pos, UUID resourceId) {
+        StreamingAudioManager.getInstance().addReadyCallback(resourceId, session -> {
+            pendingRequests.remove(resourceId);
+
+            PlaybackState current = speakers.get(pos);
+            if (current == null || !current.isPlaying() || !resourceId.equals(current.resourceId())) {
                 return;
             }
-            pendingRequests.remove(resourceId);
-            PlaybackState current = speakers.get(pos);
-            float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
-            if (current != null && current.isPlaying() && resourceId.equals(current.resourceId())) {
-                PlatformHelper.INSTANCE.playStreamingAudio(pos, session, currentVolume);
-            }
-        };
+
+            float volume = speakerVolumes.getOrDefault(pos, 0.5f);
+            long positionMs = current.getCurrentPositionMs(System.currentTimeMillis());
+            startStreamingPlayback(pos, resourceId, positionMs, volume);
+        });
+    }
+
+    private void startStreamingPlayback(BlockPos pos, UUID resourceId, long positionMs, float volume) {
+        StreamingAudioStream stream = StreamingAudioManager.getInstance().createStream(resourceId, positionMs);
+        if (stream == null) {
+            Phonon.LOGGER.error("Failed to create stream for {}", resourceId);
+            return;
+        }
+
+        // Track this stream for cleanup
+        UUID oldResourceId = activeStreams.put(pos, resourceId);
+        if (oldResourceId != null && !oldResourceId.equals(resourceId)) {
+            StreamingAudioManager.getInstance().releaseDownload(oldResourceId);
+        }
+
+        PlatformHelper.INSTANCE.playStreamingAudio(pos, stream, volume);
     }
 
     public void updateVolume(BlockPos pos, float volume) {
@@ -133,8 +162,7 @@ public class ClientSpeakerManager {
     public void removeSpeaker(BlockPos pos) {
         PlaybackState oldState = speakers.remove(pos);
         speakerVolumes.remove(pos);
-        PlatformHelper.INSTANCE.stopAudio(pos);
-        endStreamingSessionIfNeeded(oldState);
+        stopAndCleanup(pos, oldState);
     }
 
     public void clearPendingRequests() {
@@ -142,7 +170,7 @@ public class ClientSpeakerManager {
     }
 
     /**
-     * F3+T 资源重载后调用，恢复正在播放的音频。
+     * Called after F3+T resource reload to restore playing audio.
      */
     public void onResourcesReloaded() {
         for (Map.Entry<BlockPos, PlaybackState> entry : speakers.entrySet()) {

@@ -41,6 +41,8 @@ public class OpusDownloadSession {
             return;
         }
 
+        int bufferedBefore = packetBuffer.getBufferedCount();
+
         this.channels = channels;
         this.durationMs = durationMs;
         this.totalPackets = totalPackets;
@@ -49,11 +51,12 @@ public class OpusDownloadSession {
         this.streamStarted = true;
 
         if (startSequence > 0) {
+            Phonon.LOGGER.info("Seeking to startSequence={}, clearing {} buffered packets", startSequence, bufferedBefore);
             packetBuffer.seekTo(startSequence);
         }
 
-        Phonon.LOGGER.debug("Opus stream {} started: channels={}, duration={}ms, totalPackets={}, startSeq={}",
-            resourceId, channels, durationMs, totalPackets, startSequence);
+        Phonon.LOGGER.info("Opus stream {} init: channels={}, duration={}ms, total={}, startSeq={}, bufferedBefore={}",
+            resourceId, channels, durationMs, totalPackets, startSequence, bufferedBefore);
     }
 
     /**

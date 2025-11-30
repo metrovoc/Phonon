@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.platform;
 
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.client.audio.OpusAudioStream;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
@@ -42,6 +43,8 @@ public interface PlatformHelper {
     void stopAllAudio();
 
     void playStreamingAudio(BlockPos pos, StreamingAudioStream stream, float volume);
+
+    void playOpusStreamingAudio(BlockPos pos, OpusAudioStream stream, float volume);
 
     // Client-side utilities
     void runOnClient(Runnable task);

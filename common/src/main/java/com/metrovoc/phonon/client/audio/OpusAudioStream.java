@@ -59,6 +59,7 @@ public class OpusAudioStream implements AudioStream {
         }
 
         int samplesToRead = bufferSize / 2;
+        short[] outputBuffer = new short[samplesToRead];
         int samplesRead = 0;
 
         while (samplesRead < samplesToRead) {
@@ -67,7 +68,8 @@ public class OpusAudioStream implements AudioStream {
                 int available = pcmBufferLen - pcmBufferPos;
                 int toCopy = Math.min(available, samplesToRead - samplesRead);
 
-                // Copy will happen in final output assembly
+                // Actually copy the data
+                System.arraycopy(pcmBuffer, pcmBufferPos, outputBuffer, samplesRead, toCopy);
                 samplesRead += toCopy;
                 pcmBufferPos += toCopy;
                 continue;
@@ -85,7 +87,7 @@ public class OpusAudioStream implements AudioStream {
 
         // Assemble output
         ByteBuffer output = MemoryUtil.memAlloc(samplesRead * 2);
-        output.asShortBuffer().put(pcmBuffer, pcmBufferPos - samplesRead, samplesRead);
+        output.asShortBuffer().put(outputBuffer, 0, samplesRead);
         output.position(0);
         output.limit(samplesRead * 2);
 
@@ -96,11 +98,36 @@ public class OpusAudioStream implements AudioStream {
         if (!packetBuffer.isStarted()) {
             if (packetBuffer.isReadyToStart()) {
                 packetBuffer.start();
+                Phonon.LOGGER.info("Stream playback started, buffered={}", packetBuffer.getBufferedCount());
             } else {
                 return false;
             }
         }
 
+        // Check status before polling to distinguish underflow from loss
+        PacketBuffer.PollResult status = packetBuffer.checkPollStatus();
+
+        if (status == PacketBuffer.PollResult.BUFFER_EMPTY) {
+            // Underflow: caught up to network, data hasn't arrived yet
+            // Use PLC to fill audio but DON'T count as loss
+            if (packetBuffer.isFinished()) {
+                return false;
+            }
+            try {
+                int decoded = decoder.decodePLC(decodeOutput, 0);
+                if (decoded > 0) {
+                    System.arraycopy(decodeOutput, 0, pcmBuffer, 0, decoded);
+                    pcmBufferPos = 0;
+                    pcmBufferLen = decoded;
+                    return true;
+                }
+            } catch (OpusException e) {
+                // Ignore PLC errors during underflow
+            }
+            return false;
+        }
+
+        // DATA_AVAILABLE or PACKET_LOSS - proceed with poll
         byte[] opusData = packetBuffer.poll();
 
         try {
@@ -109,17 +136,12 @@ public class OpusAudioStream implements AudioStream {
                 decoded = decoder.decode(opusData, decodeOutput);
                 consecutiveLostPackets = 0;
             } else {
-                // Packet lost - use PLC
-                if (packetBuffer.isFinished()) {
-                    return false;
-                }
-
+                // True packet loss (gap in sequence)
                 consecutiveLostPackets++;
                 if (consecutiveLostPackets > MAX_CONSECUTIVE_LOST) {
-                    // Too many lost packets, likely stream ended
+                    Phonon.LOGGER.warn("Too many consecutive lost packets ({}), stopping", consecutiveLostPackets);
                     return false;
                 }
-
                 decoded = decoder.decodePLC(decodeOutput, 0);
             }
 

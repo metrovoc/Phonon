@@ -54,6 +54,10 @@ dependencies {
     // Concentus - Pure Java Opus codec implementation (jarJar to bundle into mod)
     implementation 'io.github.jaredmdobson:concentus:1.0.2'
     jarJar(group: 'io.github.jaredmdobson', name: 'concentus', version: '[1.0.0,2.0.0)')
-    // Required for dev environment - jarJar only handles packaging, not dev runtime classpath
     additionalRuntimeClasspath 'io.github.jaredmdobson:concentus:1.0.2'
+
+    // VorbisSPI - Pure Java Vorbis decoder for server-side transcoding (jarJar to bundle into mod)
+    implementation 'com.googlecode.soundlibs:vorbisspi:1.0.3.3'
+    jarJar(group: 'com.googlecode.soundlibs', name: 'vorbisspi', version: '[1.0.0,2.0.0)')
+    additionalRuntimeClasspath 'com.googlecode.soundlibs:vorbisspi:1.0.3.3'
 }

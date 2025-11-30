@@ -24,6 +24,9 @@ dependencies {
 
     // Concentus - Pure Java Opus codec implementation (api so it's available to loader modules)
     api 'io.github.jaredmdobson:concentus:1.0.2'
+
+    // VorbisSPI - Pure Java Vorbis decoder for server-side transcoding (no LWJGL dependency)
+    api 'com.googlecode.soundlibs:vorbisspi:1.0.3.3'
 }
 
 configurations {

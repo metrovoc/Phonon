@@ -2,7 +2,7 @@ package com.metrovoc.phonon.client;
 
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.PlaybackState;
-import com.metrovoc.phonon.client.audio.StreamingAudioStream;
+import com.metrovoc.phonon.client.audio.OpusAudioStream;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import net.minecraft.core.BlockPos;
 
@@ -59,7 +59,7 @@ public class ClientSpeakerManager {
 
         UUID streamResourceId = activeStreams.remove(pos);
         if (streamResourceId != null) {
-            StreamingAudioManager.getInstance().releaseDownload(streamResourceId);
+            StreamingAudioManager.getInstance().releaseOpusDownload(streamResourceId);
         }
     }
 
@@ -74,11 +74,10 @@ public class ClientSpeakerManager {
         }
 
         long currentPositionMs = playback.getCurrentPositionMs(System.currentTimeMillis());
-        boolean canCache = currentPositionMs == 0;
 
-        // Priority 2: Check if download already in progress and ready
-        if (StreamingAudioManager.getInstance().isReady(resourceId)) {
-            startStreamingPlayback(pos, resourceId, currentPositionMs, volume);
+        // Priority 2: Check if Opus download already in progress and ready
+        if (StreamingAudioManager.getInstance().isOpusReady(resourceId)) {
+            startOpusPlayback(pos, resourceId, volume);
             return;
         }
 
@@ -97,26 +96,23 @@ public class ClientSpeakerManager {
         // Priority 4: Start new streaming download
         if (pendingRequests.contains(resourceId)) {
             // Already requested, just add callback
-            addReadyCallback(pos, resourceId);
+            addOpusReadyCallback(pos, resourceId);
             return;
         }
 
         pendingRequests.add(resourceId);
-
-        // Create download session (increments ref count)
-        StreamingAudioManager.getInstance().getOrCreateDownload(resourceId, canCache);
         activeStreams.put(pos, resourceId);
 
-        // Request from server
+        // Request from server (server will send Opus packets, session created on first packet)
         PlatformHelper.INSTANCE.requestAudioFromServer(resourceId, currentPositionMs);
         Phonon.LOGGER.info("Requesting streaming audio {} from position {}ms", resourceId, currentPositionMs);
 
-        // Add callback for when header is ready
-        addReadyCallback(pos, resourceId);
+        // Add callback for when Opus stream is ready
+        addOpusReadyCallback(pos, resourceId);
     }
 
-    private void addReadyCallback(BlockPos pos, UUID resourceId) {
-        StreamingAudioManager.getInstance().addReadyCallback(resourceId, session -> {
+    private void addOpusReadyCallback(BlockPos pos, UUID resourceId) {
+        StreamingAudioManager.getInstance().addOpusReadyCallback(resourceId, session -> {
             pendingRequests.remove(resourceId);
 
             PlaybackState current = speakers.get(pos);
@@ -125,25 +121,24 @@ public class ClientSpeakerManager {
             }
 
             float volume = speakerVolumes.getOrDefault(pos, 0.5f);
-            long positionMs = current.getCurrentPositionMs(System.currentTimeMillis());
-            startStreamingPlayback(pos, resourceId, positionMs, volume);
+            startOpusPlayback(pos, resourceId, volume);
         });
     }
 
-    private void startStreamingPlayback(BlockPos pos, UUID resourceId, long positionMs, float volume) {
-        StreamingAudioStream stream = StreamingAudioManager.getInstance().createStream(resourceId, positionMs);
+    private void startOpusPlayback(BlockPos pos, UUID resourceId, float volume) {
+        OpusAudioStream stream = StreamingAudioManager.getInstance().createOpusStream(resourceId);
         if (stream == null) {
-            Phonon.LOGGER.error("Failed to create stream for {}", resourceId);
+            Phonon.LOGGER.error("Failed to create Opus stream for {}", resourceId);
             return;
         }
 
         // Track this stream for cleanup
         UUID oldResourceId = activeStreams.put(pos, resourceId);
         if (oldResourceId != null && !oldResourceId.equals(resourceId)) {
-            StreamingAudioManager.getInstance().releaseDownload(oldResourceId);
+            StreamingAudioManager.getInstance().releaseOpusDownload(oldResourceId);
         }
 
-        PlatformHelper.INSTANCE.playStreamingAudio(pos, stream, volume);
+        PlatformHelper.INSTANCE.playOpusStreamingAudio(pos, stream, volume);
     }
 
     public void updateVolume(BlockPos pos, float volume) {

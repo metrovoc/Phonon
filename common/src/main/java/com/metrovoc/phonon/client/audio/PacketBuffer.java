@@ -15,7 +15,16 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class PacketBuffer {
 
-    private static final int DEFAULT_BUFFER_DELAY_PACKETS = 3;
+    /**
+     * Result of checking poll status - distinguishes between different null cases.
+     */
+    public enum PollResult {
+        DATA_AVAILABLE,  // Packet exists in buffer
+        PACKET_LOSS,     // Gap in sequence - packet truly missing
+        BUFFER_EMPTY     // Caught up to network - waiting for more data
+    }
+
+    private static final int DEFAULT_BUFFER_DELAY_PACKETS = 10;
     private static final int MAX_BUFFER_SIZE = 100;
     private static final int MAX_GAP_BEFORE_RESET = 50;
 
@@ -48,10 +57,10 @@ public class PacketBuffer {
         try {
             if (complete) return;
 
-            // First packet received
+            // First packet received - start from this sequence, not backwards
             if (highestReceivedSeq < 0) {
                 highestReceivedSeq = sequenceNumber;
-                nextPlaybackSeq = Math.max(0, sequenceNumber - bufferDelayPackets);
+                nextPlaybackSeq = sequenceNumber;  // Start from first actual packet
             }
 
             // Update highest received
@@ -83,6 +92,34 @@ public class PacketBuffer {
     }
 
     /**
+     * Check the status before polling.
+     * Caller should check this before calling poll() to distinguish
+     * between true packet loss and buffer underflow.
+     */
+    public PollResult checkPollStatus() {
+        lock.lock();
+        try {
+            if (!started || nextPlaybackSeq < 0) {
+                return PollResult.BUFFER_EMPTY;
+            }
+
+            // Caught up to network - waiting for more data (underflow)
+            if (nextPlaybackSeq > highestReceivedSeq) {
+                return PollResult.BUFFER_EMPTY;
+            }
+
+            // Packet should exist but isn't in map - true loss (gap)
+            if (!packets.containsKey(nextPlaybackSeq)) {
+                return PollResult.PACKET_LOSS;
+            }
+
+            return PollResult.DATA_AVAILABLE;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Get next packet for playback.
      *
      * @return packet data, or null if packet is missing (caller should use PLC)
@@ -92,6 +129,11 @@ public class PacketBuffer {
         try {
             if (!started || nextPlaybackSeq < 0) {
                 return null;
+            }
+
+            // If we've caught up to or passed the highest received, wait for more
+            if (nextPlaybackSeq > highestReceivedSeq) {
+                return null;  // Don't advance, wait for packet to arrive
             }
 
             byte[] data = packets.remove(nextPlaybackSeq);
@@ -125,8 +167,10 @@ public class PacketBuffer {
             if (started) return true;
             if (highestReceivedSeq < 0) return false;
 
-            int bufferedCount = highestReceivedSeq - nextPlaybackSeq + 1;
-            return bufferedCount >= bufferDelayPackets;
+            // Check ACTUAL packet count, not theoretical range
+            // Also ensure the first packet we need actually exists
+            return packets.size() >= bufferDelayPackets
+                && packets.containsKey(nextPlaybackSeq);
         } finally {
             lock.unlock();
         }

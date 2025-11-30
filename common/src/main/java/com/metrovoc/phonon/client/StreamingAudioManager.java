@@ -230,11 +230,9 @@ public class StreamingAudioManager {
      */
     public void receiveOpusStreamStart(UUID resourceId, int channels, long durationMs,
                                        int totalPackets, int startSequence, long startPositionMs) {
-        OpusDownloadSession session = opusDownloads.get(resourceId);
-        if (session == null) {
-            Phonon.LOGGER.warn("Received Opus stream start for unknown session: {}", resourceId);
-            return;
-        }
+        // Auto-create session if not exists (server decides protocol, not client)
+        OpusDownloadSession session = opusDownloads.computeIfAbsent(resourceId,
+            id -> new OpusDownloadSession(id));
 
         session.initStream(channels, durationMs, totalPackets, startSequence, startPositionMs);
 
@@ -250,14 +248,22 @@ public class StreamingAudioManager {
     public void receiveOpusPacket(UUID resourceId, int sequenceNumber, int totalPackets, byte[] opusData) {
         OpusDownloadSession session = opusDownloads.get(resourceId);
         if (session == null) {
-            Phonon.LOGGER.debug("Received Opus packet for unknown session: {}", resourceId);
-            return;
+            // Auto-create session if packets arrive before start packet
+            session = opusDownloads.computeIfAbsent(resourceId, id -> new OpusDownloadSession(id));
+            Phonon.LOGGER.debug("Created Opus session from packet (seq={})", sequenceNumber);
         }
 
         session.receivePacket(sequenceNumber, totalPackets, opusData);
 
+        // Log first few packets and periodically after
+        if (sequenceNumber < 5 || sequenceNumber % 1000 == 0) {
+            Phonon.LOGGER.debug("Opus packet {}/{} received, buffered={}",
+                sequenceNumber, totalPackets, session.getPacketBuffer().getBufferedCount());
+        }
+
         // Check if now ready and notify
         if (session.isReady() && !session.getPacketBuffer().isStarted()) {
+            Phonon.LOGGER.info("Opus stream ready, notifying callbacks");
             notifyOpusReady(resourceId, session);
         }
     }

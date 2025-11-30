@@ -4,23 +4,22 @@ import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.OpusEncoder;
 import com.metrovoc.phonon.audio.Resampler;
 import io.github.jaredmdobson.concentus.OpusException;
-import org.lwjgl.stb.STBVorbis;
-import org.lwjgl.stb.STBVorbisInfo;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.system.MemoryUtil;
 
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.IntBuffer;
-import java.nio.ShortBuffer;
-import java.nio.file.Files;
+import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Transcodes OGG Vorbis files to Opus packets.
- * Used on server to convert existing .ogg files for Opus streaming.
+ * Uses VorbisSPI (pure Java) for decoding - works on dedicated servers without LWJGL.
  */
 public class VorbisToOpusTranscoder implements AutoCloseable {
 
@@ -28,14 +27,12 @@ public class VorbisToOpusTranscoder implements AutoCloseable {
     private final int targetSampleRate;
     private final int targetChannels;
 
-    private long vorbisHandle;
-    private ByteBuffer fileBuffer;
+    private AudioInputStream pcmStream;
     private int sourceSampleRate;
     private int sourceChannels;
-    private int totalSamples;
+    private long totalSamples;
 
     private OpusEncoder encoder;
-    private short[] resampleBuffer;
     private short[] encodeBuffer;
 
     private boolean initialized = false;
@@ -52,172 +49,155 @@ public class VorbisToOpusTranscoder implements AutoCloseable {
 
     /**
      * Initialize transcoder by opening the Vorbis file.
-     *
-     * @return true if successful
+     * VorbisSPI registers via Java SPI, so AudioSystem automatically handles OGG.
      */
     public boolean init() throws IOException {
         if (initialized) return true;
 
-        byte[] fileData = Files.readAllBytes(sourceFile);
-        fileBuffer = MemoryUtil.memAlloc(fileData.length);
-        fileBuffer.put(fileData);
-        fileBuffer.flip();
+        try {
+            AudioInputStream sourceStream = AudioSystem.getAudioInputStream(sourceFile.toFile());
+            AudioFormat sourceFormat = sourceStream.getFormat();
 
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            IntBuffer error = stack.mallocInt(1);
-            vorbisHandle = STBVorbis.stb_vorbis_open_memory(fileBuffer, error, null);
+            sourceSampleRate = (int) sourceFormat.getSampleRate();
+            sourceChannels = sourceFormat.getChannels();
 
-            if (vorbisHandle == 0) {
-                Phonon.LOGGER.error("Failed to open Vorbis file: error {}", error.get(0));
-                MemoryUtil.memFree(fileBuffer);
-                fileBuffer = null;
-                return false;
-            }
+            // Estimate total samples from frame length (may be -1 if unknown)
+            long frameLength = sourceStream.getFrameLength();
+            totalSamples = frameLength > 0 ? frameLength : 0;
 
-            STBVorbisInfo info = STBVorbisInfo.malloc(stack);
-            STBVorbis.stb_vorbis_get_info(vorbisHandle, info);
-
-            sourceSampleRate = info.sample_rate();
-            sourceChannels = info.channels();
-            totalSamples = STBVorbis.stb_vorbis_stream_length_in_samples(vorbisHandle);
+            // Convert to 16-bit signed PCM (little endian)
+            AudioFormat decodedFormat = new AudioFormat(
+                AudioFormat.Encoding.PCM_SIGNED,
+                sourceFormat.getSampleRate(),
+                16,
+                sourceFormat.getChannels(),
+                sourceFormat.getChannels() * 2,
+                sourceFormat.getSampleRate(),
+                false
+            );
+            pcmStream = AudioSystem.getAudioInputStream(decodedFormat, sourceStream);
 
             encoder = new OpusEncoder(targetChannels);
-
-            // Buffer for one Opus frame worth of source samples
-            int sourceSamplesPerFrame = (int) Math.ceil(
-                (double) OpusEncoder.FRAME_SIZE * sourceSampleRate / targetSampleRate
-            ) + 1;
-            resampleBuffer = new short[sourceSamplesPerFrame * sourceChannels];
             encodeBuffer = new short[OpusEncoder.FRAME_SIZE * targetChannels];
 
             initialized = true;
             return true;
 
+        } catch (UnsupportedAudioFileException e) {
+            Phonon.LOGGER.error("Unsupported audio format: {}", sourceFile, e);
+            return false;
         } catch (OpusException e) {
             Phonon.LOGGER.error("Failed to create Opus encoder", e);
-            if (vorbisHandle != 0) {
-                STBVorbis.stb_vorbis_close(vorbisHandle);
-                vorbisHandle = 0;
-            }
-            if (fileBuffer != null) {
-                MemoryUtil.memFree(fileBuffer);
-                fileBuffer = null;
-            }
+            close();
             return false;
         }
     }
 
     /**
      * Transcode entire file to Opus packets.
-     *
-     * @return list of Opus packets
      */
     public List<byte[]> transcodeAll() throws IOException, OpusException {
         if (!initialized && !init()) {
             throw new IOException("Failed to initialize transcoder");
         }
 
+        // Read all PCM data
+        byte[] pcmBytes = readAllBytes(pcmStream);
+
+        // Convert bytes to shorts (little endian)
+        short[] pcmSamples = bytesToShorts(pcmBytes);
+
+        // Mix to mono if needed
+        short[] monoSamples;
+        if (sourceChannels > 1 && targetChannels == 1) {
+            monoSamples = mixToMono(pcmSamples, sourceChannels);
+        } else {
+            monoSamples = pcmSamples;
+        }
+
+        // Resample to 48kHz if needed
+        short[] resampledSamples;
+        if (sourceSampleRate != targetSampleRate) {
+            resampledSamples = Resampler.resample(monoSamples, sourceSampleRate, targetSampleRate);
+        } else {
+            resampledSamples = monoSamples;
+        }
+
+        // Update totalSamples based on actual data
+        if (totalSamples == 0) {
+            totalSamples = pcmSamples.length / sourceChannels;
+        }
+
+        // Encode to Opus frames
         List<byte[]> packets = new ArrayList<>();
+        int offset = 0;
 
-        // Calculate samples per source frame to produce one Opus frame after resampling
-        int sourceSamplesNeeded = (int) Math.ceil(
-            (double) OpusEncoder.FRAME_SIZE * sourceSampleRate / targetSampleRate
-        );
+        while (offset < resampledSamples.length) {
+            int remaining = resampledSamples.length - offset;
+            int toCopy = Math.min(remaining, OpusEncoder.FRAME_SIZE);
 
-        short[] readBuffer = new short[sourceSamplesNeeded * sourceChannels];
-        ShortBuffer nativeBuffer = MemoryUtil.memAllocShort(sourceSamplesNeeded * sourceChannels);
+            System.arraycopy(resampledSamples, offset, encodeBuffer, 0, toCopy);
 
-        try {
-            while (true) {
-                int samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(
-                    vorbisHandle, sourceChannels, nativeBuffer
-                );
-
-                if (samplesRead <= 0) break;
-
-                nativeBuffer.position(0);
-                nativeBuffer.get(readBuffer, 0, samplesRead * sourceChannels);
-                nativeBuffer.position(0);
-
-                // Convert to mono if needed
-                short[] monoSamples;
-                if (sourceChannels == 1) {
-                    monoSamples = new short[samplesRead];
-                    System.arraycopy(readBuffer, 0, monoSamples, 0, samplesRead);
-                } else {
-                    monoSamples = new short[samplesRead];
-                    for (int i = 0; i < samplesRead; i++) {
-                        int left = readBuffer[i * sourceChannels];
-                        int right = readBuffer[i * sourceChannels + 1];
-                        monoSamples[i] = (short) ((left + right) / 2);
-                    }
-                }
-
-                // Resample if needed
-                short[] resampledSamples;
-                if (sourceSampleRate != targetSampleRate) {
-                    resampledSamples = Resampler.resample(monoSamples, sourceSampleRate, targetSampleRate);
-                } else {
-                    resampledSamples = monoSamples;
-                }
-
-                // Encode in frame-sized chunks
-                int offset = 0;
-                while (offset + OpusEncoder.FRAME_SIZE <= resampledSamples.length) {
-                    System.arraycopy(resampledSamples, offset, encodeBuffer, 0, OpusEncoder.FRAME_SIZE);
-                    byte[] packet = encoder.encodeFrame(encodeBuffer);
-                    if (packet.length > 0) {
-                        packets.add(packet);
-                    }
-                    offset += OpusEncoder.FRAME_SIZE;
-                }
-
-                // Handle remaining samples (pad with zeros for last frame)
-                if (offset < resampledSamples.length) {
-                    int remaining = resampledSamples.length - offset;
-                    System.arraycopy(resampledSamples, offset, encodeBuffer, 0, remaining);
-                    // Zero-pad
-                    for (int i = remaining; i < OpusEncoder.FRAME_SIZE; i++) {
-                        encodeBuffer[i] = 0;
-                    }
-                    byte[] packet = encoder.encodeFrame(encodeBuffer);
-                    if (packet.length > 0) {
-                        packets.add(packet);
-                    }
-                }
+            // Zero-pad last frame if needed
+            for (int i = toCopy; i < OpusEncoder.FRAME_SIZE; i++) {
+                encodeBuffer[i] = 0;
             }
-        } finally {
-            MemoryUtil.memFree(nativeBuffer);
+
+            byte[] packet = encoder.encodeFrame(encodeBuffer);
+            if (packet.length > 0) {
+                packets.add(packet);
+            }
+
+            offset += OpusEncoder.FRAME_SIZE;
         }
 
         return packets;
     }
 
-    /**
-     * Get duration in milliseconds.
-     */
-    public long getDurationMs() {
-        if (!initialized) return 0;
-        return (long) totalSamples * 1000 / sourceSampleRate;
+    private byte[] readAllBytes(AudioInputStream stream) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int read;
+        while ((read = stream.read(chunk)) != -1) {
+            buffer.write(chunk, 0, read);
+        }
+        return buffer.toByteArray();
     }
 
-    /**
-     * Get source sample rate.
-     */
+    private short[] bytesToShorts(byte[] bytes) {
+        short[] shorts = new short[bytes.length / 2];
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(shorts);
+        return shorts;
+    }
+
+    private short[] mixToMono(short[] interleaved, int channels) {
+        int sampleCount = interleaved.length / channels;
+        short[] mono = new short[sampleCount];
+
+        for (int i = 0; i < sampleCount; i++) {
+            int sum = 0;
+            for (int ch = 0; ch < channels; ch++) {
+                sum += interleaved[i * channels + ch];
+            }
+            mono[i] = (short) (sum / channels);
+        }
+
+        return mono;
+    }
+
+    public long getDurationMs() {
+        if (!initialized || totalSamples == 0) return 0;
+        return totalSamples * 1000 / sourceSampleRate;
+    }
+
     public int getSourceSampleRate() {
         return sourceSampleRate;
     }
 
-    /**
-     * Get source channel count.
-     */
     public int getSourceChannels() {
         return sourceChannels;
     }
 
-    /**
-     * Get target sample rate (always 48000 for Opus).
-     */
     public int getTargetSampleRate() {
         return targetSampleRate;
     }
@@ -229,14 +209,11 @@ public class VorbisToOpusTranscoder implements AutoCloseable {
             encoder = null;
         }
 
-        if (vorbisHandle != 0) {
-            STBVorbis.stb_vorbis_close(vorbisHandle);
-            vorbisHandle = 0;
-        }
-
-        if (fileBuffer != null) {
-            MemoryUtil.memFree(fileBuffer);
-            fileBuffer = null;
+        if (pcmStream != null) {
+            try {
+                pcmStream.close();
+            } catch (IOException ignored) {}
+            pcmStream = null;
         }
 
         initialized = false;
@@ -244,8 +221,6 @@ public class VorbisToOpusTranscoder implements AutoCloseable {
 
     /**
      * Transcode a file directly.
-     *
-     * @return transcoded packets, or null on failure
      */
     public static TranscodeResult transcode(Path sourceFile) {
         try (VorbisToOpusTranscoder transcoder = new VorbisToOpusTranscoder(sourceFile)) {

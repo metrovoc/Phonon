@@ -3,8 +3,6 @@ package com.metrovoc.phonon.client.audio;
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.AudioCache;
-import com.metrovoc.phonon.client.StreamingAudioSession;
-import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 
@@ -49,8 +47,7 @@ public class AudioPlayer {
             long currentTime = System.currentTimeMillis();
             long playbackPosition = playback.getCurrentPositionMs(currentTime);
 
-            com.metrovoc.phonon.client.audio.PhononAudioStream stream =
-                new com.metrovoc.phonon.client.audio.PhononAudioStream(cachedAudio);
+            PhononAudioStream stream = new PhononAudioStream(cachedAudio);
 
             if (playbackPosition > 0) {
                 stream.seekMs(playbackPosition);
@@ -69,19 +66,14 @@ public class AudioPlayer {
         }
     }
 
-    public void playStreaming(BlockPos pos, StreamingAudioSession session, float volume) {
+    public void playStreaming(BlockPos pos, StreamingAudioStream stream, float volume) {
         stop(pos);
-
-        StreamingAudioStream stream = new StreamingAudioStream(
-            session.getDecoder(),
-            session.getDecoder().getSampleRate()
-        );
 
         SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, volume);
         Minecraft.getInstance().getSoundManager().play(sound);
         playingSounds.put(pos, sound);
 
-        Phonon.LOGGER.info("Started streaming audio {} at {}", session.getResourceId(), pos);
+        Phonon.LOGGER.info("Started streaming audio at {}", pos);
     }
 
     public void stop(BlockPos pos) {

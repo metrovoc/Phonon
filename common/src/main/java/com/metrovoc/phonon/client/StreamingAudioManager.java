@@ -1,16 +1,36 @@
 package com.metrovoc.phonon.client;
 
+import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.client.audio.SharedAudioBuffer;
+import com.metrovoc.phonon.client.audio.StreamingAudioStream;
+
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiConsumer;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
+/**
+ * Manages audio downloads by resourceId.
+ * Multiple speakers sharing the same resource use the same download session.
+ */
 public class StreamingAudioManager {
     private static final StreamingAudioManager instance = new StreamingAudioManager();
+    private static final long CLEANUP_DELAY_MS = 5000;
 
-    private final Map<UUID, StreamingAudioSession> sessions = new ConcurrentHashMap<>();
-    private final Map<UUID, BiConsumer<UUID, StreamingAudioSession>> readyCallbacks = new ConcurrentHashMap<>();
+    private final Map<UUID, AudioDownloadSession> downloads = new ConcurrentHashMap<>();
+    private final Map<UUID, List<Consumer<AudioDownloadSession>>> readyCallbacks = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+        Thread t = new Thread(r, "Phonon-StreamingCleanup");
+        t.setDaemon(true);
+        return t;
+    });
+
     private Path cacheDir;
 
     public static StreamingAudioManager getInstance() {
@@ -21,49 +41,154 @@ public class StreamingAudioManager {
         this.cacheDir = cacheDir;
     }
 
-    public void setReadyCallback(UUID resourceId, BiConsumer<UUID, StreamingAudioSession> callback) {
-        readyCallbacks.put(resourceId, callback);
+    /**
+     * Get or create a download session for the resource.
+     * Increments ref count automatically.
+     */
+    public AudioDownloadSession getOrCreateDownload(UUID resourceId, boolean canCache) {
+        AudioDownloadSession session = downloads.computeIfAbsent(resourceId,
+            id -> new AudioDownloadSession(id, canCache));
+        session.addRef();
+        return session;
     }
 
-    public void startSession(UUID resourceId, long startPositionMs, byte[] headerBytes, int sampleRate) {
-        StreamingAudioSession session = new StreamingAudioSession(resourceId, startPositionMs);
+    /**
+     * Get existing download session without incrementing ref count.
+     */
+    public AudioDownloadSession getDownload(UUID resourceId) {
+        return downloads.get(resourceId);
+    }
+
+    /**
+     * Check if download exists and has header ready.
+     */
+    public boolean isReady(UUID resourceId) {
+        AudioDownloadSession session = downloads.get(resourceId);
+        return session != null && session.getBuffer().hasHeader();
+    }
+
+    /**
+     * Receive header data from network.
+     */
+    public void receiveHeader(UUID resourceId, byte[] headerBytes, int sampleRate) {
+        AudioDownloadSession session = downloads.get(resourceId);
+        if (session == null) {
+            Phonon.LOGGER.warn("Received header for unknown session: {}", resourceId);
+            return;
+        }
+
         session.receiveHeader(headerBytes, sampleRate);
-        session.onReady(s -> {
-            BiConsumer<UUID, StreamingAudioSession> callback = readyCallbacks.remove(resourceId);
-            if (callback != null) {
-                callback.accept(resourceId, s);
+
+        // Notify callbacks
+        List<Consumer<AudioDownloadSession>> callbacks = readyCallbacks.remove(resourceId);
+        if (callbacks != null) {
+            for (Consumer<AudioDownloadSession> callback : callbacks) {
+                try {
+                    callback.accept(session);
+                } catch (Exception e) {
+                    Phonon.LOGGER.error("Error in ready callback", e);
+                }
             }
-        });
-        sessions.put(resourceId, session);
+        }
     }
 
+    /**
+     * Receive chunk data from network.
+     */
     public void receiveChunk(UUID resourceId, byte[] data) {
-        StreamingAudioSession session = sessions.get(resourceId);
+        AudioDownloadSession session = downloads.get(resourceId);
         if (session != null) {
             session.receiveChunk(data);
         }
     }
 
-    public boolean hasActiveSession(UUID resourceId) {
-        return sessions.containsKey(resourceId);
-    }
-
-    public StreamingAudioSession getSession(UUID resourceId) {
-        return sessions.get(resourceId);
-    }
-
-    public void endSession(UUID resourceId) {
-        StreamingAudioSession session = sessions.remove(resourceId);
+    /**
+     * Mark download as complete.
+     */
+    public void completeDownload(UUID resourceId) {
+        AudioDownloadSession session = downloads.get(resourceId);
         if (session != null) {
-            if (cacheDir != null && session.canSaveToCache()) {
+            session.markComplete();
+
+            if (cacheDir != null && session.canCache()) {
                 session.saveToCache(cacheDir);
             }
+        }
+    }
+
+    /**
+     * Create a new stream for playback.
+     * The caller is responsible for calling releaseDownload when done.
+     */
+    public StreamingAudioStream createStream(UUID resourceId, long startPositionMs) {
+        AudioDownloadSession session = downloads.get(resourceId);
+        if (session == null || !session.getBuffer().hasHeader()) {
+            return null;
+        }
+        return new StreamingAudioStream(session.getBuffer(), startPositionMs);
+    }
+
+    /**
+     * Release a reference to the download session.
+     * Schedules cleanup if ref count reaches zero.
+     */
+    public void releaseDownload(UUID resourceId) {
+        AudioDownloadSession session = downloads.get(resourceId);
+        if (session == null) return;
+
+        int remaining = session.release();
+        if (remaining <= 0) {
+            scheduleCleanup(resourceId);
+        }
+    }
+
+    private void scheduleCleanup(UUID resourceId) {
+        scheduler.schedule(() -> {
+            AudioDownloadSession session = downloads.get(resourceId);
+            if (session != null && session.getRefCount() <= 0) {
+                downloads.remove(resourceId);
+                session.close();
+                Phonon.LOGGER.debug("Cleaned up download session: {}", resourceId);
+            }
+        }, CLEANUP_DELAY_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Add callback to be invoked when header is ready.
+     */
+    public void addReadyCallback(UUID resourceId, Consumer<AudioDownloadSession> callback) {
+        AudioDownloadSession session = downloads.get(resourceId);
+        if (session != null && session.getBuffer().hasHeader()) {
+            callback.accept(session);
+            return;
+        }
+
+        readyCallbacks.computeIfAbsent(resourceId, k -> new ArrayList<>()).add(callback);
+    }
+
+    /**
+     * Check if a download session exists.
+     */
+    public boolean hasDownload(UUID resourceId) {
+        return downloads.containsKey(resourceId);
+    }
+
+    /**
+     * Force end a session (e.g., when speaker is removed).
+     */
+    public void endSession(UUID resourceId) {
+        AudioDownloadSession session = downloads.remove(resourceId);
+        if (session != null) {
+            readyCallbacks.remove(resourceId);
             session.close();
         }
     }
 
     public void clear() {
-        sessions.values().forEach(StreamingAudioSession::close);
-        sessions.clear();
+        for (AudioDownloadSession session : downloads.values()) {
+            session.close();
+        }
+        downloads.clear();
+        readyCallbacks.clear();
     }
 }

@@ -43,9 +43,8 @@ public record AudioStreamStartPacket(
 
     public static void handle(AudioStreamStartPacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
-            StreamingAudioManager.getInstance().startSession(
+            StreamingAudioManager.getInstance().receiveHeader(
                 packet.resourceId(),
-                packet.startPositionMs(),
                 packet.headerBytes(),
                 packet.sampleRate()
             );

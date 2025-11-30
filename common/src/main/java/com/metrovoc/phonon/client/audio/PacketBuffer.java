@@ -25,7 +25,7 @@ public class PacketBuffer {
     }
 
     private static final int DEFAULT_BUFFER_DELAY_PACKETS = 10;
-    private static final int MAX_BUFFER_SIZE = 100;
+    private static final int MAX_BUFFER_SIZE = 3000;  // ~1 minute of audio (50 packets/sec)
     private static final int MAX_GAP_BEFORE_RESET = 50;
 
     private final ReentrantLock lock = new ReentrantLock();
@@ -82,9 +82,17 @@ public class PacketBuffer {
 
             packets.put(sequenceNumber, data);
 
-            // Prevent unbounded growth
+            // Prevent unbounded growth - but ONLY discard already-played packets
             while (packets.size() > MAX_BUFFER_SIZE) {
-                packets.pollFirstEntry();
+                Integer firstKey = packets.firstKey();
+                if (firstKey != null && firstKey < nextPlaybackSeq) {
+                    // Safe to discard - already played
+                    packets.pollFirstEntry();
+                } else {
+                    // All remaining packets are still needed - stop discarding
+                    // Server is sending faster than playback, which is fine
+                    break;
+                }
             }
         } finally {
             lock.unlock();
@@ -110,6 +118,12 @@ public class PacketBuffer {
 
             // Packet should exist but isn't in map - true loss (gap)
             if (!packets.containsKey(nextPlaybackSeq)) {
+                // Debug: what sequences DO we have?
+                Integer firstKey = packets.isEmpty() ? null : packets.firstKey();
+                Integer lastKey = packets.isEmpty() ? null : packets.lastKey();
+                com.metrovoc.phonon.Phonon.LOGGER.warn(
+                    "PACKET_LOSS: nextPlaybackSeq={}, highestReceivedSeq={}, packets.size={}, firstKey={}, lastKey={}",
+                    nextPlaybackSeq, highestReceivedSeq, packets.size(), firstKey, lastKey);
                 return PollResult.PACKET_LOSS;
             }
 

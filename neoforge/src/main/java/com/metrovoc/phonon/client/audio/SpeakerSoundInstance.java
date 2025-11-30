@@ -62,6 +62,10 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     private float occlusionFactor = 1.0f;
     private float targetOcclusion = 1.0f;
 
+    // Minimum volume to ensure SoundEngine creates audio channel
+    // (Minecraft skips play() when volume is exactly 0)
+    private static final float MIN_INITIAL_VOLUME = 0.0001f;
+
     public SpeakerSoundInstance(AudioStream stream, BlockPos pos, float volume) {
         super(
             SoundEvent.createVariableRangeEvent(DUMMY_SOUND_LOCATION),
@@ -76,7 +80,8 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         this.x = pos.getX() + 0.5;
         this.y = pos.getY() + 0.5;
         this.z = pos.getZ() + 0.5;
-        this.volume = volume;
+        // Ensure initial volume > 0 so SoundEngine creates audio channel
+        this.volume = Math.max(volume, MIN_INITIAL_VOLUME);
         this.attenuation = Attenuation.NONE;
         this.tickCounter = pos.hashCode() % RAYCAST_INTERVAL;
     }

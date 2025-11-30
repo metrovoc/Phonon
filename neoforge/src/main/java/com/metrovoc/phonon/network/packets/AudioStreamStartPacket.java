@@ -16,8 +16,16 @@ public record AudioStreamStartPacket(
     byte[] headerBytes,
     int sampleRate,
     int startOffset,
-    long startPositionMs
+    long startPositionMs,
+    boolean isLiveStream
 ) implements CustomPacketPayload {
+
+    /**
+     * Constructor for non-live streams (backward compatible).
+     */
+    public AudioStreamStartPacket(UUID resourceId, byte[] headerBytes, int sampleRate, int startOffset, long startPositionMs) {
+        this(resourceId, headerBytes, sampleRate, startOffset, startPositionMs, false);
+    }
 
     public static final Type<AudioStreamStartPacket> TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "audio_stream_start"));
@@ -33,6 +41,8 @@ public record AudioStreamStartPacket(
         AudioStreamStartPacket::startOffset,
         ByteBufCodecs.VAR_LONG,
         AudioStreamStartPacket::startPositionMs,
+        ByteBufCodecs.BOOL,
+        AudioStreamStartPacket::isLiveStream,
         AudioStreamStartPacket::new
     );
 
@@ -46,7 +56,8 @@ public record AudioStreamStartPacket(
             StreamingAudioManager.getInstance().receiveHeader(
                 packet.resourceId(),
                 packet.headerBytes(),
-                packet.sampleRate()
+                packet.sampleRate(),
+                packet.isLiveStream()
             );
         });
     }

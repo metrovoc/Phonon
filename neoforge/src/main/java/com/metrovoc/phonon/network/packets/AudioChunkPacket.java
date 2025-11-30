@@ -20,8 +20,20 @@ public record AudioChunkPacket(
     byte[] data
 ) implements CustomPacketPayload {
 
+    /**
+     * Special value indicating a live/infinite stream with no predetermined end.
+     */
+    public static final int LIVE_STREAM_MARKER = -1;
+
     public static int getChunkSize() {
         return PhononServerConfig.getChunkSize();
+    }
+
+    /**
+     * Check if this packet is part of a live stream.
+     */
+    public boolean isLiveStream() {
+        return totalChunks == LIVE_STREAM_MARKER;
     }
 
     public static final Type<AudioChunkPacket> TYPE =
@@ -52,8 +64,8 @@ public record AudioChunkPacket(
                     packet.data()
                 );
 
-                // Check if this is the last chunk
-                if (packet.isLastChunk()) {
+                // Live streams never complete via chunk count
+                if (!packet.isLiveStream() && packet.isLastChunk()) {
                     StreamingAudioManager.getInstance().completeDownload(packet.resourceId());
                 }
             } else {
@@ -68,6 +80,6 @@ public record AudioChunkPacket(
     }
 
     public boolean isLastChunk() {
-        return chunkIndex == totalChunks - 1;
+        return !isLiveStream() && chunkIndex == totalChunks - 1;
     }
 }

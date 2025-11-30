@@ -49,6 +49,12 @@ public class PhononNetwork {
             AudioStreamStartPacket::handle
         );
 
+        registrar.playToClient(
+            LiveStreamEndPacket.TYPE,
+            LiveStreamEndPacket.CODEC,
+            LiveStreamEndPacket::handle
+        );
+
         // Client -> Server packets
         registrar.playToServer(
             RequestAudioPacket.TYPE,

@@ -46,8 +46,17 @@ public class StreamingAudioManager {
      * Increments ref count automatically.
      */
     public AudioDownloadSession getOrCreateDownload(UUID resourceId, boolean canCache) {
+        return getOrCreateDownload(resourceId, canCache, false);
+    }
+
+    /**
+     * Get or create a download session for the resource.
+     * Increments ref count automatically.
+     * @param isLiveStream true for live streams that never complete
+     */
+    public AudioDownloadSession getOrCreateDownload(UUID resourceId, boolean canCache, boolean isLiveStream) {
         AudioDownloadSession session = downloads.computeIfAbsent(resourceId,
-            id -> new AudioDownloadSession(id, canCache));
+            id -> new AudioDownloadSession(id, canCache, isLiveStream));
         session.addRef();
         return session;
     }
@@ -71,6 +80,14 @@ public class StreamingAudioManager {
      * Receive header data from network.
      */
     public void receiveHeader(UUID resourceId, byte[] headerBytes, int sampleRate) {
+        receiveHeader(resourceId, headerBytes, sampleRate, false);
+    }
+
+    /**
+     * Receive header data from network.
+     * @param isLiveStream true if this is a live stream
+     */
+    public void receiveHeader(UUID resourceId, byte[] headerBytes, int sampleRate, boolean isLiveStream) {
         AudioDownloadSession session = downloads.get(resourceId);
         if (session == null) {
             Phonon.LOGGER.warn("Received header for unknown session: {}", resourceId);
@@ -78,6 +95,10 @@ public class StreamingAudioManager {
         }
 
         session.receiveHeader(headerBytes, sampleRate);
+
+        if (isLiveStream) {
+            Phonon.LOGGER.info("Started receiving live stream: {}", resourceId);
+        }
 
         // Notify callbacks
         List<Consumer<AudioDownloadSession>> callbacks = readyCallbacks.remove(resourceId);

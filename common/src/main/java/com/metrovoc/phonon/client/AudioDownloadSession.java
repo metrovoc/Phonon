@@ -19,13 +19,23 @@ public class AudioDownloadSession {
     private final SharedAudioBuffer buffer;
     private final AtomicInteger refCount = new AtomicInteger(0);
     private final boolean canCache;
+    private final boolean isLiveStream;
 
     private volatile boolean closed = false;
 
     public AudioDownloadSession(UUID resourceId, boolean canCache) {
+        this(resourceId, canCache, false);
+    }
+
+    public AudioDownloadSession(UUID resourceId, boolean canCache, boolean isLiveStream) {
         this.resourceId = resourceId;
         this.buffer = new SharedAudioBuffer();
         this.canCache = canCache;
+        this.isLiveStream = isLiveStream;
+    }
+
+    public boolean isLiveStream() {
+        return isLiveStream;
     }
 
     public void receiveHeader(byte[] headerBytes, int sampleRate) {

@@ -28,6 +28,10 @@ public class NeoForgeClientConfig {
     // Debug settings
     public final ModConfigSpec.BooleanValue enableDebugLogging;
 
+    // Live input settings
+    public final ModConfigSpec.ConfigValue<String> liveInputDevice;
+    public final ModConfigSpec.BooleanValue liveInputEnabled;
+
     private NeoForgeClientConfig(ModConfigSpec.Builder builder) {
         builder.push("cache");
 
@@ -65,6 +69,21 @@ public class NeoForgeClientConfig {
             .define("enableLogging", PhononClientConfig.DEFAULT_ENABLE_DEBUG_LOGGING);
 
         builder.pop();
+
+        builder.push("liveInput");
+
+        liveInputDevice = builder
+            .comment("Name of the audio input device for live streaming")
+            .comment("Use an empty string to disable or select via GUI")
+            .comment("Example: 'CABLE Output (VB-Audio Virtual Cable)'")
+            .define("device", PhononClientConfig.DEFAULT_LIVE_INPUT_DEVICE);
+
+        liveInputEnabled = builder
+            .comment("Enable live audio input broadcasting")
+            .comment("Requires FFmpeg to be installed on the system")
+            .define("enabled", PhononClientConfig.DEFAULT_LIVE_INPUT_ENABLED);
+
+        builder.pop();
     }
 
     /**
@@ -76,5 +95,7 @@ public class NeoForgeClientConfig {
         PhononClientConfig.setMaxCacheSizeMB(INSTANCE.maxCacheSizeMB::get);
         PhononClientConfig.setMaxAudioDistance(INSTANCE.maxAudioDistance::get);
         PhononClientConfig.setEnableDebugLogging(INSTANCE.enableDebugLogging::get);
+        PhononClientConfig.setLiveInputDevice(INSTANCE.liveInputDevice::get);
+        PhononClientConfig.setLiveInputEnabled(INSTANCE.liveInputEnabled::get);
     }
 }

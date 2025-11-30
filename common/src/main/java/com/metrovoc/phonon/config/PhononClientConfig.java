@@ -18,6 +18,8 @@ public final class PhononClientConfig {
     public static final int DEFAULT_MAX_CACHE_SIZE_MB = 512;
     public static final boolean DEFAULT_ENABLE_DEBUG_LOGGING = false;
     public static final double DEFAULT_MAX_AUDIO_DISTANCE = 64.0;
+    public static final String DEFAULT_LIVE_INPUT_DEVICE = "";
+    public static final boolean DEFAULT_LIVE_INPUT_ENABLED = false;
 
     // Cache settings
     private static Supplier<String> cacheDirectory = () -> DEFAULT_CACHE_DIRECTORY;
@@ -29,15 +31,23 @@ public final class PhononClientConfig {
     // Debug settings
     private static BooleanSupplier enableDebugLogging = () -> DEFAULT_ENABLE_DEBUG_LOGGING;
 
+    // Live input settings
+    private static Supplier<String> liveInputDevice = () -> DEFAULT_LIVE_INPUT_DEVICE;
+    private static BooleanSupplier liveInputEnabled = () -> DEFAULT_LIVE_INPUT_ENABLED;
+
     // Getters
     public static String getCacheDirectory() { return cacheDirectory.get(); }
     public static int getMaxCacheSizeMB() { return maxCacheSizeMB.getAsInt(); }
     public static double getMaxAudioDistance() { return maxAudioDistance.getAsDouble(); }
     public static boolean isDebugLoggingEnabled() { return enableDebugLogging.getAsBoolean(); }
+    public static String getLiveInputDevice() { return liveInputDevice.get(); }
+    public static boolean isLiveInputEnabled() { return liveInputEnabled.getAsBoolean(); }
 
     // Setters (called by platform-specific config registration)
     public static void setCacheDirectory(Supplier<String> supplier) { cacheDirectory = supplier; }
     public static void setMaxCacheSizeMB(IntSupplier supplier) { maxCacheSizeMB = supplier; }
     public static void setMaxAudioDistance(DoubleSupplier supplier) { maxAudioDistance = supplier; }
     public static void setEnableDebugLogging(BooleanSupplier supplier) { enableDebugLogging = supplier; }
+    public static void setLiveInputDevice(Supplier<String> supplier) { liveInputDevice = supplier; }
+    public static void setLiveInputEnabled(BooleanSupplier supplier) { liveInputEnabled = supplier; }
 }

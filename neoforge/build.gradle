@@ -50,4 +50,10 @@ repositories {
 dependencies {
     // Cloth Config - optional, for config GUI
     implementation "me.shedaniel.cloth:cloth-config-neoforge:15.0.140"
+
+    // Concentus - Pure Java Opus codec implementation (jarJar to bundle into mod)
+    implementation 'io.github.jaredmdobson:concentus:1.0.2'
+    jarJar(group: 'io.github.jaredmdobson', name: 'concentus', version: '[1.0.0,2.0.0)')
+    // Required for dev environment - jarJar only handles packaging, not dev runtime classpath
+    additionalRuntimeClasspath 'io.github.jaredmdobson:concentus:1.0.2'
 }

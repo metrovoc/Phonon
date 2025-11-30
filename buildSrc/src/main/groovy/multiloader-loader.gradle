@@ -12,7 +12,8 @@ configurations {
 }
 
 dependencies {
-    compileOnly(project(':common')) {
+    // Use implementation to inherit common's api dependencies (like Concentus) at runtime
+    implementation(project(':common')) {
         capabilities {
             requireCapability "$group:$mod_id"
         }

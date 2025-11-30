@@ -4,6 +4,7 @@ import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.AudioCache;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.core.BlockPos;
 
 import java.nio.file.Files;
@@ -20,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * - Automatic stereo-to-mono downmix (handled by PhononAudioStream)
  * - Timestamp-based seeking for perfect sync
  * - Respects Minecraft volume settings
+ * - Supports both Vorbis (legacy) and Opus streaming
  */
 public class AudioPlayer {
     private static AudioPlayer instance;
@@ -66,6 +68,9 @@ public class AudioPlayer {
         }
     }
 
+    /**
+     * Play legacy Vorbis streaming audio.
+     */
     public void playStreaming(BlockPos pos, StreamingAudioStream stream, float volume) {
         stop(pos);
 
@@ -73,7 +78,33 @@ public class AudioPlayer {
         Minecraft.getInstance().getSoundManager().play(sound);
         playingSounds.put(pos, sound);
 
-        Phonon.LOGGER.info("Started streaming audio at {}", pos);
+        Phonon.LOGGER.info("Started Vorbis streaming audio at {}", pos);
+    }
+
+    /**
+     * Play Opus streaming audio.
+     */
+    public void playOpusStreaming(BlockPos pos, OpusAudioStream stream, float volume) {
+        stop(pos);
+
+        SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, volume);
+        Minecraft.getInstance().getSoundManager().play(sound);
+        playingSounds.put(pos, sound);
+
+        Phonon.LOGGER.info("Started Opus streaming audio at {}", pos);
+    }
+
+    /**
+     * Play any AudioStream type.
+     */
+    public void playStream(BlockPos pos, AudioStream stream, float volume) {
+        stop(pos);
+
+        SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, volume);
+        Minecraft.getInstance().getSoundManager().play(sound);
+        playingSounds.put(pos, sound);
+
+        Phonon.LOGGER.info("Started audio stream at {}", pos);
     }
 
     public void stop(BlockPos pos) {

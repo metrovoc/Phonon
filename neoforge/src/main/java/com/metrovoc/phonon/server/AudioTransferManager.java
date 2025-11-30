@@ -2,9 +2,12 @@ package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.AudioStreamInfo;
+import com.metrovoc.phonon.audio.OpusEncoder;
 import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.network.packets.AudioChunkPacket;
 import com.metrovoc.phonon.network.packets.AudioStreamStartPacket;
+import com.metrovoc.phonon.network.packets.OpusPacket;
+import com.metrovoc.phonon.network.packets.OpusStreamStartPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -15,13 +18,23 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+/**
+ * Manages audio transfer to clients.
+ * Supports both legacy Vorbis streaming and new Opus packet-based streaming.
+ */
 public class AudioTransferManager {
 
     private static AudioTransferManager instance;
 
+    // Opus transcoding cache to avoid re-transcoding the same file
+    private final Map<UUID, TranscodedAudio> transcodeCache = new ConcurrentHashMap<>();
+
     private final Map<UUID, Queue<PendingTransfer>> playerQueues = new ConcurrentHashMap<>();
     private final List<UUID> activePlayerOrder = new ArrayList<>();
     private int roundRobinIndex = 0;
+
+    // Configuration
+    private boolean useOpus = true; // Default to Opus
 
     private AudioTransferManager() {}
 
@@ -30,6 +43,14 @@ public class AudioTransferManager {
             instance = new AudioTransferManager();
         }
         return instance;
+    }
+
+    public void setUseOpus(boolean useOpus) {
+        this.useOpus = useOpus;
+    }
+
+    public boolean isUseOpus() {
+        return useOpus;
     }
 
     public void queueTransfer(ServerPlayer player, UUID resourceId) {
@@ -54,6 +75,71 @@ public class AudioTransferManager {
             }
         }
 
+        PendingTransfer transfer;
+        if (useOpus) {
+            transfer = createOpusTransfer(resourceId, audioPath, startPositionMs, storage);
+        } else {
+            transfer = createVorbisTransfer(resourceId, audioPath, startPositionMs, storage);
+        }
+
+        if (transfer == null) {
+            Phonon.LOGGER.error("Failed to create transfer for {}", resourceId);
+            return;
+        }
+
+        queue.add(transfer);
+
+        synchronized (activePlayerOrder) {
+            if (!activePlayerOrder.contains(playerId)) {
+                activePlayerOrder.add(playerId);
+            }
+        }
+
+        Phonon.LOGGER.info("Queued {} transfer {} for player {} ({} packets, startPositionMs={})",
+            transfer.isOpus ? "Opus" : "Vorbis",
+            resourceId, player.getName().getString(),
+            transfer.isOpus ? transfer.opusPackets.size() : transfer.totalChunks,
+            startPositionMs);
+    }
+
+    private PendingTransfer createOpusTransfer(UUID resourceId, Path audioPath, long startPositionMs,
+                                               ServerAudioStorage storage) {
+        // Check cache first
+        TranscodedAudio cached = transcodeCache.get(resourceId);
+        if (cached == null) {
+            // Transcode OGG to Opus
+            VorbisToOpusTranscoder.TranscodeResult result = VorbisToOpusTranscoder.transcode(audioPath);
+            if (result == null) {
+                Phonon.LOGGER.error("Failed to transcode {} to Opus", audioPath);
+                return null;
+            }
+
+            cached = new TranscodedAudio(result.packets(), result.durationMs(), 1);
+            transcodeCache.put(resourceId, cached);
+            Phonon.LOGGER.debug("Transcoded {} to {} Opus packets", resourceId, result.packets().size());
+        }
+
+        // Calculate start sequence based on position
+        int startSequence = 0;
+        if (startPositionMs > 0) {
+            startSequence = (int) (startPositionMs / OpusEncoder.FRAME_DURATION_MS);
+            startSequence = Math.min(startSequence, cached.packets.size() - 1);
+            startSequence = Math.max(0, startSequence);
+        }
+
+        return new PendingTransfer(
+            resourceId,
+            audioPath,
+            cached.packets,
+            cached.durationMs,
+            cached.channels,
+            startSequence,
+            startPositionMs
+        );
+    }
+
+    private PendingTransfer createVorbisTransfer(UUID resourceId, Path audioPath, long startPositionMs,
+                                                 ServerAudioStorage storage) {
         long fileSize = storage.getAudioSize(resourceId);
         AudioStreamInfo streamInfo = storage.getStreamInfo(resourceId).orElse(null);
 
@@ -68,17 +154,8 @@ public class AudioTransferManager {
         }
 
         int totalChunks = (int) Math.ceil((double) dataSize / PhononServerConfig.getChunkSize());
-        PendingTransfer transfer = new PendingTransfer(resourceId, audioPath, totalChunks, startPositionMs, streamInfo, startOffset);
-        queue.add(transfer);
 
-        synchronized (activePlayerOrder) {
-            if (!activePlayerOrder.contains(playerId)) {
-                activePlayerOrder.add(playerId);
-            }
-        }
-
-        Phonon.LOGGER.info("Queued transfer {} for player {} ({} chunks, startOffset={}, startPositionMs={})",
-            resourceId, player.getName().getString(), totalChunks, startOffset, startPositionMs);
+        return new PendingTransfer(resourceId, audioPath, totalChunks, startPositionMs, streamInfo, startOffset);
     }
 
     public void tick(net.minecraft.server.MinecraftServer server) {
@@ -142,53 +219,125 @@ public class AudioTransferManager {
                     continue;
                 }
 
-                if (!transfer.headerSent && transfer.streamInfo != null) {
-                    AudioStreamStartPacket startPacket = new AudioStreamStartPacket(
-                        transfer.resourceId,
-                        transfer.streamInfo.headerBytes(),
-                        transfer.streamInfo.sampleRate(),
-                        transfer.startOffset,
-                        transfer.startPositionMs
-                    );
-                    PacketDistributor.sendToPlayer(player, startPacket);
-                    transfer.headerSent = true;
+                int bytesSent;
+                if (transfer.isOpus) {
+                    bytesSent = sendOpusPacket(player, transfer, queue);
+                } else {
+                    bytesSent = sendVorbisChunk(player, transfer, queue);
                 }
 
-                int chunkSize = PhononServerConfig.getChunkSize();
-                long readOffset = transfer.startOffset + (long) transfer.nextChunkIndex * chunkSize;
-                byte[] chunkData = readChunkAt(transfer.audioPath, readOffset, chunkSize);
-
-                if (chunkData != null) {
-                    AudioChunkPacket packet = new AudioChunkPacket(
-                        transfer.resourceId,
-                        transfer.nextChunkIndex,
-                        transfer.totalChunks,
-                        chunkData
-                    );
-
-                    PacketDistributor.sendToPlayer(player, packet);
-
-                    totalBytesSent += chunkData.length;
-                    playerBytesSent.merge(playerId, chunkData.length, Integer::sum);
-
-                    transfer.nextChunkIndex++;
-
-                    if (transfer.nextChunkIndex >= transfer.totalChunks) {
-                        queue.poll();
-                        Phonon.LOGGER.info("Transfer complete: {} to {}", transfer.resourceId, player.getName().getString());
-
-                        if (queue.isEmpty()) {
-                            activePlayerOrder.remove(roundRobinIndex);
-                            playerQueues.remove(playerId);
-                        }
-                    }
-                } else {
-                    queue.poll();
-                    Phonon.LOGGER.error("Failed to read chunk at offset {} for {}", readOffset, transfer.resourceId);
+                if (bytesSent > 0) {
+                    totalBytesSent += bytesSent;
+                    playerBytesSent.merge(playerId, bytesSent, Integer::sum);
                 }
 
                 roundRobinIndex++;
             }
+        }
+    }
+
+    private int sendOpusPacket(ServerPlayer player, PendingTransfer transfer, Queue<PendingTransfer> queue) {
+        // Send stream start packet first
+        if (!transfer.headerSent) {
+            OpusStreamStartPacket startPacket = new OpusStreamStartPacket(
+                transfer.resourceId,
+                transfer.opusChannels,
+                transfer.opusDurationMs,
+                transfer.opusPackets.size(),
+                transfer.opusStartSequence,
+                transfer.startPositionMs
+            );
+            PacketDistributor.sendToPlayer(player, startPacket);
+            transfer.headerSent = true;
+        }
+
+        // Send next Opus packet
+        int currentIndex = transfer.opusStartSequence + transfer.nextChunkIndex;
+        if (currentIndex >= transfer.opusPackets.size()) {
+            queue.poll();
+            Phonon.LOGGER.info("Opus transfer complete: {} to {}", transfer.resourceId, player.getName().getString());
+
+            if (queue.isEmpty()) {
+                synchronized (activePlayerOrder) {
+                    activePlayerOrder.remove(player.getUUID());
+                }
+                playerQueues.remove(player.getUUID());
+            }
+            return 0;
+        }
+
+        byte[] opusData = transfer.opusPackets.get(currentIndex);
+        OpusPacket packet = new OpusPacket(
+            transfer.resourceId,
+            currentIndex,
+            transfer.opusPackets.size(),
+            opusData
+        );
+
+        PacketDistributor.sendToPlayer(player, packet);
+        transfer.nextChunkIndex++;
+
+        // Check completion
+        if (transfer.opusStartSequence + transfer.nextChunkIndex >= transfer.opusPackets.size()) {
+            queue.poll();
+            Phonon.LOGGER.info("Opus transfer complete: {} to {}", transfer.resourceId, player.getName().getString());
+
+            if (queue.isEmpty()) {
+                synchronized (activePlayerOrder) {
+                    activePlayerOrder.remove(player.getUUID());
+                }
+                playerQueues.remove(player.getUUID());
+            }
+        }
+
+        return opusData.length;
+    }
+
+    private int sendVorbisChunk(ServerPlayer player, PendingTransfer transfer, Queue<PendingTransfer> queue) {
+        if (!transfer.headerSent && transfer.streamInfo != null) {
+            AudioStreamStartPacket startPacket = new AudioStreamStartPacket(
+                transfer.resourceId,
+                transfer.streamInfo.headerBytes(),
+                transfer.streamInfo.sampleRate(),
+                transfer.startOffset,
+                transfer.startPositionMs
+            );
+            PacketDistributor.sendToPlayer(player, startPacket);
+            transfer.headerSent = true;
+        }
+
+        int chunkSize = PhononServerConfig.getChunkSize();
+        long readOffset = transfer.startOffset + (long) transfer.nextChunkIndex * chunkSize;
+        byte[] chunkData = readChunkAt(transfer.audioPath, readOffset, chunkSize);
+
+        if (chunkData != null) {
+            AudioChunkPacket packet = new AudioChunkPacket(
+                transfer.resourceId,
+                transfer.nextChunkIndex,
+                transfer.totalChunks,
+                chunkData
+            );
+
+            PacketDistributor.sendToPlayer(player, packet);
+            transfer.nextChunkIndex++;
+
+            if (transfer.nextChunkIndex >= transfer.totalChunks) {
+                queue.poll();
+                Phonon.LOGGER.info("Vorbis transfer complete: {} to {}", transfer.resourceId, player.getName().getString());
+
+                if (queue.isEmpty()) {
+                    synchronized (activePlayerOrder) {
+                        activePlayerOrder.remove(player.getUUID());
+                    }
+                    playerQueues.remove(player.getUUID());
+                }
+            }
+
+            return chunkData.length;
+        } else {
+            queue.poll();
+            Phonon.LOGGER.error("Failed to read chunk at offset {} for {}", readOffset, transfer.resourceId);
+            return 0;
         }
     }
 
@@ -227,29 +376,79 @@ public class AudioTransferManager {
         return playerQueues.values().stream().mapToInt(Queue::size).sum();
     }
 
+    public void clearTranscodeCache() {
+        transcodeCache.clear();
+    }
+
+    public void clearTranscodeCache(UUID resourceId) {
+        transcodeCache.remove(resourceId);
+    }
+
     public void shutdown() {
         playerQueues.clear();
         activePlayerOrder.clear();
+        transcodeCache.clear();
     }
 
+    // Cached transcoded audio
+    private record TranscodedAudio(List<byte[]> packets, long durationMs, int channels) {}
+
+    // Unified pending transfer supporting both Opus and Vorbis
     private static class PendingTransfer {
         final UUID resourceId;
         final Path audioPath;
+        final boolean isOpus;
+
+        // Opus fields
+        final List<byte[]> opusPackets;
+        final long opusDurationMs;
+        final int opusChannels;
+        final int opusStartSequence;
+
+        // Vorbis fields
         final int totalChunks;
-        final long startPositionMs;
         final AudioStreamInfo streamInfo;
         final int startOffset;
+
+        // Common
+        final long startPositionMs;
         int nextChunkIndex = 0;
         boolean headerSent = false;
 
+        // Opus constructor
+        PendingTransfer(UUID resourceId, Path audioPath, List<byte[]> opusPackets,
+                        long durationMs, int channels, int startSequence, long startPositionMs) {
+            this.resourceId = resourceId;
+            this.audioPath = audioPath;
+            this.isOpus = true;
+            this.opusPackets = opusPackets;
+            this.opusDurationMs = durationMs;
+            this.opusChannels = channels;
+            this.opusStartSequence = startSequence;
+            this.startPositionMs = startPositionMs;
+
+            // Unused Vorbis fields
+            this.totalChunks = 0;
+            this.streamInfo = null;
+            this.startOffset = 0;
+        }
+
+        // Vorbis constructor
         PendingTransfer(UUID resourceId, Path audioPath, int totalChunks, long startPositionMs,
                         AudioStreamInfo streamInfo, int startOffset) {
             this.resourceId = resourceId;
             this.audioPath = audioPath;
+            this.isOpus = false;
             this.totalChunks = totalChunks;
             this.startPositionMs = startPositionMs;
             this.streamInfo = streamInfo;
             this.startOffset = startOffset;
+
+            // Unused Opus fields
+            this.opusPackets = null;
+            this.opusDurationMs = 0;
+            this.opusChannels = 0;
+            this.opusStartSequence = 0;
         }
     }
 }

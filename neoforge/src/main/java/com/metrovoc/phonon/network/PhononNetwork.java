@@ -15,10 +15,12 @@ public class PhononNetwork {
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(Constants.MOD_ID)
-            .versioned("1.0.0")
+            .versioned("1.1.0") // Version bump for Opus support
             .optional();
 
         // Server -> Client packets
+
+        // Legacy Vorbis streaming
         registrar.playToClient(
             SyncAudioResourcesPacket.TYPE,
             SyncAudioResourcesPacket.CODEC,
@@ -47,6 +49,19 @@ public class PhononNetwork {
             AudioStreamStartPacket.TYPE,
             AudioStreamStartPacket.CODEC,
             AudioStreamStartPacket::handle
+        );
+
+        // Opus streaming (new)
+        registrar.playToClient(
+            OpusStreamStartPacket.TYPE,
+            OpusStreamStartPacket.CODEC,
+            OpusStreamStartPacket::handle
+        );
+
+        registrar.playToClient(
+            OpusPacket.TYPE,
+            OpusPacket.CODEC,
+            OpusPacket::handle
         );
 
         // Client -> Server packets

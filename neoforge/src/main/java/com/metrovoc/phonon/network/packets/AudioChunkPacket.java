@@ -46,11 +46,16 @@ public record AudioChunkPacket(
 
     public static void handle(AudioChunkPacket packet, IPayloadContext ctx) {
         ctx.enqueueWork(() -> {
-            if (StreamingAudioManager.getInstance().hasActiveSession(packet.resourceId())) {
+            if (StreamingAudioManager.getInstance().hasDownload(packet.resourceId())) {
                 StreamingAudioManager.getInstance().receiveChunk(
                     packet.resourceId(),
                     packet.data()
                 );
+
+                // Check if this is the last chunk
+                if (packet.isLastChunk()) {
+                    StreamingAudioManager.getInstance().completeDownload(packet.resourceId());
+                }
             } else {
                 AudioReceiver.getInstance().receiveChunk(
                     packet.resourceId(),

@@ -1,8 +1,8 @@
 package com.metrovoc.phonon.platform;
 
 import com.metrovoc.phonon.audio.PlaybackState;
-import com.metrovoc.phonon.client.StreamingAudioSession;
 import com.metrovoc.phonon.client.audio.AudioPlayer;
+import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.network.packets.RequestAudioPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -89,9 +89,9 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     }
 
     @Override
-    public void playStreamingAudio(BlockPos pos, StreamingAudioSession session, float volume) {
+    public void playStreamingAudio(BlockPos pos, StreamingAudioStream stream, float volume) {
         if (isClient()) {
-            AudioPlayer.getInstance().playStreaming(pos, session, volume);
+            AudioPlayer.getInstance().playStreaming(pos, stream, volume);
         }
     }
 

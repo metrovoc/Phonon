@@ -44,16 +44,30 @@ public class LiveInputManager {
 
     /**
      * Get all available audio input devices.
+     * Note: We enumerate all mixers that have TargetDataLine capability,
+     * without strict format checking (Windows virtual devices report incorrectly).
      */
     public static List<AudioInputDevice> getAvailableDevices() {
         List<AudioInputDevice> devices = new ArrayList<>();
-        AudioFormat format = createCaptureFormat();
-        DataLine.Info info = new DataLine.Info(TargetDataLine.class, format);
+        DataLine.Info targetLineInfo = new DataLine.Info(TargetDataLine.class, null);
 
-        for (Mixer.Info mixerInfo : AudioSystem.getMixerInfo()) {
+        Mixer.Info[] mixerInfos = AudioSystem.getMixerInfo();
+        Phonon.LOGGER.info("[LiveInput] Total mixers on system: {}", mixerInfos.length);
+
+        for (Mixer.Info mixerInfo : mixerInfos) {
             try {
                 Mixer mixer = AudioSystem.getMixer(mixerInfo);
-                if (mixer.isLineSupported(info)) {
+                // Check if mixer has ANY TargetDataLine (input) capability
+                Line.Info[] targetLines = mixer.getTargetLineInfo(targetLineInfo);
+                boolean hasInput = targetLines.length > 0;
+
+                Phonon.LOGGER.info("[LiveInput] Mixer: '{}' [{}] - hasInput: {}, targetLines: {}",
+                    mixerInfo.getName(),
+                    mixerInfo.getDescription(),
+                    hasInput,
+                    targetLines.length);
+
+                if (hasInput) {
                     devices.add(new AudioInputDevice(
                         mixerInfo.getName(),
                         mixerInfo.getDescription(),
@@ -61,10 +75,12 @@ public class LiveInputManager {
                     ));
                 }
             } catch (Exception e) {
-                // Skip unavailable mixers
+                Phonon.LOGGER.warn("[LiveInput] Error checking mixer '{}': {}",
+                    mixerInfo.getName(), e.getMessage());
             }
         }
 
+        Phonon.LOGGER.info("[LiveInput] Found {} available input devices", devices.size());
         return devices;
     }
 
@@ -174,14 +190,14 @@ public class LiveInputManager {
             CHANNELS,
             CHANNELS * (SAMPLE_SIZE_BITS / 8),
             SAMPLE_RATE,
-            true  // big-endian for FFmpeg s16be
+            false  // little-endian for FFmpeg s16le (Windows native format)
         );
     }
 
     private void startFFmpegProcess() throws IOException {
         ProcessBuilder pb = new ProcessBuilder(
             "ffmpeg",
-            "-f", "s16be",
+            "-f", "s16le",  // little-endian PCM (Windows native)
             "-ar", String.valueOf(SAMPLE_RATE),
             "-ac", String.valueOf(CHANNELS),
             "-i", "pipe:0",

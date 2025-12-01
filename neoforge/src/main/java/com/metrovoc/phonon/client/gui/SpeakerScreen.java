@@ -62,7 +62,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     private static final float DEFAULT_VOLUME = 0.5f;
 
-    private static final String WINDOWS_STORE_LINK = "ms-windows-store://pdp/?productid=9N9WCLWDQS5J";
+    private static final String BT_RECEIVER_LINK = "ms-windows-store://pdp/?productid=9N9WCLWDQS5J";
     private static final String VB_CABLE_LINK = "https://vb-audio.com/Cable/";
 
     private enum Tab { TRACKS, LINE_IN }
@@ -175,32 +175,35 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     private void initLineInTab() {
         // Centered layout for Line-In, single column
+        // Buttons at bottom, text instructions at top
         int centerX = leftPos + imageWidth / 2;
         int contentWidth = 200;
         int x = centerX - contentWidth / 2;
-        int y = topPos + PADDING + 60; // Leave room for title and description
+
+        // Buttons positioned from bottom up
+        int bottomY = topPos + imageHeight - PADDING - 12 - BUTTON_HEIGHT - GAP - BUTTON_HEIGHT - GAP;
 
         // Device selector
         deviceButton = Button.builder(Component.literal(getSelectedDeviceName()), btn -> cycleDevice())
-            .bounds(x, y, contentWidth, BUTTON_HEIGHT)
+            .bounds(x, bottomY, contentWidth, BUTTON_HEIGHT)
             .build();
         addRenderableWidget(deviceButton);
         lineInWidgets.add(deviceButton);
-        y += BUTTON_HEIGHT + GAP + 10;
 
         // Start/Stop buttons side by side
+        int btnY = bottomY + BUTTON_HEIGHT + GAP;
         int btnWidth = (contentWidth - GAP) / 2;
         startBroadcastButton = Button.builder(
             Component.translatable("gui.phonon.speaker.linein.start"),
             btn -> startBroadcast()
-        ).bounds(x, y, btnWidth, BUTTON_HEIGHT).build();
+        ).bounds(x, btnY, btnWidth, BUTTON_HEIGHT).build();
         addRenderableWidget(startBroadcastButton);
         lineInWidgets.add(startBroadcastButton);
 
         stopBroadcastButton = Button.builder(
             Component.translatable("gui.phonon.speaker.linein.stop"),
             btn -> stopBroadcast()
-        ).bounds(x + btnWidth + GAP, y, btnWidth, BUTTON_HEIGHT).build();
+        ).bounds(x + btnWidth + GAP, btnY, btnWidth, BUTTON_HEIGHT).build();
         addRenderableWidget(stopBroadcastButton);
         lineInWidgets.add(stopBroadcastButton);
 
@@ -549,7 +552,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
     private void renderLineInContent(GuiGraphics graphics, int mouseX, int mouseY) {
         int centerX = leftPos + imageWidth / 2;
-        int contentWidth = 200;
+        int contentWidth = 240;
         int x = centerX - contentWidth / 2;
         int y = topPos + PADDING;
 
@@ -557,44 +560,52 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         String title = "Live Input";
         int titleWidth = font.width(title);
         graphics.drawString(font, title, centerX - titleWidth / 2, y, 0xFFFFFF);
-        y += 16;
-
-        // Description (word-wrapped)
-        String desc = "Broadcast audio from your phone to this speaker.";
-        renderWrappedText(graphics, desc, x, y, contentWidth, 0xA0A0A0);
-        y += 24;
-
-        // Setup instructions
-        String setup = "Setup:";
-        graphics.drawString(font, setup, x, y, 0xCCCCCC);
         y += 12;
 
-        // Step 1: Install software
-        graphics.drawString(font, "1. Install audio routing:", x, y, 0x909090);
-        y += 11;
+        // Description
+        graphics.drawString(font, "Stream phone audio to this speaker.", x, y, 0x808080);
+        y += 12;
 
-        // Link 1
+        // Setup instructions
+        graphics.drawString(font, "Setup (Windows):", x, y, 0xCCCCCC);
+        y += 10;
+
+        // Step 1: Bluetooth Audio Receiver
+        graphics.drawString(font, "1. Install", x + 4, y, 0x707070);
         String link1 = "Bluetooth Audio Receiver";
+        int link1X = x + 4 + font.width("1. Install ");
         int link1Width = font.width(link1);
-        boolean hover1 = mouseX >= x + 8 && mouseX <= x + 8 + link1Width && mouseY >= y && mouseY <= y + 9;
-        graphics.drawString(font, link1, x + 8, y, hover1 ? 0x80FFFF : 0x40A0FF);
-        if (hover1) graphics.fill(x + 8, y + 9, x + 8 + link1Width, y + 10, 0xFF40A0FF);
-        y += 11;
+        boolean hover1 = mouseX >= link1X && mouseX <= link1X + link1Width && mouseY >= y && mouseY <= y + 9;
+        graphics.drawString(font, link1, link1X, y, hover1 ? 0x80FFFF : 0x40A0FF);
+        if (hover1) graphics.fill(link1X, y + 9, link1X + link1Width, y + 10, 0xFF40A0FF);
+        y += 10;
 
-        graphics.drawString(font, "or", x + 8, y, 0x606060);
-        y += 11;
-
-        // Link 2
+        // Step 2: VB-Cable
+        graphics.drawString(font, "2. Install", x + 4, y, 0x707070);
         String link2 = "VB-Cable";
+        int link2X = x + 4 + font.width("2. Install ");
         int link2Width = font.width(link2);
-        boolean hover2 = mouseX >= x + 8 && mouseX <= x + 8 + link2Width && mouseY >= y && mouseY <= y + 9;
-        graphics.drawString(font, link2, x + 8, y, hover2 ? 0x80FFFF : 0x40A0FF);
-        if (hover2) graphics.fill(x + 8, y + 9, x + 8 + link2Width, y + 10, 0xFF40A0FF);
+        boolean hover2 = mouseX >= link2X && mouseX <= link2X + link2Width && mouseY >= y && mouseY <= y + 9;
+        graphics.drawString(font, link2, link2X, y, hover2 ? 0x80FFFF : 0x40A0FF);
+        if (hover2) graphics.fill(link2X, y + 9, link2X + link2Width, y + 10, 0xFF40A0FF);
+        graphics.drawString(font, " (virtual audio cable)", link2X + link2Width, y, 0x606060);
+        y += 10;
 
-        // Status at bottom
-        int statusY = topPos + imageHeight - PADDING - 12;
+        // Step 3
+        graphics.drawString(font, "3. Set CABLE Input as Windows default output", x + 4, y, 0x707070);
+        y += 10;
+
+        // Step 4
+        graphics.drawString(font, "4. Connect phone to BT Audio Receiver", x + 4, y, 0x707070);
+        y += 10;
+
+        // Step 5
+        graphics.drawString(font, "5. Select CABLE Output below & Start", x + 4, y, 0x707070);
+
+        // Status at bottom (above buttons)
+        int statusY = topPos + imageHeight - PADDING - 12 - BUTTON_HEIGHT - GAP - BUTTON_HEIGHT - GAP - 14;
         String statusKey = isBroadcasting ? "gui.phonon.speaker.linein.status.active" : "gui.phonon.speaker.linein.status.idle";
-        int statusColor = isBroadcasting ? 0x40FF40 : 0x808080;
+        int statusColor = isBroadcasting ? 0x40FF40 : 0x707070;
         String statusText = Component.translatable(statusKey).getString();
         int statusWidth = font.width(statusText);
         graphics.drawString(font, statusText, centerX - statusWidth / 2, statusY, statusColor);
@@ -652,21 +663,26 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             // Handle Line-In link clicks
             if (currentTab == Tab.LINE_IN) {
                 int centerX = leftPos + imageWidth / 2;
-                int contentWidth = 200;
+                int contentWidth = 240;
                 int x = centerX - contentWidth / 2;
-                int y = topPos + PADDING + 16 + 24 + 12 + 11;
+                // Link positions: PADDING + 12 (title) + 12 (desc) + 10 (setup header)
+                int baseY = topPos + PADDING + 12 + 12 + 10;
 
+                // Link 1: Bluetooth Audio Receiver
+                int link1X = x + 4 + font.width("1. Install ");
                 String link1 = "Bluetooth Audio Receiver";
                 int link1Width = font.width(link1);
-                if (mouseX >= x + 8 && mouseX <= x + 8 + link1Width && mouseY >= y && mouseY <= y + 9) {
-                    Util.getPlatform().openUri(WINDOWS_STORE_LINK);
+                if (mouseX >= link1X && mouseX <= link1X + link1Width && mouseY >= baseY && mouseY <= baseY + 9) {
+                    Util.getPlatform().openUri(BT_RECEIVER_LINK);
                     return true;
                 }
 
-                y += 11 + 11;
+                // Link 2: VB-Cable (10 pixels below link1)
+                int link2Y = baseY + 10;
+                int link2X = x + 4 + font.width("2. Install ");
                 String link2 = "VB-Cable";
                 int link2Width = font.width(link2);
-                if (mouseX >= x + 8 && mouseX <= x + 8 + link2Width && mouseY >= y && mouseY <= y + 9) {
+                if (mouseX >= link2X && mouseX <= link2X + link2Width && mouseY >= link2Y && mouseY <= link2Y + 9) {
                     Util.getPlatform().openUri(VB_CABLE_LINK);
                     return true;
                 }

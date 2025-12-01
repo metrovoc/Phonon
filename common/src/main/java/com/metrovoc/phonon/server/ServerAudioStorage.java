@@ -95,40 +95,71 @@ public class ServerAudioStorage {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 Path targetFile = storageDir.resolve(resourceId + ".ogg");
+                Phonon.LOGGER.info("Processing audio: {}", url);
 
-                Phonon.LOGGER.info("Downloading audio from {} to {}", url, targetFile);
+                boolean success = false;
 
-                HttpClient httpClient = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(PhononServerConfig.getDownloadConnectTimeoutSeconds()))
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .build();
+                // Strategy 1: Use yt-dlp (supports YouTube/Bilibili/any URL)
+                if (FFmpegHelper.isYtDlpAvailable()) {
+                    success = FFmpegHelper.downloadAndConvert(url, targetFile);
+                }
 
-                HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .GET()
-                    .timeout(Duration.ofSeconds(PhononServerConfig.getDownloadReadTimeoutSeconds()))
-                    .build();
+                // Strategy 2: If yt-dlp fails/unavailable and URL is direct .ogg link, use HTTP download
+                if (!success && isDirectOggUrl(url)) {
+                    Phonon.LOGGER.info("Fallback to direct HTTP download");
+                    success = directDownload(url, targetFile);
+                }
 
-                HttpResponse<InputStream> response = httpClient.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofInputStream()
-                );
-
-                if (response.statusCode() == 200) {
-                    Files.copy(response.body(), targetFile, StandardCopyOption.REPLACE_EXISTING);
+                if (success && Files.exists(targetFile)) {
                     scanAndCacheStreamInfo(resourceId, targetFile);
                     long size = Files.size(targetFile);
-                    Phonon.LOGGER.info("Downloaded audio {} ({} bytes)", resourceId, size);
+                    Phonon.LOGGER.info("Stored audio {} ({} bytes)", resourceId, size);
                     return true;
                 } else {
-                    Phonon.LOGGER.error("Failed to download audio: HTTP {}", response.statusCode());
+                    Phonon.LOGGER.error("Failed to download/convert audio");
                     return false;
                 }
             } catch (Exception e) {
-                Phonon.LOGGER.error("Failed to download audio {}", resourceId, e);
+                Phonon.LOGGER.error("Failed to store audio {}", resourceId, e);
                 return false;
             }
         }, downloadExecutor);
+    }
+
+    private boolean isDirectOggUrl(String url) {
+        String lower = url.toLowerCase();
+        return lower.endsWith(".ogg") || lower.contains(".ogg?");
+    }
+
+    private boolean directDownload(String url, Path targetFile) {
+        try {
+            HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(PhononServerConfig.getDownloadConnectTimeoutSeconds()))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .GET()
+                .timeout(Duration.ofSeconds(PhononServerConfig.getDownloadReadTimeoutSeconds()))
+                .build();
+
+            HttpResponse<InputStream> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofInputStream()
+            );
+
+            if (response.statusCode() == 200) {
+                Files.copy(response.body(), targetFile, StandardCopyOption.REPLACE_EXISTING);
+                return true;
+            } else {
+                Phonon.LOGGER.error("HTTP download failed: {}", response.statusCode());
+                return false;
+            }
+        } catch (Exception e) {
+            Phonon.LOGGER.error("Direct download failed", e);
+            return false;
+        }
     }
 
     public boolean hasAudio(UUID resourceId) {

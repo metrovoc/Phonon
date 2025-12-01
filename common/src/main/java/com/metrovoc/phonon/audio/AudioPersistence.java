@@ -25,6 +25,7 @@ public class AudioPersistence {
             obj.addProperty("name", resource.name());
             obj.addProperty("url", resource.url());
             obj.addProperty("duration", resource.durationMs());
+            obj.addProperty("size", resource.sizeBytes());
             array.add(obj);
         }
 
@@ -48,7 +49,9 @@ public class AudioPersistence {
                 String name = obj.get("name").getAsString();
                 String url = obj.get("url").getAsString();
                 long duration = obj.get("duration").getAsLong();
-                resources.add(new AudioResource(id, name, url, duration));
+                // Backward compatibility: size field may not exist in old saves
+                long size = obj.has("size") ? obj.get("size").getAsLong() : 0L;
+                resources.add(new AudioResource(id, name, url, duration, size));
             }
 
             return resources;

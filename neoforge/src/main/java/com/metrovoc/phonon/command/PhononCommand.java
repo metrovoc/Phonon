@@ -3,14 +3,18 @@ package com.metrovoc.phonon.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.metrovoc.phonon.audio.AudioManager;
-import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.audio.AudioPersistence;
+import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.config.NeoForgeServerConfig;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
+import com.metrovoc.phonon.server.FFmpegHelper;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -20,6 +24,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Server commands for managing audio resources.
@@ -42,6 +47,7 @@ public class PhononCommand {
             )
             .then(Commands.literal("remove")
                 .then(Commands.argument("name", StringArgumentType.string())
+                    .suggests(PhononCommand::suggestResourceNames)
                     .executes(PhononCommand::removeResource)
                 )
             )
@@ -51,21 +57,29 @@ public class PhononCommand {
         );
     }
 
+    /**
+     * Tab completion: list all resource names
+     */
+    private static CompletableFuture<Suggestions> suggestResourceNames(
+            CommandContext<CommandSourceStack> ctx, SuggestionsBuilder builder) {
+        return SharedSuggestionProvider.suggest(
+            AudioManager.getInstance().getAllResources().stream().map(AudioResource::name),
+            builder
+        );
+    }
+
     private static int addResource(CommandContext<CommandSourceStack> ctx) {
         String name = StringArgumentType.getString(ctx, "name");
         String url = StringArgumentType.getString(ctx, "url");
 
-        // Validate URL format
-        if (!url.toLowerCase().endsWith(".ogg")) {
-            ctx.getSource().sendFailure(Component.literal(
-                "Only .ogg files are supported. Example: https://example.com/music.ogg"
-            ));
-            return 0;
-        }
+        // Check tool availability
+        boolean hasYtDlp = FFmpegHelper.isYtDlpAvailable();
+        boolean isDirectOgg = url.toLowerCase().endsWith(".ogg") || url.toLowerCase().contains(".ogg?");
 
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        if (!hasYtDlp && !isDirectOgg) {
             ctx.getSource().sendFailure(Component.literal(
-                "URL must start with http:// or https://"
+                "yt-dlp not found. Only direct .ogg URLs are supported.\n" +
+                "Install yt-dlp: https://github.com/yt-dlp/yt-dlp"
             ));
             return 0;
         }
@@ -79,39 +93,35 @@ public class PhononCommand {
         UUID resourceId = UUID.randomUUID();
 
         ctx.getSource().sendSuccess(
-            () -> Component.literal("Downloading audio '" + name + "'..."),
+            () -> Component.literal("\u00A7eProcessing '\u00A7f" + name + "\u00A7e'... (downloading & converting)"),
             false
         );
 
-        // Download to server storage
         ServerAudioStorage storage = ServerAudioStorage.getInstance();
         storage.downloadAndStore(resourceId, url)
             .thenAccept(success -> {
-                if (success) {
-                    // Get actual duration via ffprobe
-                    long durationMs = storage.getDurationMs(resourceId);
-                    AudioResource finalResource = new AudioResource(resourceId, name, url, durationMs);
-                    manager.addResource(finalResource);
+                MinecraftServer server = ctx.getSource().getServer();
+                server.execute(() -> {
+                    if (success) {
+                        long durationMs = storage.getDurationMs(resourceId);
+                        long sizeBytes = storage.getAudioSize(resourceId);
 
-                    // Broadcast to all players
-                    MinecraftServer server = ctx.getSource().getServer();
-                    server.execute(() -> {
+                        AudioResource resource = new AudioResource(resourceId, name, url, durationMs, sizeBytes);
+                        manager.addResource(resource);
+
                         broadcastResourceList(server);
-                        String durationStr = durationMs > 0
-                            ? String.format(" (%d:%02d)", durationMs / 60000, (durationMs / 1000) % 60)
-                            : "";
+
+                        String info = formatDuration(durationMs) + ", " + formatSize(sizeBytes);
                         ctx.getSource().sendSuccess(
-                            () -> Component.literal("Added audio resource: " + name + durationStr),
+                            () -> Component.literal("\u00A7aAdded: \u00A7f" + name + " \u00A77(" + info + ")"),
                             true
                         );
-                    });
-                } else {
-                    ctx.getSource().getServer().execute(() -> {
+                    } else {
                         ctx.getSource().sendFailure(Component.literal(
-                            "Failed to download audio. Check server logs."
+                            "\u00A7cFailed to download/convert audio. Check server logs."
                         ));
-                    });
-                }
+                    }
+                });
             });
 
         return 1;
@@ -123,22 +133,26 @@ public class PhononCommand {
 
         if (resources.isEmpty()) {
             ctx.getSource().sendSuccess(
-                () -> Component.literal("No audio resources registered"),
+                () -> Component.literal("\u00A77No audio resources registered."),
                 false
             );
             return 0;
         }
 
         ctx.getSource().sendSuccess(
-            () -> Component.literal("Audio resources (" + resources.size() + "):"),
+            () -> Component.literal("\u00A76Audio Resources \u00A77(" + resources.size() + "):"),
             false
         );
 
+        ServerAudioStorage storage = ServerAudioStorage.getInstance();
         for (AudioResource resource : resources) {
-            boolean cached = ServerAudioStorage.getInstance().hasAudio(resource.id());
-            String status = cached ? "[OK]" : "[MISSING]";
+            boolean cached = storage.hasAudio(resource.id());
+            String status = cached ? "\u00A7a\u2713" : "\u00A7c\u2717";
+            String duration = formatDuration(resource.durationMs());
+            String size = formatSize(resource.sizeBytes());
+
             ctx.getSource().sendSuccess(
-                () -> Component.literal("  " + status + " " + resource.name()),
+                () -> Component.literal("  " + status + " \u00A7f" + resource.name() + " \u00A77[" + duration + "] \u00A78(" + size + ")"),
                 false
             );
         }
@@ -152,21 +166,17 @@ public class PhononCommand {
         return manager.getResourceByName(name)
             .map(resource -> {
                 manager.removeResource(resource.id());
-
-                // Delete file from storage
                 ServerAudioStorage.getInstance().deleteAudio(resource.id());
-
-                // Broadcast updated resource list
                 broadcastResourceList(ctx.getSource().getServer());
 
                 ctx.getSource().sendSuccess(
-                    () -> Component.literal("Removed audio resource: " + name),
+                    () -> Component.literal("\u00A7aRemoved: \u00A7f" + name),
                     true
                 );
                 return 1;
             })
             .orElseGet(() -> {
-                ctx.getSource().sendFailure(Component.literal("Resource '" + name + "' not found"));
+                ctx.getSource().sendFailure(Component.literal("\u00A7cResource '" + name + "' not found"));
                 return 0;
             });
     }
@@ -183,11 +193,9 @@ public class PhononCommand {
 
     private static int reloadConfig(CommandContext<CommandSourceStack> ctx) {
         try {
-            // Reload server config
             NeoForgeServerConfig.SPEC.afterReload();
             NeoForgeServerConfig.bind();
 
-            // Reload audio resources from disk
             MinecraftServer server = ctx.getSource().getServer();
             Path worldDir = server.getWorldPath(LevelResource.ROOT);
             Path dataFile = worldDir.resolve("phonon_audio.json");
@@ -196,17 +204,31 @@ public class PhononCommand {
             List<AudioResource> resources = AudioPersistence.load(dataFile);
             manager.loadResources(resources);
 
-            // Broadcast updated resource list to all players
             broadcastResourceList(server);
 
             ctx.getSource().sendSuccess(
-                () -> Component.literal("Phonon config and " + resources.size() + " audio resources reloaded"),
+                () -> Component.literal("\u00A7aReloaded config and " + resources.size() + " audio resources"),
                 true
             );
             return 1;
         } catch (Exception e) {
-            ctx.getSource().sendFailure(Component.literal("Failed to reload: " + e.getMessage()));
+            ctx.getSource().sendFailure(Component.literal("\u00A7cFailed to reload: " + e.getMessage()));
             return 0;
         }
+    }
+
+    private static String formatDuration(long ms) {
+        if (ms <= 0) return "??:??";
+        long totalSeconds = ms / 1000;
+        long minutes = totalSeconds / 60;
+        long seconds = totalSeconds % 60;
+        return String.format("%d:%02d", minutes, seconds);
+    }
+
+    private static String formatSize(long bytes) {
+        if (bytes <= 0) return "? KB";
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format("%.1f KB", bytes / 1024.0);
+        return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
     }
 }

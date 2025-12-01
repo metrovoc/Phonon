@@ -3,45 +3,153 @@ package com.metrovoc.phonon.server;
 import com.metrovoc.phonon.Phonon;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 /**
  * FFmpeg/FFprobe wrapper for audio metadata extraction.
- * Relies on system-installed ffmpeg - no bundled binaries.
+ * Also provides yt-dlp integration for downloading from various sources.
+ * Relies on system-installed tools - no bundled binaries.
  */
 public class FFmpegHelper {
 
-    private static volatile Boolean available;
+    private static volatile Boolean ffmpegAvailable;
+    private static volatile Boolean ytdlpAvailable;
 
     public static boolean isAvailable() {
-        if (available == null) {
-            available = checkAvailability();
-        }
-        return available;
+        return isFFmpegAvailable();
     }
 
-    private static boolean checkAvailability() {
+    public static boolean isFFmpegAvailable() {
+        if (ffmpegAvailable == null) {
+            ffmpegAvailable = checkCommand("ffprobe", "-version");
+            if (ffmpegAvailable) {
+                Phonon.LOGGER.info("FFmpeg detected on system");
+            } else {
+                Phonon.LOGGER.warn("FFmpeg not found. Install: https://ffmpeg.org/download.html");
+            }
+        }
+        return ffmpegAvailable;
+    }
+
+    public static boolean isYtDlpAvailable() {
+        if (ytdlpAvailable == null) {
+            ytdlpAvailable = checkCommand("yt-dlp", "--version");
+            if (ytdlpAvailable) {
+                Phonon.LOGGER.info("yt-dlp detected on system");
+            } else {
+                Phonon.LOGGER.warn("yt-dlp not found. Only direct .ogg URLs supported. Install: https://github.com/yt-dlp/yt-dlp");
+            }
+        }
+        return ytdlpAvailable;
+    }
+
+    private static boolean checkCommand(String cmd, String arg) {
         try {
-            Process process = new ProcessBuilder("ffprobe", "-version")
+            Process process = new ProcessBuilder(cmd, arg)
                 .redirectErrorStream(true)
                 .start();
             boolean finished = process.waitFor(5, TimeUnit.SECONDS);
-            if (finished && process.exitValue() == 0) {
-                Phonon.LOGGER.info("FFmpeg detected on system");
-                return true;
+            return finished && process.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Download any URL using yt-dlp and convert to OGG Vorbis.
+     * Supports YouTube, Bilibili, and many other video/audio sites,
+     * as well as direct audio URLs.
+     *
+     * @param url        The source URL to download
+     * @param targetFile The destination OGG file path
+     * @return true if download and conversion succeeded
+     */
+    public static boolean downloadAndConvert(String url, Path targetFile) {
+        if (!isYtDlpAvailable()) {
+            return false;
+        }
+
+        Path tempDir = null;
+        try {
+            tempDir = Files.createTempDirectory("phonon_dl_");
+
+            ProcessBuilder pb = new ProcessBuilder(
+                "yt-dlp",
+                "-x",                           // Extract audio only
+                "--audio-format", "vorbis",     // Convert to OGG (Vorbis)
+                "--audio-quality", "5",         // Quality ~160kbps
+                "-o", "%(id)s.%(ext)s",         // Output filename template
+                "--no-playlist",                // Download single video only
+                "--no-warnings",
+                url
+            );
+            pb.directory(tempDir.toFile());
+            pb.redirectErrorStream(true);
+
+            Phonon.LOGGER.info("Running yt-dlp for: {}", url);
+            Process process = pb.start();
+
+            // Read output to prevent buffer blocking
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    Phonon.LOGGER.debug("[yt-dlp] {}", line);
+                }
+            }
+
+            boolean finished = process.waitFor(300, TimeUnit.SECONDS); // 5 minute timeout
+            if (!finished) {
+                process.destroyForcibly();
+                Phonon.LOGGER.error("yt-dlp timeout");
+                return false;
+            }
+
+            if (process.exitValue() == 0) {
+                // Find the generated .ogg file
+                try (Stream<Path> files = Files.list(tempDir)) {
+                    Optional<Path> downloaded = files
+                        .filter(p -> p.toString().endsWith(".ogg"))
+                        .findFirst();
+
+                    if (downloaded.isPresent()) {
+                        Files.createDirectories(targetFile.getParent());
+                        Files.move(downloaded.get(), targetFile, StandardCopyOption.REPLACE_EXISTING);
+                        Phonon.LOGGER.info("yt-dlp successfully converted to: {}", targetFile);
+                        return true;
+                    } else {
+                        Phonon.LOGGER.error("yt-dlp produced no .ogg file");
+                    }
+                }
+            } else {
+                Phonon.LOGGER.error("yt-dlp failed with exit code: {}", process.exitValue());
             }
         } catch (Exception e) {
-            // ffprobe not found
+            Phonon.LOGGER.error("yt-dlp download failed", e);
+        } finally {
+            // Clean up temp directory
+            if (tempDir != null) {
+                try (Stream<Path> walk = Files.walk(tempDir)) {
+                    walk.sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+                } catch (Exception e) {
+                    // Ignore cleanup errors
+                }
+            }
         }
-        Phonon.LOGGER.warn("FFmpeg not found. Audio duration will be unavailable. Install ffmpeg: https://ffmpeg.org/download.html");
         return false;
     }
 
     public static Optional<Long> getDurationMs(Path audioFile) {
-        if (!isAvailable()) {
+        if (!isFFmpegAvailable()) {
             return Optional.empty();
         }
 

@@ -4,11 +4,17 @@ import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.ClientAudioManager;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
+import com.metrovoc.phonon.client.LiveInputManager;
+import com.metrovoc.phonon.client.audio.AudioInputDevice;
 import com.metrovoc.phonon.menu.SpeakerMenu;
+import com.metrovoc.phonon.network.packets.LiveBroadcastChunkPacket;
+import com.metrovoc.phonon.network.packets.LiveBroadcastEndPacket;
+import com.metrovoc.phonon.network.packets.LiveBroadcastStartPacket;
 import com.metrovoc.phonon.network.packets.SpeakerControlPacket;
 import com.metrovoc.phonon.network.packets.SpeakerSeekPacket;
 import com.metrovoc.phonon.network.packets.SpeakerVolumePacket;
 import com.metrovoc.phonon.platform.PlatformHelper;
+import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -23,7 +29,7 @@ import java.util.UUID;
 
 /**
  * Speaker 控制 GUI。
- * 左栏: 搜索 + 曲目列表
+ * 左栏: Tab 切换 (Tracks / Line-In)
  * 右栏: 当前播放 + 进度条 + 音量 + Play/Pause/Stop
  */
 public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
@@ -34,12 +40,33 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     private static final int SLIDER_HEIGHT = 20;
     private static final int BUTTON_HEIGHT = 20;
     private static final int PROGRESS_HEIGHT = 24;
+    private static final int TAB_HEIGHT = 16;
 
     private static final float DEFAULT_VOLUME = 0.5f;
     private static final float LEFT_RATIO = 0.55f;
 
+    private static final String WINDOWS_STORE_LINK = "ms-windows-store://pdp/?productid=9N9WCLWDQS5J";
+    private static final String VB_CABLE_LINK = "https://vb-audio.com/Cable/";
+
+    private enum Tab { TRACKS, LINE_IN }
+    private Tab currentTab = Tab.TRACKS;
+
+    // Tab buttons
+    private Button tabTracksButton;
+    private Button tabLineInButton;
+
+    // Tracks tab widgets
     private EditBox searchBox;
     private TrackListWidget trackList;
+
+    // Line-In tab widgets
+    private Button deviceButton;
+    private Button startBroadcastButton;
+    private Button stopBroadcastButton;
+    private List<AudioInputDevice> availableDevices;
+    private int selectedDeviceIndex = -1;
+
+    // Right column (shared)
     private VolumeSlider volumeSlider;
     private ProgressSlider progressSlider;
     private Button playPauseButton;
@@ -48,6 +75,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     @Nullable
     private AudioResource selectedTrack;
     private float currentVolume = DEFAULT_VOLUME;
+    private boolean isBroadcasting = false;
 
     public SpeakerScreen(SpeakerMenu menu, Inventory playerInv, Component title) {
         super(menu, playerInv, title);
@@ -60,6 +88,8 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         super.init();
 
         currentVolume = ClientSpeakerManager.getInstance().getSpeakerVolume(menu.getSpeakerPos());
+        isBroadcasting = LiveInputManager.getInstance().isBroadcasting();
+        availableDevices = LiveInputManager.getAvailableDevices();
 
         int leftWidth = (int) ((imageWidth - PADDING * 3) * LEFT_RATIO);
         int rightWidth = imageWidth - PADDING * 3 - leftWidth;
@@ -67,29 +97,167 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         int rightX = leftX + leftWidth + PADDING;
         int topY = topPos + PADDING;
 
-        initLeftColumn(leftX, topY, leftWidth);
+        initTabs(leftX, topY, leftWidth);
+        initTracksTab(leftX, topY + TAB_HEIGHT + GAP, leftWidth);
+        initLineInTab(leftX, topY + TAB_HEIGHT + GAP, leftWidth);
         initRightColumn(rightX, topY, rightWidth);
+
+        updateTabVisibility();
         refreshTrackList();
     }
 
-    private void initLeftColumn(int x, int y, int width) {
-        y += 14;
+    private void initTabs(int x, int y, int width) {
+        int tabWidth = (width - GAP) / 2;
 
+        tabTracksButton = Button.builder(Component.translatable("gui.phonon.speaker.tab.tracks"), btn -> switchTab(Tab.TRACKS))
+            .bounds(x, y, tabWidth, TAB_HEIGHT)
+            .build();
+        addRenderableWidget(tabTracksButton);
+
+        tabLineInButton = Button.builder(Component.translatable("gui.phonon.speaker.tab.linein"), btn -> switchTab(Tab.LINE_IN))
+            .bounds(x + tabWidth + GAP, y, tabWidth, TAB_HEIGHT)
+            .build();
+        addRenderableWidget(tabLineInButton);
+    }
+
+    private void switchTab(Tab tab) {
+        currentTab = tab;
+        updateTabVisibility();
+    }
+
+    private void updateTabVisibility() {
+        boolean showTracks = currentTab == Tab.TRACKS;
+        boolean showLineIn = currentTab == Tab.LINE_IN;
+
+        // Tab button styling
+        tabTracksButton.active = !showTracks;
+        tabLineInButton.active = !showLineIn;
+
+        // Tracks tab widgets
+        searchBox.visible = showTracks;
+        trackList.visible = showTracks;
+
+        // Line-In tab widgets
+        deviceButton.visible = showLineIn;
+        startBroadcastButton.visible = showLineIn;
+        stopBroadcastButton.visible = showLineIn;
+
+        updateLineInButtons();
+    }
+
+    private void initTracksTab(int x, int y, int width) {
         searchBox = new EditBox(font, x, y, width, SEARCH_HEIGHT, Component.literal("Search"));
         searchBox.setHint(Component.literal("Search tracks..."));
         searchBox.setResponder(this::onSearchChanged);
         searchBox.setMaxLength(100);
         addRenderableWidget(searchBox);
-        y += SEARCH_HEIGHT + 4;
 
-        int listHeight = imageHeight - (y - topPos) - PADDING;
+        int listY = y + SEARCH_HEIGHT + 4;
+        int listHeight = imageHeight - (listY - topPos) - PADDING;
         trackList = new TrackListWidget(
-            minecraft, width, listHeight, y, TRACK_ITEM_HEIGHT,
+            minecraft, width, listHeight, listY, TRACK_ITEM_HEIGHT,
             this::onTrackSelected,
             this::onTrackDoubleClicked
         );
         trackList.setX(x);
         addRenderableWidget(trackList);
+    }
+
+    private void initLineInTab(int x, int y, int width) {
+        // Content area starts after description text (approximately 100 pixels down)
+        int contentY = y + 90;
+
+        // Device selector button
+        String deviceText = getSelectedDeviceName();
+        deviceButton = Button.builder(Component.literal(deviceText), btn -> cycleDevice())
+            .bounds(x, contentY, width, BUTTON_HEIGHT)
+            .build();
+        addRenderableWidget(deviceButton);
+
+        // Start/Stop buttons
+        int btnWidth = (width - GAP) / 2;
+        int btnY = contentY + BUTTON_HEIGHT + GAP;
+
+        startBroadcastButton = Button.builder(
+            Component.translatable("gui.phonon.speaker.linein.start"),
+            btn -> startBroadcast()
+        ).bounds(x, btnY, btnWidth, BUTTON_HEIGHT).build();
+        addRenderableWidget(startBroadcastButton);
+
+        stopBroadcastButton = Button.builder(
+            Component.translatable("gui.phonon.speaker.linein.stop"),
+            btn -> stopBroadcast()
+        ).bounds(x + btnWidth + GAP, btnY, btnWidth, BUTTON_HEIGHT).build();
+        addRenderableWidget(stopBroadcastButton);
+    }
+
+    private String getSelectedDeviceName() {
+        if (availableDevices == null || availableDevices.isEmpty()) {
+            return "No input devices found";
+        }
+        if (selectedDeviceIndex < 0 || selectedDeviceIndex >= availableDevices.size()) {
+            return "Select device...";
+        }
+        String name = availableDevices.get(selectedDeviceIndex).name();
+        if (font.width(name) > 150) {
+            name = font.plainSubstrByWidth(name, 145) + "...";
+        }
+        return name;
+    }
+
+    private void cycleDevice() {
+        if (availableDevices == null || availableDevices.isEmpty()) return;
+        selectedDeviceIndex = (selectedDeviceIndex + 1) % availableDevices.size();
+        deviceButton.setMessage(Component.literal(getSelectedDeviceName()));
+        updateLineInButtons();
+    }
+
+    private void updateLineInButtons() {
+        boolean hasDevice = selectedDeviceIndex >= 0 && availableDevices != null
+            && selectedDeviceIndex < availableDevices.size();
+
+        startBroadcastButton.active = hasDevice && !isBroadcasting;
+        stopBroadcastButton.active = isBroadcasting;
+    }
+
+    private void startBroadcast() {
+        if (selectedDeviceIndex < 0 || availableDevices == null) return;
+
+        AudioInputDevice device = availableDevices.get(selectedDeviceIndex);
+        UUID streamId = UUID.randomUUID();
+
+        // Send start packet to server
+        PlatformHelper.INSTANCE.sendToServer(
+            new LiveBroadcastStartPacket(menu.getSpeakerPos(), streamId, device.name())
+        );
+
+        // Setup callbacks to forward audio data to server
+        LiveInputManager manager = LiveInputManager.getInstance();
+        manager.setChunkCallback((id, data) -> {
+            PlatformHelper.INSTANCE.sendToServer(
+                new LiveBroadcastChunkPacket(id, data)
+            );
+        });
+
+        // Start local capture
+        manager.startBroadcast(device.name(), streamId);
+        isBroadcasting = true;
+        updateLineInButtons();
+    }
+
+    private void stopBroadcast() {
+        LiveInputManager manager = LiveInputManager.getInstance();
+        UUID streamId = manager.getCurrentResourceId();
+
+        manager.stopBroadcast();
+
+        // Notify server
+        if (streamId != null) {
+            PlatformHelper.INSTANCE.sendToServer(new LiveBroadcastEndPacket(streamId));
+        }
+
+        isBroadcasting = false;
+        updateLineInButtons();
     }
 
     private void initRightColumn(int x, int y, int width) {
@@ -233,6 +401,13 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     protected void containerTick() {
         super.containerTick();
         updatePlaybackUI();
+
+        // Sync broadcast state
+        boolean nowBroadcasting = LiveInputManager.getInstance().isBroadcasting();
+        if (nowBroadcasting != isBroadcasting) {
+            isBroadcasting = nowBroadcasting;
+            updateLineInButtons();
+        }
     }
 
     private void updatePlaybackUI() {
@@ -293,12 +468,91 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         int rightX = leftX + leftWidth + PADDING;
         int rightWidth = imageWidth - PADDING * 3 - leftWidth;
 
-        graphics.drawString(font, "Tracks", leftX, topPos + PADDING, 0xFFFFFF);
-        String countText = ClientAudioManager.getInstance().getAllResources().size() + " total";
-        int countWidth = font.width(countText);
-        graphics.drawString(font, countText, leftX + leftWidth - countWidth, topPos + PADDING, 0x808080);
+        if (currentTab == Tab.LINE_IN) {
+            renderLineInContent(graphics, leftX, topPos + PADDING + TAB_HEIGHT + GAP, leftWidth, mouseX, mouseY);
+        }
 
         renderNowPlaying(graphics, rightX, topPos + PADDING, rightWidth);
+    }
+
+    private void renderLineInContent(GuiGraphics graphics, int x, int y, int width, int mouseX, int mouseY) {
+        // Title
+        graphics.drawString(font, Component.translatable("gui.phonon.speaker.linein.title"), x, y, 0xFFFFFF);
+        y += 12;
+
+        // Description
+        graphics.drawString(font, Component.translatable("gui.phonon.speaker.linein.description"), x, y, 0xA0A0A0);
+        y += 20;
+
+        // Setup instructions
+        graphics.drawString(font, Component.translatable("gui.phonon.speaker.linein.setup"), x, y, 0xFFFFFF);
+        y += 12;
+
+        // Step 1 with clickable links
+        graphics.drawString(font, Component.translatable("gui.phonon.speaker.linein.step1"), x, y, 0xA0A0A0);
+        y += 11;
+
+        // Link 1: Bluetooth Audio Receiver
+        String link1Text = "Bluetooth Audio Receiver";
+        int link1X = x + 8;
+        int link1Width = font.width(link1Text);
+        boolean hover1 = mouseX >= link1X && mouseX <= link1X + link1Width && mouseY >= y && mouseY <= y + 9;
+        graphics.drawString(font, link1Text, link1X, y, hover1 ? 0x80FFFF : 0x40A0FF);
+        if (hover1) {
+            graphics.fill(link1X, y + 9, link1X + link1Width, y + 10, 0xFF40A0FF);
+        }
+        y += 11;
+
+        // "or"
+        graphics.drawString(font, "or", x + 8, y, 0x606060);
+        y += 11;
+
+        // Link 2: VB-Cable
+        String link2Text = "VB-Cable";
+        int link2X = x + 8;
+        int link2Width = font.width(link2Text);
+        boolean hover2 = mouseX >= link2X && mouseX <= link2X + link2Width && mouseY >= y && mouseY <= y + 9;
+        graphics.drawString(font, link2Text, link2X, y, hover2 ? 0x80FFFF : 0x40A0FF);
+        if (hover2) {
+            graphics.fill(link2X, y + 9, link2X + link2Width, y + 10, 0xFF40A0FF);
+        }
+        y += 14;
+
+        // Status text at bottom
+        int statusY = topPos + imageHeight - PADDING - 10;
+        String statusKey = isBroadcasting ? "gui.phonon.speaker.linein.status.active" : "gui.phonon.speaker.linein.status.idle";
+        int statusColor = isBroadcasting ? 0x40FF40 : 0x808080;
+        graphics.drawString(font, Component.translatable(statusKey), x, statusY, statusColor);
+    }
+
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && currentTab == Tab.LINE_IN) {
+            int leftWidth = (int) ((imageWidth - PADDING * 3) * LEFT_RATIO);
+            int x = leftPos + PADDING;
+            int y = topPos + PADDING + TAB_HEIGHT + GAP + 12 + 20 + 12 + 11;
+
+            // Check link 1 click
+            String link1Text = "Bluetooth Audio Receiver";
+            int link1X = x + 8;
+            int link1Width = font.width(link1Text);
+            if (mouseX >= link1X && mouseX <= link1X + link1Width && mouseY >= y && mouseY <= y + 9) {
+                Util.getPlatform().openUri(WINDOWS_STORE_LINK);
+                return true;
+            }
+
+            y += 11 + 11; // skip "or" line
+
+            // Check link 2 click
+            String link2Text = "VB-Cable";
+            int link2X = x + 8;
+            int link2Width = font.width(link2Text);
+            if (mouseX >= link2X && mouseX <= link2X + link2Width && mouseY >= y && mouseY <= y + 9) {
+                Util.getPlatform().openUri(VB_CABLE_LINK);
+                return true;
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     private void renderNowPlaying(GuiGraphics graphics, int x, int y, int width) {

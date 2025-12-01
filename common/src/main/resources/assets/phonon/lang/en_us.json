@@ -12,5 +12,20 @@
   "config.phonon.client.maxAudioDistance": "Max Audio Distance",
   "config.phonon.client.maxAudioDistance.tooltip": "Maximum distance (in blocks) at which audio can be heard",
   "config.phonon.client.enableDebugLogging": "Debug Logging",
-  "config.phonon.client.enableDebugLogging.tooltip": "Enable verbose debug logging"
+  "config.phonon.client.enableDebugLogging.tooltip": "Enable verbose debug logging",
+
+  "gui.phonon.speaker.tab.tracks": "Tracks",
+  "gui.phonon.speaker.tab.linein": "Line-In",
+  "gui.phonon.speaker.linein.title": "Bluetooth Line-In",
+  "gui.phonon.speaker.linein.description": "Broadcast audio from your phone to this speaker.",
+  "gui.phonon.speaker.linein.setup": "Setup:",
+  "gui.phonon.speaker.linein.step1": "1. Install audio routing software:",
+  "gui.phonon.speaker.linein.step2": "2. Pair your phone via Bluetooth",
+  "gui.phonon.speaker.linein.step3": "3. Select input device and click Start",
+  "gui.phonon.speaker.linein.device": "Input Device:",
+  "gui.phonon.speaker.linein.start": "Start",
+  "gui.phonon.speaker.linein.stop": "Stop",
+  "gui.phonon.speaker.linein.status.idle": "Status: Not broadcasting",
+  "gui.phonon.speaker.linein.status.active": "Status: Broadcasting...",
+  "gui.phonon.speaker.linein.live": "LIVE"
 }

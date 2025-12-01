@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioResource;
+import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.config.NeoForgeServerConfig;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
 import com.metrovoc.phonon.server.ServerAudioStorage;
@@ -13,8 +14,10 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 
@@ -180,16 +183,29 @@ public class PhononCommand {
 
     private static int reloadConfig(CommandContext<CommandSourceStack> ctx) {
         try {
+            // Reload server config
             NeoForgeServerConfig.SPEC.afterReload();
             NeoForgeServerConfig.bind();
 
+            // Reload audio resources from disk
+            MinecraftServer server = ctx.getSource().getServer();
+            Path worldDir = server.getWorldPath(LevelResource.ROOT);
+            Path dataFile = worldDir.resolve("phonon_audio.json");
+
+            AudioManager manager = AudioManager.getInstance();
+            List<AudioResource> resources = AudioPersistence.load(dataFile);
+            manager.loadResources(resources);
+
+            // Broadcast updated resource list to all players
+            broadcastResourceList(server);
+
             ctx.getSource().sendSuccess(
-                () -> Component.literal("Phonon server config reloaded"),
+                () -> Component.literal("Phonon config and " + resources.size() + " audio resources reloaded"),
                 true
             );
             return 1;
         } catch (Exception e) {
-            ctx.getSource().sendFailure(Component.literal("Failed to reload config: " + e.getMessage()));
+            ctx.getSource().sendFailure(Component.literal("Failed to reload: " + e.getMessage()));
             return 0;
         }
     }

@@ -1,7 +1,19 @@
 package com.metrovoc.phonon.network;
 
 import com.metrovoc.phonon.Constants;
-import com.metrovoc.phonon.network.packets.*;
+import com.metrovoc.phonon.network.packets.AudioChunkPacket;
+import com.metrovoc.phonon.network.packets.AudioStreamStartPacket;
+import com.metrovoc.phonon.network.packets.LiveBroadcastChunkPacket;
+import com.metrovoc.phonon.network.packets.LiveBroadcastEndPacket;
+import com.metrovoc.phonon.network.packets.LiveBroadcastStartPacket;
+import com.metrovoc.phonon.network.packets.LiveStreamEndPacket;
+import com.metrovoc.phonon.network.packets.RequestAudioPacket;
+import com.metrovoc.phonon.network.packets.SpeakerControlPacket;
+import com.metrovoc.phonon.network.packets.SpeakerSeekPacket;
+import com.metrovoc.phonon.network.packets.SpeakerVolumePacket;
+import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
+import com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket;
+import com.metrovoc.phonon.network.packets.SyncSpeakerVolumePacket;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -78,6 +90,26 @@ public class PhononNetwork {
             SpeakerVolumePacket.TYPE,
             SpeakerVolumePacket.CODEC,
             SpeakerVolumePacket::handle
+        );
+
+        // Live broadcast packets
+        registrar.playToServer(
+            LiveBroadcastStartPacket.TYPE,
+            LiveBroadcastStartPacket.CODEC,
+            LiveBroadcastStartPacket::handle
+        );
+
+        // Bidirectional packets (Client -> Server -> Clients)
+        registrar.playBidirectional(
+            LiveBroadcastChunkPacket.TYPE,
+            LiveBroadcastChunkPacket.CODEC,
+            LiveBroadcastChunkPacket::handle
+        );
+
+        registrar.playBidirectional(
+            LiveBroadcastEndPacket.TYPE,
+            LiveBroadcastEndPacket.CODEC,
+            LiveBroadcastEndPacket::handle
         );
     }
 }

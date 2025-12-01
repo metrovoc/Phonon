@@ -88,6 +88,11 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
 
         @Override
         public boolean mouseClicked(double mouseX, double mouseY, int button) {
+            // Check parent container's active state to prevent click-through
+            if (!TrackListWidget.this.isActive()) {
+                return false;
+            }
+
             if (button == 0) {
                 long now = System.currentTimeMillis();
                 TrackListWidget.this.setSelected(this);

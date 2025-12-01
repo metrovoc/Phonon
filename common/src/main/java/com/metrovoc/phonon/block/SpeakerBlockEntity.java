@@ -63,14 +63,21 @@ public class SpeakerBlockEntity extends BlockEntity {
     @Override
     public void setLevel(net.minecraft.world.level.Level level) {
         super.setLevel(level);
-        // 服务端加载时，如果有活跃播放状态，注册到 ServerSpeakerManager
-        if (level != null && !level.isClientSide && (playback.isPlaying() || playback.isPaused())) {
-            com.metrovoc.phonon.server.ServerSpeakerManager.getInstance().registerSpeaker(
-                level.dimension(),
-                worldPosition,
-                playback,
-                com.metrovoc.phonon.server.ServerSpeakerManager.getDurationMs(playback.resourceId())
-            );
+        if (level != null) {
+            if (!level.isClientSide) {
+                // 服务端加载时，如果有活跃播放状态，注册到 ServerSpeakerManager
+                if (playback.isPlaying() || playback.isPaused()) {
+                    com.metrovoc.phonon.server.ServerSpeakerManager.getInstance().registerSpeaker(
+                        level.dimension(),
+                        worldPosition,
+                        playback,
+                        com.metrovoc.phonon.server.ServerSpeakerManager.getDurationMs(playback.resourceId())
+                    );
+                }
+            } else {
+                // 客户端：区块加载时立即恢复播放
+                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().updateSpeaker(worldPosition, playback, volume);
+            }
         }
     }
 
@@ -147,6 +154,11 @@ public class SpeakerBlockEntity extends BlockEntity {
             // 读取时用当前时间作为新的 anchor
             long now = System.currentTimeMillis();
             playback = new PlaybackState(resourceId, now, savedPos, speed);
+
+            // 如果此时 level 已存在且为客户端，立即同步
+            if (level != null && level.isClientSide) {
+                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().updateSpeaker(worldPosition, playback, volume);
+            }
         } catch (Exception e) {
             playback = PlaybackState.STOPPED;
         }

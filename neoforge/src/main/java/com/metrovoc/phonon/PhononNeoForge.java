@@ -139,33 +139,11 @@ public class PhononNeoForge {
 
     private void onPlayerJoin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
-            // 同步音频资源列表
+            // 只同步音频资源列表，speaker 状态由 BlockEntity 自动同步
             var resources = AudioManager.getInstance().getAllResources();
             var packet = new SyncAudioResourcesPacket(resources);
             PacketDistributor.sendToPlayer(player, packet);
-
-            // 同步当前维度中所有活跃 speaker 的播放状态
-            var activeSpeakers = ServerSpeakerManager.getInstance()
-                .getActiveSpeakersInDimension(player.level().dimension());
-
-            for (var entry : activeSpeakers.entrySet()) {
-                var pos = entry.getKey();
-                var syncData = entry.getValue();
-
-                // 获取 speaker 的音量
-                float volume = 0.5f;
-                if (player.level().getBlockEntity(pos) instanceof com.metrovoc.phonon.block.SpeakerBlockEntity speaker) {
-                    volume = speaker.getVolume();
-                }
-
-                var statePacket = new com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket(
-                    pos, syncData.state(), volume, syncData.serverTimeMs()
-                );
-                PacketDistributor.sendToPlayer(player, statePacket);
-            }
-
-            Phonon.LOGGER.info("Synced {} audio resources and {} active speakers to {}",
-                resources.size(), activeSpeakers.size(), player.getName().getString());
+            Phonon.LOGGER.info("Synced {} audio resources to {}", resources.size(), player.getName().getString());
         }
     }
 

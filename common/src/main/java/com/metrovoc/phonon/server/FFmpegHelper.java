@@ -20,35 +20,16 @@ import java.util.stream.Stream;
  */
 public class FFmpegHelper {
 
-    private static volatile Boolean ffmpegAvailable;
-    private static volatile Boolean ytdlpAvailable;
-
     public static boolean isAvailable() {
         return isFFmpegAvailable();
     }
 
     public static boolean isFFmpegAvailable() {
-        if (ffmpegAvailable == null) {
-            ffmpegAvailable = checkCommand("ffprobe", "-version");
-            if (ffmpegAvailable) {
-                Phonon.LOGGER.info("FFmpeg detected on system");
-            } else {
-                Phonon.LOGGER.warn("FFmpeg not found. Install: https://ffmpeg.org/download.html");
-            }
-        }
-        return ffmpegAvailable;
+        return checkCommand("ffprobe", "-version");
     }
 
     public static boolean isYtDlpAvailable() {
-        if (ytdlpAvailable == null) {
-            ytdlpAvailable = checkCommand("yt-dlp", "--version");
-            if (ytdlpAvailable) {
-                Phonon.LOGGER.info("yt-dlp detected on system");
-            } else {
-                Phonon.LOGGER.warn("yt-dlp not found. Only direct .ogg URLs supported. Install: https://github.com/yt-dlp/yt-dlp");
-            }
-        }
-        return ytdlpAvailable;
+        return checkCommand("yt-dlp", "--version");
     }
 
     private static boolean checkCommand(String cmd, String arg) {

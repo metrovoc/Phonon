@@ -109,7 +109,7 @@ public class PhononNeoForge {
                 long duration = storage.getDurationMs(resource.id());
                 if (duration > 0) {
                     manager.updateResource(new AudioResource(
-                        resource.id(), resource.name(), resource.url(), duration
+                        resource.id(), resource.name(), resource.url(), duration, resource.sizeBytes()
                     ));
                     repaired++;
                 }

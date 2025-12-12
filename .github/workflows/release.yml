@@ -39,8 +39,13 @@ jobs:
           loaders: neoforge
           game-versions: 1.21.1
           changelog-file: CHANGELOG.md
-          modrinth-description: README.md
-          curseforge-description: README.md
+
+      - name: Sync Modrinth Description
+        run: |
+          curl -X PATCH "https://api.modrinth.com/v2/project/${{ vars.MODRINTH_ID }}" \
+            -H "Authorization: ${{ secrets.MODRINTH_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n --rawfile body README.md '{body: $body}')"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

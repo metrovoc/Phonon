@@ -39,6 +39,8 @@ jobs:
           loaders: neoforge
           game-versions: 1.21.1
           changelog-file: CHANGELOG.md
+          modrinth-description: README.md
+          curseforge-description: README.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

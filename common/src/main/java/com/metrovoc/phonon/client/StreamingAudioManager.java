@@ -22,6 +22,7 @@ import java.util.function.Consumer;
 public class StreamingAudioManager {
     private static final StreamingAudioManager instance = new StreamingAudioManager();
     private static final long CLEANUP_DELAY_MS = 5000;
+    private static final int MIN_DATA_FOR_PLAYBACK = 16 * 1024;
 
     private final Map<UUID, AudioDownloadSession> downloads = new ConcurrentHashMap<>();
     private final Map<UUID, List<Consumer<AudioDownloadSession>>> readyCallbacks = new ConcurrentHashMap<>();
@@ -60,11 +61,11 @@ public class StreamingAudioManager {
     }
 
     /**
-     * Check if download exists and has header ready.
+     * Check if download exists and has enough data ready for playback.
      */
     public boolean isReady(UUID resourceId) {
         AudioDownloadSession session = downloads.get(resourceId);
-        return session != null && session.getBuffer().hasHeader();
+        return session != null && session.getBuffer().hasEnoughData(MIN_DATA_FOR_PLAYBACK);
     }
 
     /**
@@ -78,8 +79,25 @@ public class StreamingAudioManager {
         }
 
         session.receiveHeader(headerBytes, sampleRate);
+        // Don't trigger callbacks here - wait for enough data in receiveChunk()
+    }
 
-        // Notify callbacks
+    /**
+     * Receive chunk data from network.
+     */
+    public void receiveChunk(UUID resourceId, byte[] data) {
+        AudioDownloadSession session = downloads.get(resourceId);
+        if (session == null) return;
+
+        session.receiveChunk(data);
+        tryNotifyCallbacks(resourceId, session);
+    }
+
+    private void tryNotifyCallbacks(UUID resourceId, AudioDownloadSession session) {
+        if (!session.getBuffer().hasEnoughData(MIN_DATA_FOR_PLAYBACK)) {
+            return;
+        }
+
         List<Consumer<AudioDownloadSession>> callbacks = readyCallbacks.remove(resourceId);
         if (callbacks != null) {
             for (Consumer<AudioDownloadSession> callback : callbacks) {
@@ -89,16 +107,6 @@ public class StreamingAudioManager {
                     Phonon.LOGGER.error("Error in ready callback", e);
                 }
             }
-        }
-    }
-
-    /**
-     * Receive chunk data from network.
-     */
-    public void receiveChunk(UUID resourceId, byte[] data) {
-        AudioDownloadSession session = downloads.get(resourceId);
-        if (session != null) {
-            session.receiveChunk(data);
         }
     }
 
@@ -122,7 +130,7 @@ public class StreamingAudioManager {
      */
     public StreamingAudioStream createStream(UUID resourceId, long startPositionMs) {
         AudioDownloadSession session = downloads.get(resourceId);
-        if (session == null || !session.getBuffer().hasHeader()) {
+        if (session == null || !session.getBuffer().hasEnoughData(MIN_DATA_FOR_PLAYBACK)) {
             return null;
         }
         return new StreamingAudioStream(session.getBuffer(), startPositionMs);
@@ -154,11 +162,11 @@ public class StreamingAudioManager {
     }
 
     /**
-     * Add callback to be invoked when header is ready.
+     * Add callback to be invoked when enough data is ready for playback.
      */
     public void addReadyCallback(UUID resourceId, Consumer<AudioDownloadSession> callback) {
         AudioDownloadSession session = downloads.get(resourceId);
-        if (session != null && session.getBuffer().hasHeader()) {
+        if (session != null && session.getBuffer().hasEnoughData(MIN_DATA_FOR_PLAYBACK)) {
             callback.accept(session);
             return;
         }

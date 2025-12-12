@@ -163,6 +163,21 @@ public class SharedAudioBuffer {
     }
 
     /**
+     * Check if buffer has enough data for playback to start.
+     * Requires header + minimum audio data beyond header.
+     */
+    public boolean hasEnoughData(int minBytesAfterHeader) {
+        lock.readLock().lock();
+        try {
+            if (headerData == null) return false;
+            int dataAfterHeader = totalBytes - headerData.length;
+            return dataAfterHeader >= minBytesAfterHeader;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
      * Find nearest OGG page boundary at or before the given offset.
      * Returns -1 if no page found.
      */

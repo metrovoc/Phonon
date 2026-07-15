@@ -33,7 +33,7 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void sendToAllTracking(Level level, BlockPos pos, Object packet) {
         if (level instanceof ServerLevel serverLevel && packet instanceof CustomPacketPayload payload) {
-            PacketDistributor.sendToPlayersTrackingChunk(serverLevel, new ChunkPos(pos), payload);
+            PacketDistributor.sendToPlayersTrackingChunk(serverLevel, ChunkPos.containing(pos), payload);
         }
     }
 

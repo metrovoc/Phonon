@@ -2,7 +2,7 @@ package com.metrovoc.phonon.config;
 
 import com.metrovoc.phonon.client.AudioCache;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -127,18 +127,17 @@ public final class PhononConfigScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
-        super.render(graphics, mouseX, mouseY, partialTick);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 
         int left = (width - FIELD_WIDTH) / 2;
         int top = Math.max(38, height / 2 - 105);
-        graphics.drawCenteredString(font, title, width / 2, top - 22, 0xFFFFFF);
-        graphics.drawString(font, Component.translatable("config.phonon.client.cacheDirectory"),
+        graphics.centeredText(font, title, width / 2, top - 22, 0xFFFFFF);
+        graphics.text(font, Component.translatable("config.phonon.client.cacheDirectory"),
             left, top, 0xA0A0A0);
-        graphics.drawString(font, Component.translatable("config.phonon.client.maxCacheSizeMB"),
+        graphics.text(font, Component.translatable("config.phonon.client.maxCacheSizeMB"),
             left, top + ROW_HEIGHT, 0xA0A0A0);
-        graphics.drawString(font, Component.translatable("config.phonon.client.maxAudioDistance"),
+        graphics.text(font, Component.translatable("config.phonon.client.maxAudioDistance"),
             left, top + ROW_HEIGHT * 2, 0xA0A0A0);
     }
 

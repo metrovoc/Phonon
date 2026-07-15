@@ -2,7 +2,7 @@ package com.metrovoc.phonon.client.gui;
 
 import com.metrovoc.phonon.audio.AudioResource;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.ObjectSelectionList;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -59,8 +59,8 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
         }
 
         @Override
-        public void renderContent(GuiGraphics graphics, int mouseX, int mouseY,
-                                  boolean hovered, float partialTick) {
+        public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY,
+                                   boolean hovered, float partialTick) {
             int top = getContentY();
             int left = getContentX();
             int width = getContentWidth();
@@ -76,12 +76,12 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
             if (minecraft.font.width(name) > width - 50) {
                 name = minecraft.font.plainSubstrByWidth(name, width - 55) + "...";
             }
-            graphics.drawString(minecraft.font, name, left + 4, top + 4, textColor);
+            graphics.text(minecraft.font, name, left + 4, top + 4, textColor);
 
             // Duration (right-aligned)
             String duration = formatDuration(resource.durationMs());
             int durationWidth = minecraft.font.width(duration);
-            graphics.drawString(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0x808080);
+            graphics.text(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0x808080);
 
         }
 

@@ -1,6 +1,6 @@
 package com.metrovoc.phonon.client.gui;
 
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -35,7 +35,7 @@ public class ProgressSlider extends AbstractWidget {
     }
 
     @Override
-    protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         int barY = getY() + (height - BAR_HEIGHT) / 2;
 
         // Background track
@@ -56,7 +56,7 @@ public class ProgressSlider extends AbstractWidget {
         // Time text below
         String timeText = formatTime(positionMs) + " / " + (durationMs > 0 ? formatTime(durationMs) : "--:--");
         int textWidth = net.minecraft.client.Minecraft.getInstance().font.width(timeText);
-        graphics.drawString(net.minecraft.client.Minecraft.getInstance().font,
+        graphics.text(net.minecraft.client.Minecraft.getInstance().font,
             timeText, getX() + (width - textWidth) / 2, getY() + height - 8, 0xA0A0A0);
     }
 

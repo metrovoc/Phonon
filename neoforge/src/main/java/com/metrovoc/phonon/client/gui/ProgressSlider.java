@@ -3,6 +3,7 @@ package com.metrovoc.phonon.client.gui;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.function.Consumer;
@@ -60,27 +61,27 @@ public class ProgressSlider extends AbstractWidget {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (button == 0 && durationMs > 0 && isMouseOver(mouseX, mouseY)) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
+        if (event.button() == 0 && durationMs > 0 && isMouseOver(event.x(), event.y())) {
             dragging = true;
-            updateFromMouse(mouseX);
+            updateFromMouse(event.x());
             return true;
         }
         return false;
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (dragging && button == 0) {
-            updateFromMouse(mouseX);
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (dragging && event.button() == 0) {
+            updateFromMouse(event.x());
             return true;
         }
         return false;
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (dragging && button == 0) {
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (dragging && event.button() == 0) {
             dragging = false;
             onSeek.accept(progress);
             return true;

@@ -20,7 +20,7 @@ import java.util.UUID;
 public class NeoForgePlatformHelper implements PlatformHelper {
 
     private boolean isClient() {
-        return FMLEnvironment.dist.isClient();
+        return FMLEnvironment.getDist().isClient();
     }
 
     @Override

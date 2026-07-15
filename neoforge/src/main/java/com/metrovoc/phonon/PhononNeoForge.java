@@ -53,7 +53,7 @@ public class PhononNeoForge {
         modContainer.registerConfig(ModConfig.Type.SERVER, NeoForgeServerConfig.SPEC);
         modContainer.registerConfig(ModConfig.Type.CLIENT, NeoForgeClientConfig.SPEC);
 
-        if (FMLEnvironment.dist == Dist.CLIENT) {
+        if (FMLEnvironment.getDist() == Dist.CLIENT) {
             modBus.addListener(PhononClient::onClientSetup);
             NeoForge.EVENT_BUS.addListener(PhononClient::onClientLogout);
             ConfigScreenFactory.create().ifPresent(factory ->

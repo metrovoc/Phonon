@@ -74,7 +74,7 @@ public class SpeakerBlockEntity extends BlockEntity {
     public void setLevel(net.minecraft.world.level.Level level) {
         super.setLevel(level);
         if (level != null) {
-            if (!level.isClientSide) {
+            if (!level.isClientSide()) {
                 // 服务端加载时，如果有活跃播放状态，注册到 ServerSpeakerManager
                 if (playback.isPlaying() || playback.isPaused()) {
                     com.metrovoc.phonon.server.ServerSpeakerManager.getInstance().registerSpeaker(
@@ -95,7 +95,7 @@ public class SpeakerBlockEntity extends BlockEntity {
     public void setRemoved() {
         // BlockEntity 被移除时清理状态
         if (level != null) {
-            if (level.isClientSide) {
+            if (level.isClientSide()) {
                 com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().removeSpeaker(worldPosition);
             } else {
                 com.metrovoc.phonon.server.ServerSpeakerManager.getInstance()
@@ -164,7 +164,7 @@ public class SpeakerBlockEntity extends BlockEntity {
             playback = new PlaybackState(resourceId, now, savedPos, speed);
 
             // 如果此时 level 已存在且为客户端，立即同步
-            if (level != null && level.isClientSide) {
+            if (level != null && level.isClientSide()) {
                 com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().updateSpeaker(worldPosition, playback, volume);
             }
         } catch (Exception e) {

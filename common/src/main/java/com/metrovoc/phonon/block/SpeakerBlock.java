@@ -70,7 +70,7 @@ public class SpeakerBlock extends Block implements EntityBlock {
         Player player,
         BlockHitResult hitResult
     ) {
-        if (level.isClientSide) {
+        if (level.isClientSide()) {
             // Open GUI on client
             openGui(pos);
         }

@@ -4,6 +4,7 @@ import com.metrovoc.phonon.audio.AudioResource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ObjectSelectionList;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -43,7 +44,6 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
 
     public class Entry extends ObjectSelectionList.Entry<Entry> {
         private final AudioResource resource;
-        private long lastClickTime;
 
         public Entry(AudioResource resource) {
             this.resource = resource;
@@ -59,13 +59,16 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
         }
 
         @Override
-        public void render(GuiGraphics graphics, int index, int top, int left, int width, int height,
-                           int mouseX, int mouseY, boolean hovered, float partialTick) {
+        public void renderContent(GuiGraphics graphics, int mouseX, int mouseY,
+                                  boolean hovered, float partialTick) {
+            int top = getContentY();
+            int left = getContentX();
+            int width = getContentWidth();
             int textColor = isSelected() ? 0xFFFFFF : (hovered ? 0xE0E0E0 : 0xA0A0A0);
 
-            if (hovered || isSelected()) {
-                graphics.fill(left, top, left + width, top + height,
-                    isSelected() ? 0x40FFFFFF : 0x20FFFFFF);
+            if (hovered) {
+                graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1,
+                    0x20FFFFFF);
             }
 
             // Track name
@@ -87,17 +90,15 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
         }
 
         @Override
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            if (button == 0) {
-                long now = System.currentTimeMillis();
+        public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
+            if (event.button() == 0) {
                 TrackListWidget.this.setSelected(this);
                 onSelect.accept(resource);
 
                 // Double-click to play
-                if (now - lastClickTime < 400) {
+                if (isDoubleClick) {
                     onPlay.accept(resource);
                 }
-                lastClickTime = now;
                 return true;
             }
             return false;

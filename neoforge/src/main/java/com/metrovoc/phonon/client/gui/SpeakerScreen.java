@@ -13,6 +13,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.Nullable;
@@ -336,30 +339,30 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent event) {
         if (searchBox != null && searchBox.isFocused()) {
-            if (keyCode == 256) { // ESC
+            if (event.isEscape()) {
                 searchBox.setFocused(false);
                 return true;
             }
-            return searchBox.keyPressed(keyCode, scanCode, modifiers);
+            return searchBox.keyPressed(event);
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
-    public boolean charTyped(char c, int modifiers) {
+    public boolean charTyped(CharacterEvent event) {
         if (searchBox != null && searchBox.isFocused()) {
-            return searchBox.charTyped(c, modifiers);
+            return searchBox.charTyped(event);
         }
-        return super.charTyped(c, modifiers);
+        return super.charTyped(event);
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (getFocused() != null && isDragging() && button == 0) {
-            return getFocused().mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (getFocused() != null && isDragging() && event.button() == 0) {
+            return getFocused().mouseDragged(event, dragX, dragY);
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return super.mouseDragged(event, dragX, dragY);
     }
 }

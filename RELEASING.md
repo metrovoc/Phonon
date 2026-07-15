@@ -88,6 +88,20 @@ release branches are not force-updated after publication.
 6. Push the branch before the tag. The release workflow validates that the tag,
    declared mod version, Java version, and Minecraft version agree.
 
+Push release tags individually. GitHub does not create `push` events when more
+than three tags are pushed at once. If an immutable tag already exists but its
+workflow event was not created, or a platform upload needs to be retried, replay
+that exact tag through the guarded manual entry point:
+
+```bash
+gh workflow run release.yml --ref main \
+  -f 'release_tag=v0.3.0-alpha.2+mc26.2'
+```
+
+The recovery workflow checks out the existing tag and applies the same version
+and target validation as a tag push. Never delete or move the tag to retrigger a
+release.
+
 Configure the GitHub environments `publish-alpha`, `publish-beta`, and
 `publish-release`. Alpha may publish automatically after CI; beta and release
 should require a maintainer approval. The workflow maps all three channels

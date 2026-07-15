@@ -15,10 +15,10 @@ final class SpeakerPacketValidator {
             pos.getY() + 0.5,
             pos.getZ() + 0.5
         );
-        if (distanceSquared > MAX_INTERACTION_DISTANCE_SQUARED || !player.serverLevel().isLoaded(pos)) {
+        if (distanceSquared > MAX_INTERACTION_DISTANCE_SQUARED || !player.level().isLoaded(pos)) {
             return null;
         }
-        return player.serverLevel().getBlockEntity(pos) instanceof SpeakerBlockEntity speaker
+        return player.level().getBlockEntity(pos) instanceof SpeakerBlockEntity speaker
             ? speaker
             : null;
     }

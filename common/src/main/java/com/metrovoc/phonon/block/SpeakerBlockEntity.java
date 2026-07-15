@@ -1,5 +1,6 @@
 package com.metrovoc.phonon.block;
 
+import com.mojang.serialization.Codec;
 import com.metrovoc.phonon.audio.PlaybackState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -11,6 +12,8 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -109,54 +112,52 @@ public class SpeakerBlockEntity extends BlockEntity {
 
     @Override
     public CompoundTag getUpdateTag(HolderLookup.Provider provider) {
-        CompoundTag tag = new CompoundTag();
-        saveAdditional(tag, provider);
-        return tag;
+        return saveCustomOnly(provider);
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) {
-        super.saveAdditional(tag, provider);
+    protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
 
-        tag.putFloat("volume", volume);
+        output.putFloat("volume", volume);
 
         // 保存时"坍缩": 计算当前位置，不保存 anchorTime
         if (playback.resourceId() != null) {
-            tag.putIntArray("resourceId", UUIDUtil.uuidToIntArray(playback.resourceId()));
+            output.putIntArray("resourceId", UUIDUtil.uuidToIntArray(playback.resourceId()));
             long now = PlaybackState.nowMs();
             long effectivePos = playback.getCurrentPositionMs(now);
-            tag.putLong("position", effectivePos);
-            tag.putFloat("speed", playback.speed());
+            output.putLong("position", effectivePos);
+            output.putFloat("speed", playback.speed());
         }
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
-        super.loadAdditional(tag, provider);
+    protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
 
-        volume = sanitizeVolume(tag.getFloatOr("volume", DEFAULT_VOLUME));
+        volume = sanitizeVolume(input.getFloatOr("volume", DEFAULT_VOLUME));
 
         try {
             // 兼容旧格式: playing + startTime
-            if (tag.contains("playing")) {
-                loadLegacyFormat(tag);
+            if (input.read("playing", Codec.BOOL).isPresent()) {
+                loadLegacyFormat(input);
                 return;
             }
 
             // 新格式: resourceId + position + speed
-            if (!tag.contains("resourceId")) {
+            if (input.getIntArray("resourceId").isEmpty()) {
                 playback = PlaybackState.STOPPED;
                 return;
             }
 
-            UUID resourceId = readUuid(tag, "resourceId");
+            UUID resourceId = readUuid(input, "resourceId");
             if (resourceId == null) {
                 playback = PlaybackState.STOPPED;
                 return;
             }
 
-            long savedPos = tag.getLongOr("position", 0L);
-            float speed = tag.getFloatOr("speed", 1.0f);
+            long savedPos = input.getLongOr("position", 0L);
+            float speed = input.getFloatOr("speed", 1.0f);
 
             // 读取时用当前时间作为新的 anchor
             long now = PlaybackState.nowMs();
@@ -174,24 +175,24 @@ public class SpeakerBlockEntity extends BlockEntity {
     /**
      * 兼容旧 NBT 格式 (playing + startTime)。
      */
-    private void loadLegacyFormat(CompoundTag tag) {
-        if (!tag.getBooleanOr("playing", false)) {
+    private void loadLegacyFormat(ValueInput input) {
+        if (!input.getBooleanOr("playing", false)) {
             playback = PlaybackState.STOPPED;
             return;
         }
 
-        if (!tag.contains("resourceId")) {
+        if (input.getIntArray("resourceId").isEmpty()) {
             playback = PlaybackState.STOPPED;
             return;
         }
 
-        UUID resourceId = readUuid(tag, "resourceId");
+        UUID resourceId = readUuid(input, "resourceId");
         if (resourceId == null) {
             playback = PlaybackState.STOPPED;
             return;
         }
 
-        long startTime = tag.getLongOr("startTime", System.currentTimeMillis());
+        long startTime = input.getLongOr("startTime", System.currentTimeMillis());
         long elapsed = System.currentTimeMillis() - startTime;
         long now = PlaybackState.nowMs();
 
@@ -199,8 +200,8 @@ public class SpeakerBlockEntity extends BlockEntity {
         playback = new PlaybackState(resourceId, now, Math.max(0, elapsed), 1.0f);
     }
 
-    private static UUID readUuid(CompoundTag tag, String key) {
-        int[] bits = tag.getIntArray(key).orElse(null);
+    private static UUID readUuid(ValueInput input, String key) {
+        int[] bits = input.getIntArray(key).orElse(null);
         return bits != null && bits.length == 4 ? UUIDUtil.uuidFromIntArray(bits) : null;
     }
 }

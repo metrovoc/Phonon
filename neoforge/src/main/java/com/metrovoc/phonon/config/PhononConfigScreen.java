@@ -104,7 +104,7 @@ public final class PhononConfigScreen extends Screen {
 
         Minecraft minecraft = Minecraft.getInstance();
         AudioCache.getInstance().initialize(minecraft.gameDirectory.toPath());
-        minecraft.setScreen(parent);
+        minecraft.gui.setScreen(parent);
     }
 
     private static int parseInt(String value, int fallback, int minimum, int maximum) {
@@ -143,6 +143,6 @@ public final class PhononConfigScreen extends Screen {
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(parent);
+        Minecraft.getInstance().gui.setScreen(parent);
     }
 }

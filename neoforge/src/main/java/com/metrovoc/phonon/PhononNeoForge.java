@@ -18,7 +18,7 @@ import com.metrovoc.phonon.server.AudioTransferManager;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import com.metrovoc.phonon.server.ServerSpeakerManager;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
 import net.minecraft.util.Unit;
@@ -174,7 +174,7 @@ public class PhononNeoForge {
      * 注册客户端资源重载监听器 (F3+T 恢复)。
      */
     private void onRegisterClientReloadListeners(AddClientReloadListenersEvent event) {
-        event.addListener(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker_playback"),
+        event.addListener(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "speaker_playback"),
             new SimplePreparableReloadListener<Unit>() {
                 @Override
                 protected Unit prepare(ResourceManager resourceManager, ProfilerFiller profiler) {

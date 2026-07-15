@@ -113,7 +113,7 @@ public class ServerSpeakerManager {
             stopCallback.onSpeakerStopped(level, key.pos, speaker);
         }
 
-        Phonon.LOGGER.debug("Auto-stopped speaker at {} in {}", key.pos, key.dimension.location());
+        Phonon.LOGGER.debug("Auto-stopped speaker at {} in {}", key.pos, key.dimension.identifier());
     }
 
     /**

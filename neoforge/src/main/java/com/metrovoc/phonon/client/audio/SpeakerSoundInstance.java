@@ -12,7 +12,7 @@ import net.minecraft.client.sounds.AudioStream;
 import net.minecraft.client.sounds.SoundBufferLibrary;
 import net.minecraft.client.sounds.WeighedSoundEvents;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -29,8 +29,8 @@ import java.util.concurrent.CompletableFuture;
 
 public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
 
-    private static final ResourceLocation DUMMY_SOUND_LOCATION =
-        ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker");
+    private static final Identifier DUMMY_SOUND_LOCATION =
+        Identifier.fromNamespaceAndPath(Constants.MOD_ID, "speaker");
     private static final Sound DUMMY_SOUND = new Sound(
         DUMMY_SOUND_LOCATION,
         ConstantFloat.of(1.0f),

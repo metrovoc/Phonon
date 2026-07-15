@@ -11,7 +11,7 @@ import io.netty.handler.codec.DecoderException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -35,7 +35,7 @@ public record SpeakerControlPacket(
     private static final Action[] ACTIONS = Action.values();
 
     public static final Type<SpeakerControlPacket> TYPE =
-        new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker_control"));
+        new Type<>(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "speaker_control"));
 
     private static final StreamCodec<ByteBuf, Action> ACTION_CODEC = StreamCodec.of(
         (buf, action) -> buf.writeByte(action.ordinal()),

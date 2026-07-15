@@ -7,7 +7,7 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.UUID;
@@ -21,7 +21,7 @@ public record AudioStreamStartPacket(
     boolean cacheable
 ) implements CustomPacketPayload {
     public static final Type<AudioStreamStartPacket> TYPE =
-        new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "audio_stream_start"));
+        new Type<>(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "audio_stream_start"));
 
     public static final StreamCodec<ByteBuf, AudioStreamStartPacket> CODEC = StreamCodec.composite(
         ByteBufCodecs.VAR_LONG,

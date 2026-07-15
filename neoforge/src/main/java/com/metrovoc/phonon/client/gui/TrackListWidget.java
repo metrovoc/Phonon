@@ -37,7 +37,7 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
     }
 
     @Override
-    protected int getScrollbarPosition() {
+    protected int scrollBarX() {
         return this.getX() + this.width - 6;
     }
 

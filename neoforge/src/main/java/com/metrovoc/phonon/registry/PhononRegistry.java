@@ -9,7 +9,6 @@ import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -30,7 +29,7 @@ public class PhononRegistry {
         DeferredRegister.create(net.minecraft.core.registries.Registries.MENU, Constants.MOD_ID);
 
     public static final Supplier<Block> SPEAKER_BLOCK =
-        BLOCKS.registerBlock("speaker", SpeakerBlock::new, BlockBehaviour.Properties.of());
+        BLOCKS.registerBlock("speaker", SpeakerBlock::new);
 
     public static final Supplier<BlockEntityType<SpeakerBlockEntity>> SPEAKER_BLOCK_ENTITY =
         BLOCK_ENTITIES.register("speaker", () -> new BlockEntityType<>(

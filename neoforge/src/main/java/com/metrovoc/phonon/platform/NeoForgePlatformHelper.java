@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.UUID;
@@ -25,7 +26,7 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void sendToServer(Object packet) {
         if (packet instanceof CustomPacketPayload payload) {
-            PacketDistributor.sendToServer(payload);
+            ClientPacketDistributor.sendToServer(payload);
         }
     }
 
@@ -83,14 +84,14 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void requestAudioFromServer(long streamId, UUID resourceId, long startPositionMs) {
         if (isClient() && Minecraft.getInstance().getConnection() != null) {
-            PacketDistributor.sendToServer(new RequestAudioPacket(streamId, resourceId, startPositionMs));
+            ClientPacketDistributor.sendToServer(new RequestAudioPacket(streamId, resourceId, startPositionMs));
         }
     }
 
     @Override
     public void cancelAudioStream(long streamId) {
         if (isClient() && Minecraft.getInstance().getConnection() != null) {
-            PacketDistributor.sendToServer(new CancelAudioStreamPacket(streamId));
+            ClientPacketDistributor.sendToServer(new CancelAudioStreamPacket(streamId));
         }
     }
 

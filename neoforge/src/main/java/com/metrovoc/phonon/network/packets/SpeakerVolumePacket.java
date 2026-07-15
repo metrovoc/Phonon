@@ -42,15 +42,17 @@ public record SpeakerVolumePacket(
             if (!(ctx.player() instanceof ServerPlayer player)) return;
 
             var level = player.serverLevel();
-            if (!(level.getBlockEntity(packet.pos) instanceof SpeakerBlockEntity speaker)) return;
+            SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
+            if (speaker == null) return;
 
             speaker.setVolume(packet.volume);
+            float volume = speaker.getVolume();
 
             // Broadcast to all tracking players
             PlatformHelper.INSTANCE.sendToAllTracking(
                 level,
                 packet.pos,
-                new SyncSpeakerVolumePacket(packet.pos, packet.volume)
+                new SyncSpeakerVolumePacket(packet.pos, volume)
             );
         });
     }

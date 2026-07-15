@@ -5,6 +5,7 @@ import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
+import com.metrovoc.phonon.client.PhononClient;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import com.metrovoc.phonon.command.PhononCommand;
 import com.metrovoc.phonon.config.ConfigScreenFactory;
@@ -14,7 +15,6 @@ import com.metrovoc.phonon.network.PhononNetwork;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
 import com.metrovoc.phonon.registry.PhononRegistry;
 import com.metrovoc.phonon.server.AudioTransferManager;
-import com.metrovoc.phonon.server.FFmpegHelper;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import com.metrovoc.phonon.server.ServerSpeakerManager;
 import net.minecraft.server.level.ServerPlayer;
@@ -53,6 +53,8 @@ public class PhononNeoForge {
         modContainer.registerConfig(ModConfig.Type.CLIENT, NeoForgeClientConfig.SPEC);
 
         if (FMLEnvironment.dist == Dist.CLIENT) {
+            modBus.addListener(PhononClient::onClientSetup);
+            NeoForge.EVENT_BUS.addListener(PhononClient::onClientLogout);
             ConfigScreenFactory.create().ifPresent(factory ->
                 modContainer.registerExtensionPoint(IConfigScreenFactory.class, factory));
             modBus.addListener(this::onRegisterClientReloadListeners);
@@ -65,6 +67,7 @@ public class PhononNeoForge {
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onPlayerJoin);
+        NeoForge.EVENT_BUS.addListener(this::onPlayerLogout);
         NeoForge.EVENT_BUS.addListener(this::onServerTick);
     }
 
@@ -89,8 +92,9 @@ public class PhononNeoForge {
 
         // 设置 speaker 停止回调
         ServerSpeakerManager.getInstance().setStopCallback((level, pos, speaker) -> {
-            var packet = new com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket(
-                pos, PlaybackState.STOPPED, speaker.getVolume(), System.currentTimeMillis()
+            long now = PlaybackState.nowMs();
+            var packet = com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket.snapshot(
+                pos, PlaybackState.STOPPED, speaker.getVolume(), now
             );
             PlatformHelper.INSTANCE.sendToAllTracking(level, pos, packet);
         });
@@ -99,10 +103,6 @@ public class PhononNeoForge {
     }
 
     private void repairMissingDurations(AudioManager manager, ServerAudioStorage storage) {
-        if (!FFmpegHelper.isAvailable()) {
-            return;
-        }
-
         int repaired = 0;
         for (AudioResource resource : manager.getAllResources()) {
             if (resource.durationMs() <= 0 && storage.hasAudio(resource.id())) {
@@ -132,8 +132,8 @@ public class PhononNeoForge {
             Phonon.LOGGER.error("Failed to save audio resources", e);
         }
 
-        ServerAudioStorage.getInstance().shutdown();
-        AudioTransferManager.getInstance().shutdown();
+        ServerAudioStorage.reset();
+        AudioTransferManager.reset();
         ServerSpeakerManager.reset();
     }
 
@@ -144,6 +144,12 @@ public class PhononNeoForge {
             var packet = new SyncAudioResourcesPacket(resources);
             PacketDistributor.sendToPlayer(player, packet);
             Phonon.LOGGER.info("Synced {} audio resources to {}", resources.size(), player.getName().getString());
+        }
+    }
+
+    private void onPlayerLogout(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            AudioTransferManager.getInstance().cancelPlayerTransfers(player.getUUID());
         }
     }
 

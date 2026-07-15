@@ -17,7 +17,7 @@ neoForge {
     runs {
         configureEach {
             systemProperty('neoforge.enabledGameTestNamespaces', mod_id)
-            ideName = "NeoForge ${it.name.capitalize()} (${project.path})" // Unify the run config names with fabric
+            ideName = "NeoForge ${it.name.capitalize()} (${project.path})"
         }
         client {
             client()
@@ -42,12 +42,3 @@ neoForge {
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-repositories {
-    maven { url "https://maven.shedaniel.me/" }
-}
-
-dependencies {
-    // Cloth Config - optional, for config GUI
-    implementation "me.shedaniel.cloth:cloth-config-neoforge:15.0.140"
-}

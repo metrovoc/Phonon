@@ -1,119 +1,160 @@
 package com.metrovoc.phonon.client.audio;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Thread-safe buffer for streaming audio data.
- * Supports one writer (download thread) and multiple readers (decoder streams).
- * Each reader maintains its own cursor position.
+ * One-writer, many-reader segmented audio buffer.
+ *
+ * <p>Incoming packet arrays are retained instead of copied. Callers therefore
+ * transfer ownership of appended arrays and must not mutate them afterwards.</p>
  */
-public class SharedAudioBuffer {
-    private static final int CHUNK_SIZE = 16 * 1024;
-    private static final byte[] OGG_MAGIC = {'O', 'g', 'g', 'S'};
-
-    private final List<byte[]> chunks = new ArrayList<>();
+public final class SharedAudioBuffer {
+    private final List<byte[]> segments = new ArrayList<>();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+    private final Condition dataAvailable = lock.writeLock().newCondition();
 
-    private int totalBytes = 0;
-    private boolean complete = false;
-
-    private byte[] headerData = null;
-    private int sampleRate = 0;
+    private int[] segmentEnds = new int[16];
+    private int totalBytes;
+    private boolean complete;
+    private byte[] headerData;
+    private int sampleRate;
+    private long streamStartPositionMs;
 
     public void append(byte[] data) {
-        if (data == null || data.length == 0) return;
+        if (data == null || data.length == 0) {
+            return;
+        }
 
         lock.writeLock().lock();
         try {
-            int offset = 0;
-            while (offset < data.length) {
-                int lastChunkSpace = getLastChunkSpace();
-                if (lastChunkSpace > 0) {
-                    byte[] lastChunk = chunks.get(chunks.size() - 1);
-                    int lastChunkUsed = CHUNK_SIZE - lastChunkSpace;
-                    int toCopy = Math.min(lastChunkSpace, data.length - offset);
-                    System.arraycopy(data, offset, lastChunk, lastChunkUsed, toCopy);
-                    offset += toCopy;
-                    totalBytes += toCopy;
-                } else {
-                    byte[] newChunk = new byte[CHUNK_SIZE];
-                    int toCopy = Math.min(CHUNK_SIZE, data.length - offset);
-                    System.arraycopy(data, offset, newChunk, 0, toCopy);
-                    chunks.add(newChunk);
-                    offset += toCopy;
-                    totalBytes += toCopy;
-                }
+            if (complete) {
+                return;
             }
+
+            int newTotal = Math.addExact(totalBytes, data.length);
+            ensureIndexCapacity(segments.size() + 1);
+            segments.add(data);
+            totalBytes = newTotal;
+            segmentEnds[segments.size() - 1] = newTotal;
+            dataAvailable.signalAll();
         } finally {
             lock.writeLock().unlock();
         }
     }
 
-    private int getLastChunkSpace() {
-        if (chunks.isEmpty()) return 0;
-        int usedInLast = totalBytes % CHUNK_SIZE;
-        if (usedInLast == 0 && totalBytes > 0) return 0;
-        return CHUNK_SIZE - usedInLast;
+    private void ensureIndexCapacity(int required) {
+        if (required <= segmentEnds.length) {
+            return;
+        }
+
+        int newCapacity = Math.max(required, segmentEnds.length << 1);
+        int[] expanded = new int[newCapacity];
+        System.arraycopy(segmentEnds, 0, expanded, 0, segmentEnds.length);
+        segmentEnds = expanded;
     }
 
-    public void setHeader(byte[] header, int sampleRate) {
+    public void setHeader(byte[] header, int sampleRate, long streamStartPositionMs) {
         lock.writeLock().lock();
         try {
             this.headerData = header;
             this.sampleRate = sampleRate;
+            this.streamStartPositionMs = Math.max(0, streamStartPositionMs);
         } finally {
             lock.writeLock().unlock();
         }
     }
 
-    public void markComplete() {
+    public boolean markComplete() {
         lock.writeLock().lock();
         try {
+            if (complete) {
+                return false;
+            }
             complete = true;
+            dataAvailable.signalAll();
+            return true;
         } finally {
             lock.writeLock().unlock();
         }
     }
 
     /**
-     * Read data from buffer at specified offset.
-     * @return actual bytes read
+     * Reads up to {@code length} bytes at an absolute stream-buffer offset.
      */
-    public int read(int globalOffset, byte[] dest, int destOffset, int length) {
+    public int read(int globalOffset, byte[] destination, int destinationOffset, int length) {
+        if (globalOffset < 0 || destinationOffset < 0 || length < 0
+            || destinationOffset > destination.length
+            || length > destination.length - destinationOffset) {
+            throw new IndexOutOfBoundsException();
+        }
+
         lock.readLock().lock();
         try {
-            if (globalOffset >= totalBytes) return 0;
-
-            int available = Math.min(length, totalBytes - globalOffset);
-            int read = 0;
-
-            while (read < available) {
-                int currentGlobalPos = globalOffset + read;
-                int chunkIndex = currentGlobalPos / CHUNK_SIZE;
-                int offsetInChunk = currentGlobalPos % CHUNK_SIZE;
-
-                if (chunkIndex >= chunks.size()) break;
-
-                byte[] chunk = chunks.get(chunkIndex);
-                int bytesInThisChunk;
-                if (chunkIndex == chunks.size() - 1) {
-                    int usedInLast = totalBytes % CHUNK_SIZE;
-                    if (usedInLast == 0 && totalBytes > 0) usedInLast = CHUNK_SIZE;
-                    bytesInThisChunk = usedInLast - offsetInChunk;
-                } else {
-                    bytesInThisChunk = CHUNK_SIZE - offsetInChunk;
-                }
-
-                int toCopy = Math.min(bytesInThisChunk, available - read);
-                System.arraycopy(chunk, offsetInChunk, dest, destOffset + read, toCopy);
-                read += toCopy;
-            }
-
-            return read;
+            return readLocked(globalOffset, destination, destinationOffset, length);
         } finally {
             lock.readLock().unlock();
+        }
+    }
+
+    private int readLocked(int globalOffset, byte[] destination, int destinationOffset, int length) {
+        if (globalOffset >= totalBytes || length == 0) {
+            return 0;
+        }
+
+        int available = Math.min(length, totalBytes - globalOffset);
+        int segmentIndex = findSegment(globalOffset);
+        int copied = 0;
+
+        while (copied < available && segmentIndex < segments.size()) {
+            int segmentStart = segmentIndex == 0 ? 0 : segmentEnds[segmentIndex - 1];
+            byte[] segment = segments.get(segmentIndex);
+            int offsetInSegment = globalOffset + copied - segmentStart;
+            int copyLength = Math.min(segment.length - offsetInSegment, available - copied);
+            System.arraycopy(segment, offsetInSegment, destination, destinationOffset + copied, copyLength);
+            copied += copyLength;
+            segmentIndex++;
+        }
+
+        return copied;
+    }
+
+    private int findSegment(int offset) {
+        int low = 0;
+        int high = segments.size() - 1;
+        while (low < high) {
+            int middle = (low + high) >>> 1;
+            if (segmentEnds[middle] <= offset) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        return low;
+    }
+
+    /**
+     * Waits briefly for producer progress to avoid returning an artificial EOF
+     * to Minecraft's streaming sound channel during a network jitter window.
+     */
+    public boolean awaitDataAfter(int offset, long timeout, TimeUnit unit) throws InterruptedException {
+        long remaining = unit.toNanos(timeout);
+        lock.writeLock().lockInterruptibly();
+        try {
+            while (totalBytes <= offset && !complete && remaining > 0) {
+                remaining = dataAvailable.awaitNanos(remaining);
+            }
+            return totalBytes > offset;
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 
@@ -130,6 +171,15 @@ public class SharedAudioBuffer {
         lock.readLock().lock();
         try {
             return sampleRate;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public long getStreamStartPositionMs() {
+        lock.readLock().lock();
+        try {
+            return streamStartPositionMs;
         } finally {
             lock.readLock().unlock();
         }
@@ -162,61 +212,56 @@ public class SharedAudioBuffer {
         }
     }
 
-    /**
-     * Check if buffer has enough data for playback to start.
-     * Requires header + minimum audio data beyond header.
-     */
     public boolean hasEnoughData(int minBytesAfterHeader) {
         lock.readLock().lock();
         try {
-            if (headerData == null) return false;
-            int dataAfterHeader = totalBytes - headerData.length;
-            return dataAfterHeader >= minBytesAfterHeader;
+            if (headerData == null) {
+                return false;
+            }
+            int audioBytes = totalBytes - headerData.length;
+            return audioBytes >= minBytesAfterHeader || complete && audioBytes > 0;
         } finally {
             lock.readLock().unlock();
         }
     }
 
     /**
-     * Find nearest OGG page boundary at or before the given offset.
-     * Returns -1 if no page found.
+     * Writes a completed snapshot without first assembling a second full-size
+     * heap array.
      */
-    public int findPageOffset(int approximateOffset) {
+    public void writeTo(Path file) throws IOException {
+        byte[][] snapshot;
         lock.readLock().lock();
         try {
-            if (totalBytes == 0) return -1;
-
-            int searchStart = Math.min(approximateOffset, totalBytes - 4);
-            if (searchStart < 0) searchStart = 0;
-
-            // Search backwards for "OggS" magic
-            byte[] window = new byte[Math.min(8192, searchStart + 4)];
-            int windowStart = Math.max(0, searchStart - window.length + 4);
-            int bytesRead = read(windowStart, window, 0, window.length);
-
-            for (int i = bytesRead - 4; i >= 0; i--) {
-                if (window[i] == OGG_MAGIC[0] &&
-                    window[i + 1] == OGG_MAGIC[1] &&
-                    window[i + 2] == OGG_MAGIC[2] &&
-                    window[i + 3] == OGG_MAGIC[3]) {
-                    return windowStart + i;
-                }
+            if (!complete) {
+                throw new IllegalStateException("Cannot persist an incomplete audio buffer");
             }
-
-            return -1;
+            snapshot = segments.toArray(byte[][]::new);
         } finally {
             lock.readLock().unlock();
         }
+
+        try (FileChannel channel = FileChannel.open(
+            file,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE
+        )) {
+            for (byte[] segment : snapshot) {
+                ByteBuffer source = ByteBuffer.wrap(segment);
+                while (source.hasRemaining()) {
+                    channel.write(source);
+                }
+            }
+            channel.force(false);
+        }
     }
 
-    /**
-     * Get all data as byte array (for caching).
-     */
     public byte[] toByteArray() {
         lock.readLock().lock();
         try {
             byte[] result = new byte[totalBytes];
-            read(0, result, 0, totalBytes);
+            readLocked(0, result, 0, totalBytes);
             return result;
         } finally {
             lock.readLock().unlock();

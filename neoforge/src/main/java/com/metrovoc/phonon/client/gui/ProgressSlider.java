@@ -99,7 +99,7 @@ public class ProgressSlider extends AbstractWidget {
         long seconds = ms / 1000;
         long minutes = seconds / 60;
         seconds = seconds % 60;
-        return String.format("%d:%02d", minutes, seconds);
+        return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
     }
 
     @Override

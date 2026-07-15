@@ -12,9 +12,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
 import java.util.Iterator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 服务端 Speaker 管理器。
@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ServerSpeakerManager {
     private static ServerSpeakerManager instance;
 
-    private final Map<SpeakerKey, SpeakerInfo> activeSpeakers = new ConcurrentHashMap<>();
+    private final Map<SpeakerKey, SpeakerInfo> activeSpeakers = new HashMap<>();
 
     /**
      * 停止回调，由平台层设置，用于发送网络包。
@@ -77,7 +77,7 @@ public class ServerSpeakerManager {
         // 每 20 tick (1 秒) 检查一次
         if (tickCount % 20 != 0) return;
 
-        long now = System.currentTimeMillis();
+        long now = PlaybackState.nowMs();
         Iterator<Map.Entry<SpeakerKey, SpeakerInfo>> it = activeSpeakers.entrySet().iterator();
 
         while (it.hasNext()) {
@@ -123,26 +123,6 @@ public class ServerSpeakerManager {
         Optional<AudioResource> resource = AudioManager.getInstance().getResource(resourceId);
         return resource.map(AudioResource::durationMs).orElse(-1L);
     }
-
-    /**
-     * 获取指定维度中所有活跃 speaker 的状态 (用于新玩家同步)。
-     */
-    public Map<BlockPos, SpeakerSyncData> getActiveSpeakersInDimension(ResourceKey<Level> dimension) {
-        Map<BlockPos, SpeakerSyncData> result = new java.util.HashMap<>();
-        long now = System.currentTimeMillis();
-
-        for (var entry : activeSpeakers.entrySet()) {
-            if (entry.getKey().dimension.equals(dimension)) {
-                result.put(entry.getKey().pos, new SpeakerSyncData(entry.getValue().state, now));
-            }
-        }
-        return result;
-    }
-
-    /**
-     * 同步数据记录。
-     */
-    public record SpeakerSyncData(PlaybackState state, long serverTimeMs) {}
 
     private record SpeakerKey(ResourceKey<Level> dimension, BlockPos pos) {}
 

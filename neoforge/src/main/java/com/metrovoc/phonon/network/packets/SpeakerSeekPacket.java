@@ -43,34 +43,36 @@ public record SpeakerSeekPacket(
             if (!(ctx.player() instanceof ServerPlayer player)) return;
 
             var level = player.serverLevel();
-            if (!(level.getBlockEntity(packet.pos) instanceof SpeakerBlockEntity speaker)) return;
+            SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
+            if (speaker == null) return;
 
             PlaybackState current = speaker.getPlayback();
             if (current.resourceId() == null) return;
 
-            long serverTime = System.currentTimeMillis();
+            long serverTime = PlaybackState.nowMs();
+            long durationMs = ServerSpeakerManager.getDurationMs(current.resourceId());
+            long seekPositionMs = Math.max(0, packet.seekPositionMs);
+            if (durationMs > 0) {
+                seekPositionMs = Math.min(seekPositionMs, Math.max(0, durationMs - 1));
+            }
 
             // 创建新状态: anchor=now, position=seekPosition, 保持原有 speed
             PlaybackState newState = new PlaybackState(
                 current.resourceId(),
                 serverTime,
-                packet.seekPositionMs,
+                seekPositionMs,
                 current.speed()
             );
 
             speaker.setPlayback(newState);
 
-            // 如果正在播放，更新 ServerSpeakerManager
-            if (newState.isPlaying()) {
-                long durationMs = ServerSpeakerManager.getDurationMs(newState.resourceId());
-                ServerSpeakerManager.getInstance().registerSpeaker(
-                    level.dimension(), packet.pos, newState, durationMs);
-            }
+            ServerSpeakerManager.getInstance().registerSpeaker(
+                level.dimension(), packet.pos, newState, durationMs);
 
             PlatformHelper.INSTANCE.sendToAllTracking(
                 level,
                 packet.pos,
-                new SyncSpeakerStatePacket(packet.pos, newState, speaker.getVolume(), serverTime)
+                SyncSpeakerStatePacket.snapshot(packet.pos, newState, speaker.getVolume(), serverTime)
             );
         });
     }

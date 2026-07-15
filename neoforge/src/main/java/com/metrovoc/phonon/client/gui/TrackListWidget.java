@@ -63,6 +63,11 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
                            int mouseX, int mouseY, boolean hovered, float partialTick) {
             int textColor = isSelected() ? 0xFFFFFF : (hovered ? 0xE0E0E0 : 0xA0A0A0);
 
+            if (hovered || isSelected()) {
+                graphics.fill(left, top, left + width, top + height,
+                    isSelected() ? 0x40FFFFFF : 0x20FFFFFF);
+            }
+
             // Track name
             String name = resource.name();
             if (minecraft.font.width(name) > width - 50) {
@@ -75,11 +80,6 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
             int durationWidth = minecraft.font.width(duration);
             graphics.drawString(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0x808080);
 
-            // Selection highlight
-            if (hovered || isSelected()) {
-                graphics.fill(left, top, left + width, top + height,
-                    isSelected() ? 0x40FFFFFF : 0x20FFFFFF);
-            }
         }
 
         private boolean isSelected() {
@@ -108,7 +108,7 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
             long seconds = ms / 1000;
             long minutes = seconds / 60;
             seconds = seconds % 60;
-            return String.format("%d:%02d", minutes, seconds);
+            return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
         }
     }
 }

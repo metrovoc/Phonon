@@ -56,8 +56,14 @@ public class SpeakerBlockEntity extends BlockEntity {
     }
 
     public void setVolume(float volume) {
-        this.volume = volume;
+        this.volume = sanitizeVolume(volume);
         setChanged();
+    }
+
+    private static float sanitizeVolume(float volume) {
+        return Float.isFinite(volume)
+            ? Math.max(0.0f, Math.min(1.0f, volume))
+            : DEFAULT_VOLUME;
     }
 
     @Override
@@ -116,7 +122,7 @@ public class SpeakerBlockEntity extends BlockEntity {
         // 保存时"坍缩": 计算当前位置，不保存 anchorTime
         if (playback.resourceId() != null) {
             tag.putUUID("resourceId", playback.resourceId());
-            long now = System.currentTimeMillis();
+            long now = PlaybackState.nowMs();
             long effectivePos = playback.getCurrentPositionMs(now);
             tag.putLong("position", effectivePos);
             tag.putFloat("speed", playback.speed());
@@ -127,7 +133,7 @@ public class SpeakerBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.loadAdditional(tag, provider);
 
-        volume = tag.contains("volume") ? tag.getFloat("volume") : DEFAULT_VOLUME;
+        volume = sanitizeVolume(tag.contains("volume") ? tag.getFloat("volume") : DEFAULT_VOLUME);
 
         try {
             // 兼容旧格式: playing + startTime
@@ -152,7 +158,7 @@ public class SpeakerBlockEntity extends BlockEntity {
             float speed = tag.contains("speed") ? tag.getFloat("speed") : 1.0f;
 
             // 读取时用当前时间作为新的 anchor
-            long now = System.currentTimeMillis();
+            long now = PlaybackState.nowMs();
             playback = new PlaybackState(resourceId, now, savedPos, speed);
 
             // 如果此时 level 已存在且为客户端，立即同步
@@ -185,8 +191,8 @@ public class SpeakerBlockEntity extends BlockEntity {
         }
 
         long startTime = tag.getLong("startTime");
-        long now = System.currentTimeMillis();
-        long elapsed = now - startTime;
+        long elapsed = System.currentTimeMillis() - startTime;
+        long now = PlaybackState.nowMs();
 
         // 转换为新格式: anchor=now, position=elapsed, speed=1.0
         playback = new PlaybackState(resourceId, now, Math.max(0, elapsed), 1.0f);

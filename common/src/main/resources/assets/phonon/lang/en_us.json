@@ -10,7 +10,5 @@
   "config.phonon.client.maxCacheSizeMB": "Max Cache Size (MB)",
   "config.phonon.client.maxCacheSizeMB.tooltip": "Maximum cache size in megabytes. Set to 0 for unlimited.",
   "config.phonon.client.maxAudioDistance": "Max Audio Distance",
-  "config.phonon.client.maxAudioDistance.tooltip": "Maximum distance (in blocks) at which audio can be heard",
-  "config.phonon.client.enableDebugLogging": "Debug Logging",
-  "config.phonon.client.enableDebugLogging.tooltip": "Enable verbose debug logging"
+  "config.phonon.client.maxAudioDistance.tooltip": "Maximum distance (in blocks) at which audio can be heard"
 }

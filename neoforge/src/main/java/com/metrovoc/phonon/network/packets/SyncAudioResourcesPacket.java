@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
+import com.metrovoc.phonon.audio.AudioLimits;
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.client.ClientAudioManager;
 import io.netty.buffer.ByteBuf;
@@ -25,16 +26,19 @@ public record SyncAudioResourcesPacket(List<AudioResource> resources) implements
         ByteBufCodecs.collection(
             ArrayList::new,
             StreamCodec.composite(
-                ByteBufCodecs.fromCodec(UUIDCodec.CODEC),
+                UUIDCodec.STREAM_CODEC,
                 AudioResource::id,
-                ByteBufCodecs.STRING_UTF8,
+                ByteBufCodecs.stringUtf8(AudioLimits.MAX_RESOURCE_NAME_CHARS),
                 AudioResource::name,
-                ByteBufCodecs.STRING_UTF8,
+                ByteBufCodecs.stringUtf8(AudioLimits.MAX_RESOURCE_URL_CHARS),
                 AudioResource::url,
                 ByteBufCodecs.VAR_LONG,
                 AudioResource::durationMs,
+                ByteBufCodecs.VAR_LONG,
+                AudioResource::sizeBytes,
                 AudioResource::new
-            )
+            ),
+            AudioLimits.MAX_RESOURCE_COUNT
         ),
         SyncAudioResourcesPacket::resources,
         SyncAudioResourcesPacket::new

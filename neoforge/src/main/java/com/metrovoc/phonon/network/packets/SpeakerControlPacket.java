@@ -1,11 +1,13 @@
 package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
+import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import com.metrovoc.phonon.server.ServerSpeakerManager;
 import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.DecoderException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -30,12 +32,20 @@ public record SpeakerControlPacket(
         STOP    // 停止 (重置到开头)
     }
 
+    private static final Action[] ACTIONS = Action.values();
+
     public static final Type<SpeakerControlPacket> TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "speaker_control"));
 
     private static final StreamCodec<ByteBuf, Action> ACTION_CODEC = StreamCodec.of(
         (buf, action) -> buf.writeByte(action.ordinal()),
-        buf -> Action.values()[buf.readByte()]
+        buf -> {
+            int id = buf.readUnsignedByte();
+            if (id >= ACTIONS.length) {
+                throw new DecoderException("Unknown speaker action: " + id);
+            }
+            return ACTIONS[id];
+        }
     );
 
     public static final StreamCodec<ByteBuf, SpeakerControlPacket> CODEC = StreamCodec.composite(
@@ -58,14 +68,19 @@ public record SpeakerControlPacket(
             if (!(ctx.player() instanceof ServerPlayer player)) return;
 
             var level = player.serverLevel();
-            if (!(level.getBlockEntity(packet.pos) instanceof SpeakerBlockEntity speaker)) return;
+            SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
+            if (speaker == null) return;
 
-            long serverTime = System.currentTimeMillis();
+            long serverTime = PlaybackState.nowMs();
             PlaybackState current = speaker.getPlayback();
             PlaybackState newState;
 
             switch (packet.action) {
                 case PLAY -> {
+                    if (packet.resourceId == null
+                        || AudioManager.getInstance().getResource(packet.resourceId).isEmpty()) {
+                        return;
+                    }
                     if (current.isPaused() && current.resourceId() != null
                         && current.resourceId().equals(packet.resourceId)) {
                         // 从暂停恢复: 更新 anchor 到现在，保持 position
@@ -105,7 +120,7 @@ public record SpeakerControlPacket(
             PlatformHelper.INSTANCE.sendToAllTracking(
                 level,
                 packet.pos,
-                new SyncSpeakerStatePacket(packet.pos, newState, speaker.getVolume(), serverTime)
+                SyncSpeakerStatePacket.snapshot(packet.pos, newState, speaker.getVolume(), serverTime)
             );
         });
     }

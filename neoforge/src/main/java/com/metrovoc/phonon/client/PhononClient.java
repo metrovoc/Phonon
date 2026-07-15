@@ -1,21 +1,16 @@
 package com.metrovoc.phonon.client;
 
-import com.metrovoc.phonon.Constants;
 import net.minecraft.client.Minecraft;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 
-@EventBusSubscriber(modid = Constants.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
-public class PhononClient {
+public final class PhononClient {
+    private PhononClient() {}
 
-    @SubscribeEvent
     public static void onClientSetup(FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
             var gameDir = Minecraft.getInstance().gameDirectory.toPath();
             com.metrovoc.phonon.client.AudioCache.getInstance().initialize(gameDir);
-            com.metrovoc.phonon.client.AudioReceiver.getInstance().initialize(gameDir);
 
             // Register GUI opener
             com.metrovoc.phonon.block.SpeakerBlock.setGuiOpener(pos -> {
@@ -27,5 +22,10 @@ public class PhononClient {
                 ));
             });
         });
+    }
+
+    public static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().clear();
+        com.metrovoc.phonon.client.ClientAudioManager.getInstance().setResources(java.util.List.of());
     }
 }

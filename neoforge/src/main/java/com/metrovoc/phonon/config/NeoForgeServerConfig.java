@@ -26,6 +26,7 @@ public class NeoForgeServerConfig {
     // Download settings
     public final ModConfigSpec.IntValue downloadConnectTimeoutSeconds;
     public final ModConfigSpec.IntValue downloadReadTimeoutSeconds;
+    public final ModConfigSpec.IntValue maxAudioSizeMB;
 
     private NeoForgeServerConfig(ModConfigSpec.Builder builder) {
         builder.push("transfer");
@@ -35,7 +36,7 @@ public class NeoForgeServerConfig {
             .defineInRange("chunkSize",
                 PhononServerConfig.DEFAULT_CHUNK_SIZE,
                 64 * 1024,
-                1024 * 1024);
+                512 * 1024);
 
         maxBytesPerTick = builder
             .comment("Max bytes/tick for all audio transfers combined.")
@@ -71,6 +72,13 @@ public class NeoForgeServerConfig {
                 30,
                 600);
 
+        maxAudioSizeMB = builder
+            .comment("Maximum stored size of one converted OGG file in megabytes.")
+            .defineInRange("maxAudioSizeMB",
+                PhononServerConfig.DEFAULT_MAX_AUDIO_SIZE_MB,
+                16,
+                PhononServerConfig.MAX_AUDIO_SIZE_MB);
+
         builder.pop();
     }
 
@@ -84,5 +92,6 @@ public class NeoForgeServerConfig {
         PhononServerConfig.setMaxBytesPerPlayerPerTick(INSTANCE.maxBytesPerPlayerPerTick::get);
         PhononServerConfig.setDownloadConnectTimeoutSeconds(INSTANCE.downloadConnectTimeoutSeconds::get);
         PhononServerConfig.setDownloadReadTimeoutSeconds(INSTANCE.downloadReadTimeoutSeconds::get);
+        PhononServerConfig.setMaxAudioSizeMB(INSTANCE.maxAudioSizeMB::get);
     }
 }

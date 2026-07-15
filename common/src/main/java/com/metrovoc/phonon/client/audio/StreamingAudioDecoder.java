@@ -15,11 +15,13 @@ import java.util.concurrent.locks.ReentrantLock;
 public class StreamingAudioDecoder implements AutoCloseable {
     private static final int INITIAL_BUFFER_SIZE = 64 * 1024;
     private static final int MIN_DATA_FOR_PLAYBACK = 16 * 1024;
+    private static final int MAX_VORBIS_FRAME_SAMPLES = 8192;
 
     private final ReentrantLock lock = new ReentrantLock();
 
     private long decoderHandle;
     private ByteBuffer accumBuffer;
+    private ShortBuffer pendingPcm;
     private int accumSize;
     private int consumedTotal;
 
@@ -30,6 +32,8 @@ public class StreamingAudioDecoder implements AutoCloseable {
 
     public StreamingAudioDecoder() {
         this.accumBuffer = MemoryUtil.memAlloc(INITIAL_BUFFER_SIZE);
+        this.pendingPcm = MemoryUtil.memAllocShort(MAX_VORBIS_FRAME_SAMPLES);
+        this.pendingPcm.limit(0);
         this.accumSize = 0;
         this.consumedTotal = 0;
         this.headerParsed = false;
@@ -62,6 +66,10 @@ public class StreamingAudioDecoder implements AutoCloseable {
     }
 
     private void ensureCapacity(int additionalBytes) {
+        if (consumedTotal > 0 && accumSize + additionalBytes > accumBuffer.capacity()) {
+            compactBuffer();
+        }
+
         int required = accumSize + additionalBytes;
         if (required > accumBuffer.capacity()) {
             int newCapacity = Math.max(accumBuffer.capacity() * 2, required);
@@ -110,35 +118,34 @@ public class StreamingAudioDecoder implements AutoCloseable {
         if (remaining > 0 && consumedTotal > 0) {
             accumBuffer.position(consumedTotal);
             accumBuffer.limit(accumSize);
-            ByteBuffer temp = MemoryUtil.memAlloc(remaining);
-            temp.put(accumBuffer);
-            temp.flip();
-
-            accumBuffer.position(0);
-            accumBuffer.limit(accumBuffer.capacity());
-            accumBuffer.put(temp);
-            MemoryUtil.memFree(temp);
+            accumBuffer.compact();
         }
         accumSize = remaining;
         consumedTotal = 0;
+        accumBuffer.position(accumSize);
+        accumBuffer.limit(accumBuffer.capacity());
     }
 
-    public ShortBuffer decode(int maxSamples) {
+    /**
+     * Decodes directly into the caller's PCM buffer, avoiding an intermediate
+     * native allocation and copy for every OpenAL buffer fill.
+     */
+    public int decode(ShortBuffer output) {
         lock.lock();
         try {
-            if (closed || !headerParsed || decoderHandle == 0) {
-                return null;
+            if (closed || !headerParsed || decoderHandle == 0 || !output.hasRemaining()) {
+                return 0;
             }
 
-            ShortBuffer output = MemoryUtil.memAllocShort(maxSamples);
             int totalDecoded = 0;
+            totalDecoded += drainPending(output);
 
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 IntBuffer channelsOut = stack.mallocInt(1);
                 IntBuffer samplesOut = stack.mallocInt(1);
                 PointerBuffer outputPtr = stack.mallocPointer(1);
 
-                while (totalDecoded < maxSamples) {
+                while (output.hasRemaining()) {
                     int availableData = accumSize - consumedTotal;
                     if (availableData <= 0) {
                         break;
@@ -161,9 +168,16 @@ public class StreamingAudioDecoder implements AutoCloseable {
                         int chans = channelsOut.get(0);
                         long outputAddr = outputPtr.get(0);
 
-                        int samplesToWrite = Math.min(samples, maxSamples - totalDecoded);
-                        writeMonoSamples(output, outputAddr, chans, samplesToWrite);
-                        totalDecoded += samplesToWrite;
+                        if (samples <= output.remaining()) {
+                            writeMonoSamples(output, outputAddr, chans, samples);
+                            totalDecoded += samples;
+                        } else {
+                            ensurePendingCapacity(samples);
+                            pendingPcm.clear();
+                            writeMonoSamples(pendingPcm, outputAddr, chans, samples);
+                            pendingPcm.flip();
+                            totalDecoded += drainPending(output);
+                        }
                     }
                 }
             }
@@ -172,16 +186,31 @@ public class StreamingAudioDecoder implements AutoCloseable {
                 compactBuffer();
             }
 
-            if (totalDecoded == 0) {
-                MemoryUtil.memFree(output);
-                return null;
-            }
-
-            output.flip();
-            return output;
+            return totalDecoded;
         } finally {
             lock.unlock();
         }
+    }
+
+    private int drainPending(ShortBuffer output) {
+        int count = Math.min(output.remaining(), pendingPcm.remaining());
+        if (count == 0) {
+            return 0;
+        }
+
+        int originalLimit = pendingPcm.limit();
+        pendingPcm.limit(pendingPcm.position() + count);
+        output.put(pendingPcm);
+        pendingPcm.limit(originalLimit);
+        return count;
+    }
+
+    private void ensurePendingCapacity(int samples) {
+        if (pendingPcm.capacity() >= samples) {
+            return;
+        }
+        MemoryUtil.memFree(pendingPcm);
+        pendingPcm = MemoryUtil.memAllocShort(samples);
     }
 
     private void writeMonoSamples(ShortBuffer output, long channelArrayAddr, int chans, int samples) {
@@ -193,12 +222,20 @@ public class StreamingAudioDecoder implements AutoCloseable {
             for (int i = 0; i < samples; i++) {
                 output.put(floatToShort(channel0.get(i)));
             }
-        } else {
+        } else if (chans == 2) {
             long ch1Addr = channelPtrs.get(1);
             FloatBuffer channel1 = MemoryUtil.memFloatBuffer(ch1Addr, samples);
             for (int i = 0; i < samples; i++) {
                 float mixed = (channel0.get(i) + channel1.get(i)) * 0.5f;
                 output.put(floatToShort(mixed));
+            }
+        } else {
+            for (int i = 0; i < samples; i++) {
+                float mixed = 0.0f;
+                for (int channel = 0; channel < chans; channel++) {
+                    mixed += MemoryUtil.memGetFloat(channelPtrs.get(channel) + (long) i * Float.BYTES);
+                }
+                output.put(floatToShort(mixed / chans));
             }
         }
     }
@@ -246,11 +283,16 @@ public class StreamingAudioDecoder implements AutoCloseable {
     public void flush() {
         lock.lock();
         try {
+            if (closed) {
+                return;
+            }
             if (decoderHandle != 0) {
                 STBVorbis.stb_vorbis_flush_pushdata(decoderHandle);
             }
             consumedTotal = 0;
             accumSize = 0;
+            pendingPcm.clear();
+            pendingPcm.limit(0);
         } finally {
             lock.unlock();
         }
@@ -273,6 +315,11 @@ public class StreamingAudioDecoder implements AutoCloseable {
             if (accumBuffer != null) {
                 MemoryUtil.memFree(accumBuffer);
                 accumBuffer = null;
+            }
+
+            if (pendingPcm != null) {
+                MemoryUtil.memFree(pendingPcm);
+                pendingPcm = null;
             }
         } finally {
             lock.unlock();

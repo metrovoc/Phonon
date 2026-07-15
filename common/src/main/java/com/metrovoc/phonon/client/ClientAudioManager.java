@@ -2,48 +2,65 @@ package com.metrovoc.phonon.client;
 
 import com.metrovoc.phonon.audio.AudioResource;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
-/**
- * Client-side audio resource manager.
- * Mirrors server's AudioManager, but read-only.
- */
-public class ClientAudioManager {
-    private static ClientAudioManager instance;
-    private final Map<UUID, AudioResource> resources = new ConcurrentHashMap<>();
-    private final Map<String, UUID> nameIndex = new ConcurrentHashMap<>();
+/** Immutable client-thread snapshot of server audio metadata. */
+public final class ClientAudioManager {
+    private static final ClientAudioManager INSTANCE = new ClientAudioManager();
+    private static final Comparator<AudioResource> RESOURCE_ORDER =
+        Comparator.comparing(AudioResource::name, String.CASE_INSENSITIVE_ORDER)
+            .thenComparing(AudioResource::id);
+
+    private Map<UUID, AudioResource> resourcesById = Map.of();
+    private List<IndexedResource> resources = List.of();
+    private List<AudioResource> allResources = List.of();
 
     private ClientAudioManager() {}
 
     public static ClientAudioManager getInstance() {
-        if (instance == null) {
-            instance = new ClientAudioManager();
-        }
-        return instance;
+        return INSTANCE;
     }
 
     public void setResources(List<AudioResource> resourceList) {
-        resources.clear();
-        nameIndex.clear();
-        for (AudioResource resource : resourceList) {
-            resources.put(resource.id(), resource);
-            nameIndex.put(resource.name().toLowerCase(), resource.id());
-        }
+        Map<UUID, AudioResource> byId = new HashMap<>();
+        List<IndexedResource> indexed = new ArrayList<>(resourceList.size());
+        resourceList.stream()
+            .sorted(RESOURCE_ORDER)
+            .forEach(resource -> {
+                byId.put(resource.id(), resource);
+                indexed.add(new IndexedResource(resource, normalize(resource.name())));
+            });
+        resourcesById = Map.copyOf(byId);
+        resources = List.copyOf(indexed);
+        allResources = indexed.stream().map(IndexedResource::resource).toList();
     }
 
     public Optional<AudioResource> getResource(UUID id) {
-        return Optional.ofNullable(resources.get(id));
+        return Optional.ofNullable(resourcesById.get(id));
     }
 
     public List<AudioResource> getAllResources() {
-        return new ArrayList<>(resources.values());
+        return allResources;
     }
 
     public List<AudioResource> searchResources(String query) {
-        String lowerQuery = query.toLowerCase();
-        return resources.values().stream()
-            .filter(r -> r.name().toLowerCase().contains(lowerQuery))
+        String normalizedQuery = normalize(query);
+        return resources.stream()
+            .filter(entry -> entry.normalizedName().contains(normalizedQuery))
+            .map(IndexedResource::resource)
             .toList();
     }
+
+    private static String normalize(String value) {
+        return value.toLowerCase(Locale.ROOT);
+    }
+
+    private record IndexedResource(AudioResource resource, String normalizedName) {}
 }

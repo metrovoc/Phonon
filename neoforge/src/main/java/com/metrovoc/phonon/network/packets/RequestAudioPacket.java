@@ -2,6 +2,7 @@ package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.server.AudioTransferManager;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import io.netty.buffer.ByteBuf;
@@ -14,16 +15,17 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.UUID;
 
-public record RequestAudioPacket(UUID resourceId, long startPositionMs) implements CustomPacketPayload {
-
-    public RequestAudioPacket(UUID resourceId) {
-        this(resourceId, 0);
-    }
-
+public record RequestAudioPacket(
+    long streamId,
+    UUID resourceId,
+    long startPositionMs
+) implements CustomPacketPayload {
     public static final Type<RequestAudioPacket> TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "request_audio"));
 
     public static final StreamCodec<ByteBuf, RequestAudioPacket> CODEC = StreamCodec.composite(
+        ByteBufCodecs.VAR_LONG,
+        RequestAudioPacket::streamId,
         UUIDCodec.STREAM_CODEC,
         RequestAudioPacket::resourceId,
         ByteBufCodecs.VAR_LONG,
@@ -36,18 +38,28 @@ public record RequestAudioPacket(UUID resourceId, long startPositionMs) implemen
         return TYPE;
     }
 
-    public static void handle(RequestAudioPacket packet, IPayloadContext ctx) {
-        ctx.enqueueWork(() -> {
-            if (ctx.player() instanceof ServerPlayer serverPlayer) {
-                if (ServerAudioStorage.getInstance().hasAudio(packet.resourceId)) {
-                    AudioTransferManager.getInstance().queueTransfer(serverPlayer, packet.resourceId, packet.startPositionMs);
-                    Phonon.LOGGER.debug("Player {} requested audio {} at position {}ms",
-                        serverPlayer.getName().getString(), packet.resourceId, packet.startPositionMs);
-                } else {
-                    Phonon.LOGGER.warn("Player {} requested unavailable audio {}",
-                        serverPlayer.getName().getString(), packet.resourceId);
-                }
+    public static void handle(RequestAudioPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player) || packet.streamId <= 0) {
+                return;
             }
+
+            if (AudioManager.getInstance().getResource(packet.resourceId).isEmpty()
+                || !ServerAudioStorage.getInstance().hasAudio(packet.resourceId)) {
+                Phonon.LOGGER.warn(
+                    "Player {} requested unavailable audio {}",
+                    player.getName().getString(),
+                    packet.resourceId
+                );
+                return;
+            }
+
+            AudioTransferManager.getInstance().queueTransfer(
+                player,
+                packet.streamId,
+                packet.resourceId,
+                Math.max(0, packet.startPositionMs)
+            );
         });
     }
 }

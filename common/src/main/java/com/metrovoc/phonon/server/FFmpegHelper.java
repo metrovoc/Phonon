@@ -1,10 +1,9 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.config.PhononServerConfig;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -20,10 +19,6 @@ import java.util.stream.Stream;
  */
 public class FFmpegHelper {
 
-    public static boolean isAvailable() {
-        return isFFmpegAvailable();
-    }
-
     public static boolean isFFmpegAvailable() {
         return checkCommand("ffprobe", "-version");
     }
@@ -38,6 +33,9 @@ public class FFmpegHelper {
                 .redirectErrorStream(true)
                 .start();
             boolean finished = process.waitFor(5, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+            }
             return finished && process.exitValue() == 0;
         } catch (Exception e) {
             return false;
@@ -59,6 +57,7 @@ public class FFmpegHelper {
         }
 
         Path tempDir = null;
+        Process process = null;
         try {
             tempDir = Files.createTempDirectory("phonon_dl_");
 
@@ -69,24 +68,21 @@ public class FFmpegHelper {
                 "--audio-quality", "5",         // Quality ~160kbps
                 "-o", "%(id)s.%(ext)s",         // Output filename template
                 "--no-playlist",                // Download single video only
+                "--max-filesize", PhononServerConfig.getMaxAudioSizeMB() + "M",
                 "--no-warnings",
                 url
             );
             pb.directory(tempDir.toFile());
-            pb.redirectErrorStream(true);
+            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
 
             Phonon.LOGGER.info("Running yt-dlp for: {}", url);
-            Process process = pb.start();
+            process = pb.start();
 
-            // Read output to prevent buffer blocking
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    Phonon.LOGGER.debug("[yt-dlp] {}", line);
-                }
-            }
-
-            boolean finished = process.waitFor(300, TimeUnit.SECONDS); // 5 minute timeout
+            boolean finished = process.waitFor(
+                PhononServerConfig.getDownloadReadTimeoutSeconds(),
+                TimeUnit.SECONDS
+            );
             if (!finished) {
                 process.destroyForcibly();
                 Phonon.LOGGER.error("yt-dlp timeout");
@@ -115,6 +111,9 @@ public class FFmpegHelper {
         } catch (Exception e) {
             Phonon.LOGGER.error("yt-dlp download failed", e);
         } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
             // Clean up temp directory
             if (tempDir != null) {
                 try (Stream<Path> walk = Files.walk(tempDir)) {
@@ -145,16 +144,16 @@ public class FFmpegHelper {
 
             Process process = pb.start();
 
-            String output;
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                output = reader.readLine();
-            }
-
             boolean finished = process.waitFor(30, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 Phonon.LOGGER.warn("FFprobe timeout for {}", audioFile);
                 return Optional.empty();
+            }
+
+            String output;
+            try (var reader = process.inputReader()) {
+                output = reader.readLine();
             }
 
             if (process.exitValue() != 0 || output == null || output.isBlank()) {

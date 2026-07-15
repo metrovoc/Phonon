@@ -5,67 +5,50 @@ import org.lwjgl.system.MemoryUtil;
 
 import javax.sound.sampled.AudioFormat;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.ShortBuffer;
-import java.util.Arrays;
+import java.util.concurrent.TimeUnit;
 
 /**
- * AudioStream backed by SharedAudioBuffer.
- * Each instance owns its own decoder and read cursor.
- * Multiple streams can read from the same buffer independently.
+ * Independent decoder view over a shared network download.
  */
-public class StreamingAudioStream implements AudioStream {
-    private static final int READ_CHUNK_SIZE = 4096;
-    private static final int BYTES_PER_MS = 48; // Approximate: 48kHz mono
+public final class StreamingAudioStream implements AudioStream {
+    private static final int READ_CHUNK_SIZE = 16 * 1024;
+    private static final int DISCARD_BUFFER_SAMPLES = 8192;
+    private static final long STARVATION_WAIT_MS = 100;
 
     private final SharedAudioBuffer buffer;
     private final AudioFormat format;
+    private final ShortBuffer discardBuffer = MemoryUtil.memAllocShort(DISCARD_BUFFER_SAMPLES);
+    private final StreamingAudioDecoder decoder = new StreamingAudioDecoder();
 
-    private StreamingAudioDecoder decoder;
     private int readCursor;
-    private boolean closed = false;
+    private long samplesToSkip;
+    private boolean closed;
 
-    public StreamingAudioStream(SharedAudioBuffer buffer, long startPositionMs) {
+    public StreamingAudioStream(SharedAudioBuffer buffer, long targetPositionMs) {
         this.buffer = buffer;
-        this.decoder = new StreamingAudioDecoder();
 
         byte[] header = buffer.getHeader();
         if (header == null) {
-            throw new IllegalStateException("Buffer has no header");
+            close();
+            throw new IllegalStateException("Buffer has no OGG header");
         }
 
         decoder.pushData(header);
-
         int sampleRate = decoder.isHeaderParsed() ? decoder.getSampleRate() : buffer.getSampleRate();
-        this.format = new AudioFormat(sampleRate, 16, 1, true, false);
-
-        if (startPositionMs > 0) {
-            seekTo(startPositionMs);
-        } else {
-            this.readCursor = header.length;
-        }
-    }
-
-    public void seekTo(long positionMs) {
-        byte[] header = buffer.getHeader();
-        if (header == null) return;
-
-        // Estimate byte offset (rough approximation)
-        int sampleRate = buffer.getSampleRate();
-        int bytesPerSecond = sampleRate > 0 ? sampleRate / 8 : 6000; // ~48kbps for vorbis
-        int approxOffset = header.length + (int)(positionMs * bytesPerSecond / 1000);
-
-        // Find nearest OGG page boundary
-        int pageOffset = buffer.findPageOffset(approxOffset);
-        if (pageOffset < 0 || pageOffset < header.length) {
-            pageOffset = header.length;
+        if (sampleRate <= 0) {
+            close();
+            throw new IllegalStateException("Invalid OGG sample rate");
         }
 
-        // Rebuild decoder
-        decoder.close();
-        decoder = new StreamingAudioDecoder();
-        decoder.pushData(header);
+        format = new AudioFormat(sampleRate, 16, 1, true, false);
+        readCursor = header.length;
 
-        this.readCursor = pageOffset;
+        long skipMs = Math.max(0, targetPositionMs - buffer.getStreamStartPositionMs());
+        samplesToSkip = skipMs > Long.MAX_VALUE / sampleRate
+            ? Long.MAX_VALUE
+            : skipMs * sampleRate / 1000L;
     }
 
     @Override
@@ -75,53 +58,90 @@ public class StreamingAudioStream implements AudioStream {
 
     @Override
     public ByteBuffer read(int bufferSize) {
-        if (closed) {
+        if (closed || bufferSize <= 0) {
             return MemoryUtil.memAlloc(0);
         }
 
-        // Feed more data to decoder if available
-        feedDecoder();
+        int sampleCapacity = Math.max(1, bufferSize / Short.BYTES);
+        ByteBuffer output = MemoryUtil.memAlloc(sampleCapacity * Short.BYTES)
+            .order(ByteOrder.nativeOrder());
+        ShortBuffer pcm = output.asShortBuffer();
 
-        int samplesToRead = bufferSize / 2;
-        ShortBuffer decoded = decoder.decode(samplesToRead);
+        fill(pcm);
 
-        if (decoded == null) {
+        int decodedSamples = pcm.position();
+        if (decodedSamples == 0) {
+            MemoryUtil.memFree(output);
             return MemoryUtil.memAlloc(0);
         }
 
-        int decodedSamples = decoded.remaining();
-        ByteBuffer output = MemoryUtil.memAlloc(decodedSamples * 2);
-        output.asShortBuffer().put(decoded);
         output.position(0);
-        output.limit(decodedSamples * 2);
-
-        MemoryUtil.memFree(decoded);
+        output.limit(decodedSamples * Short.BYTES);
         return output;
     }
 
-    private void feedDecoder() {
-        int available = buffer.getTotalBytes() - readCursor;
-        if (available <= 0) return;
-
-        int toRead = Math.min(available, READ_CHUNK_SIZE);
-        byte[] data = new byte[toRead];
-        int bytesRead = buffer.read(readCursor, data, 0, toRead);
-
-        if (bytesRead > 0) {
-            if (bytesRead < data.length) {
-                data = Arrays.copyOf(data, bytesRead);
+    private void fill(ShortBuffer output) {
+        while (output.hasRemaining() && !closed) {
+            int decoded = samplesToSkip > 0 ? discardSamples() : decoder.decode(output);
+            if (decoded > 0) {
+                continue;
             }
-            decoder.pushData(data);
-            readCursor += bytesRead;
+            if (!feedDecoder()) {
+                return;
+            }
         }
+    }
+
+    private int discardSamples() {
+        discardBuffer.clear();
+        discardBuffer.limit((int) Math.min(discardBuffer.capacity(), samplesToSkip));
+        int decoded = decoder.decode(discardBuffer);
+        samplesToSkip -= decoded;
+        return decoded;
+    }
+
+    private boolean feedDecoder() {
+        int available = buffer.getTotalBytes() - readCursor;
+        if (available <= 0 && !buffer.isComplete()) {
+            try {
+                buffer.awaitDataAfter(readCursor, STARVATION_WAIT_MS, TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            available = buffer.getTotalBytes() - readCursor;
+        }
+
+        if (available <= 0) {
+            return false;
+        }
+
+        int length = Math.min(available, READ_CHUNK_SIZE);
+        byte[] data = new byte[length];
+        int bytesRead = buffer.read(readCursor, data, 0, length);
+        if (bytesRead <= 0) {
+            return false;
+        }
+
+        if (bytesRead != data.length) {
+            byte[] exact = new byte[bytesRead];
+            System.arraycopy(data, 0, exact, 0, bytesRead);
+            data = exact;
+        }
+
+        decoder.pushData(data);
+        readCursor += bytesRead;
+        return true;
     }
 
     @Override
     public void close() {
-        if (!closed) {
-            closed = true;
-            decoder.close();
+        if (closed) {
+            return;
         }
+        closed = true;
+        decoder.close();
+        MemoryUtil.memFree(discardBuffer);
     }
 
     public boolean isClosed() {

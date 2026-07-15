@@ -243,7 +243,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
             long durationMs = resourceOpt.map(AudioResource::durationMs).orElse(-1L);
-            long positionMs = state.getCurrentPositionMs(System.currentTimeMillis());
+            long positionMs = state.getCurrentPositionMs();
 
             progressSlider.update(positionMs, durationMs);
         } else {

@@ -23,6 +23,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -74,7 +75,8 @@ public class PhononCommand {
 
         // Check tool availability
         boolean hasYtDlp = FFmpegHelper.isYtDlpAvailable();
-        boolean isDirectOgg = url.toLowerCase().endsWith(".ogg") || url.toLowerCase().contains(".ogg?");
+        String normalizedUrl = url.toLowerCase(Locale.ROOT);
+        boolean isDirectOgg = normalizedUrl.endsWith(".ogg") || normalizedUrl.contains(".ogg?");
 
         if (!hasYtDlp && !isDirectOgg) {
             ctx.getSource().sendFailure(Component.literal(
@@ -107,7 +109,13 @@ public class PhononCommand {
                         long sizeBytes = storage.getAudioSize(resourceId);
 
                         AudioResource resource = new AudioResource(resourceId, name, url, durationMs, sizeBytes);
-                        manager.addResource(resource);
+                        if (!manager.addResource(resource)) {
+                            storage.deleteAudio(resourceId);
+                            ctx.getSource().sendFailure(Component.literal(
+                                "\u00A7cResource '" + name + "' was added by another request"
+                            ));
+                            return;
+                        }
 
                         broadcastResourceList(server);
 

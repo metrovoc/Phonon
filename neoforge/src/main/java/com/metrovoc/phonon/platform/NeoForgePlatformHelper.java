@@ -76,7 +76,7 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void runOnClient(Runnable task) {
         if (isClient()) {
-            Minecraft.getInstance().tell(task);
+            Minecraft.getInstance().execute(task);
         }
     }
 

@@ -3,6 +3,8 @@ plugins {
     id 'net.neoforged.moddev'
 }
 
+def phononRunDirectory = providers.gradleProperty('phononRunDir').orElse('run')
+
 neoForge {
     version = neoforge_version
     // Automatically enable neoforge AccessTransformers if the file exists
@@ -16,6 +18,7 @@ neoForge {
     }
     runs {
         configureEach {
+            gameDirectory = file(phononRunDirectory.get())
             systemProperty('neoforge.enabledGameTestNamespaces', mod_id)
             ideName = "NeoForge ${it.name.capitalize()} (${project.path})"
         }

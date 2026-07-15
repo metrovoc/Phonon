@@ -1,9 +1,16 @@
 name: Release
+run-name: Release ${{ inputs.release_tag || github.ref_name }}
 
 on:
   push:
     tags:
       - 'v*\+mc*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing immutable v<semver>+mc<minecraft> tag to publish
+        required: true
+        type: string
 
 jobs:
   metadata:
@@ -15,20 +22,26 @@ jobs:
       mod_version: ${{ steps.release.outputs.mod_version }}
       platform_version: ${{ steps.release.outputs.platform_version }}
       prerelease: ${{ steps.release.outputs.prerelease }}
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ inputs.release_tag || github.ref_name }}
 
       - name: Validate release tag
         id: release
         shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
 
-          tag="${GITHUB_REF_NAME}"
+          tag="${RELEASE_TAG}"
           if [[ "${tag}" != v*+mc* ]]; then
             echo "Expected v<semver>+mc<minecraft>, got ${tag}" >&2
             exit 1
           fi
+          git rev-parse --verify "refs/tags/${tag}^{commit}" >/dev/null
 
           mod_version="${tag#v}"
           mod_version="${mod_version%%+mc*}"
@@ -74,6 +87,7 @@ jobs:
             echo "mod_version=${mod_version}"
             echo "platform_version=${platform_version}"
             echo "prerelease=${prerelease}"
+            echo "tag=${tag}"
           } >> "${GITHUB_OUTPUT}"
 
   publish:
@@ -85,6 +99,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.metadata.outputs.tag }}
 
       - uses: actions/setup-java@v4
         with:
@@ -136,6 +152,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: Phonon ${{ needs.metadata.outputs.mod_version }} for Minecraft ${{ needs.metadata.outputs.minecraft }}
+          tag_name: ${{ needs.metadata.outputs.tag }}
           files: |
             ${{ steps.artifact.outputs.path }}
             ${{ steps.artifact.outputs.path }}.sha256

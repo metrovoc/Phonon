@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/minecraft-*'
+      - 'feat/**'
+      - 'fix/**'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Java version
+        id: java
+        shell: bash
+        run: echo "version=$(sed -n 's/^java_version=//p' gradle.properties)" >> "${GITHUB_OUTPUT}"
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ steps.java.outputs.version }}
+          distribution: temurin
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        run: ./gradlew clean build --console=plain
+
+      - name: Upload mod artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: phonon-${{ github.sha }}
+          path: neoforge/build/libs/!(*-sources|*-dev|*-javadoc).jar
+          if-no-files-found: error
+          retention-days: 14

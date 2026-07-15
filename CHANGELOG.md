@@ -2,9 +2,10 @@
 
 ## 0.3.0-alpha.1
 
-This is an alpha build. Automated tests and a dedicated-server startup smoke
-test have passed, but each published Minecraft target still requires manual
-in-game validation before promotion to beta.
+This is an alpha build. Every target passes compilation and automated tests,
+and selected targets pass server or client startup smoke tests, but each
+published Minecraft target still requires manual in-game validation before
+promotion to beta.
 
 ### Performance
 
@@ -41,11 +42,16 @@ in-game validation before promotion to beta.
 
 ### Build and release management
 
-- Target Minecraft 1.21.1 exactly with NeoForge 21.1.235, Java 21,
-  ModDevGradle 2.0.141, and Gradle 9.2.1 for this branch.
+- Add exact-target release branches for Minecraft 1.21.1 through 1.21.11, 26.1,
+  26.1.1, 26.1.2, and 26.2; `main` targets 26.2.
+- Pin each branch to its matching NeoForge release. Minecraft 1.21.x uses Java
+  21, while Minecraft 26.x uses Java 25.
 - Remove unused Mixin declarations and replace the optional Cloth Config screen
   with a dependency-free vanilla screen.
 - Add unit tests for OGG indexing, seek lookup, segmented buffering, playback
   clocks, metadata indexes, persistence, and stream sharing.
 - Add explicit alpha, beta, and release channel mapping with version-qualified
   Minecraft tags and guarded GitHub publishing environments.
+- Pass dedicated-server startup smoke tests on 1.21.1, 1.21.2, 1.21.4, 1.21.9,
+  26.1, and 26.2, plus a 26.2 client resource and audio-engine startup smoke
+  test. The full multiplayer and playback checklist remains untested.

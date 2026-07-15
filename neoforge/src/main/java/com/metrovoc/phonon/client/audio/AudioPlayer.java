@@ -8,9 +8,9 @@ import net.minecraft.core.BlockPos;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Audio player using Minecraft's SoundManager.
@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class AudioPlayer {
     private static AudioPlayer instance;
-    private final Map<BlockPos, SpeakerSoundInstance> playingSounds = new ConcurrentHashMap<>();
+    private final Map<BlockPos, SpeakerSoundInstance> playingSounds = new HashMap<>();
 
     private AudioPlayer() {}
 
@@ -44,8 +44,7 @@ public class AudioPlayer {
         stop(pos);
 
         try {
-            long currentTime = System.currentTimeMillis();
-            long playbackPosition = playback.getCurrentPositionMs(currentTime);
+            long playbackPosition = playback.getCurrentPositionMs();
 
             PhononAudioStream stream = new PhononAudioStream(cachedAudio);
 
@@ -58,7 +57,7 @@ public class AudioPlayer {
 
             playingSounds.put(pos, sound);
 
-            Phonon.LOGGER.info("Started playing audio {} at {} (seek {}ms)",
+            Phonon.LOGGER.debug("Started playing audio {} at {} (seek {}ms)",
                 resourceId, pos, playbackPosition);
 
         } catch (Exception e) {
@@ -73,7 +72,7 @@ public class AudioPlayer {
         Minecraft.getInstance().getSoundManager().play(sound);
         playingSounds.put(pos, sound);
 
-        Phonon.LOGGER.info("Started streaming audio at {}", pos);
+        Phonon.LOGGER.debug("Started streaming audio at {}", pos);
     }
 
     public void stop(BlockPos pos) {
@@ -89,10 +88,6 @@ public class AudioPlayer {
         if (sound != null) {
             sound.setVolume(volume);
         }
-    }
-
-    public boolean isPlaying(BlockPos pos) {
-        return playingSounds.containsKey(pos);
     }
 
     public void stopAll() {

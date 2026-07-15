@@ -3,7 +3,6 @@ package com.metrovoc.phonon.platform;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 
 import java.util.ServiceLoader;
@@ -19,15 +18,7 @@ public interface PlatformHelper {
         .findFirst()
         .orElseThrow(() -> new RuntimeException("Failed to load PlatformHelper"));
 
-    String getPlatformName();
-
-    boolean isClient();
-
-    boolean isServer();
-
     // Network
-    void sendToClient(ServerPlayer player, Object packet);
-
     void sendToServer(Object packet);
 
     void sendToAllTracking(Level level, BlockPos pos, Object packet);
@@ -46,9 +37,9 @@ public interface PlatformHelper {
     // Client-side utilities
     void runOnClient(Runnable task);
 
-    void requestAudioFromServer(UUID resourceId, long startPositionMs);
+    void requestAudioFromServer(long streamId, UUID resourceId, long startPositionMs);
 
-    default void requestAudioFromServer(UUID resourceId) {
-        requestAudioFromServer(resourceId, 0);
-    }
+    void cancelAudioStream(long streamId);
+
+    long getEstimatedOneWayLatencyMs();
 }

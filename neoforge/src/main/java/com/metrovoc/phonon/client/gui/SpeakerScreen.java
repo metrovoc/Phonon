@@ -9,10 +9,13 @@ import com.metrovoc.phonon.network.packets.SpeakerControlPacket;
 import com.metrovoc.phonon.network.packets.SpeakerSeekPacket;
 import com.metrovoc.phonon.network.packets.SpeakerVolumePacket;
 import com.metrovoc.phonon.platform.PlatformHelper;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.Nullable;
@@ -50,9 +53,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     private float currentVolume = DEFAULT_VOLUME;
 
     public SpeakerScreen(SpeakerMenu menu, Inventory playerInv, Component title) {
-        super(menu, playerInv, title);
-        this.imageWidth = 360;
-        this.imageHeight = 240;
+        super(menu, playerInv, title, 360, 240);
     }
 
     @Override
@@ -243,7 +244,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
             long durationMs = resourceOpt.map(AudioResource::durationMs).orElse(-1L);
-            long positionMs = state.getCurrentPositionMs(System.currentTimeMillis());
+            long positionMs = state.getCurrentPositionMs();
 
             progressSlider.update(positionMs, durationMs);
         } else {
@@ -267,15 +268,16 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     }
 
     @Override
-    protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
+    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractBackground(graphics, mouseX, mouseY, partialTick);
         graphics.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xE0101820);
-        renderBorder(graphics);
+        extractBorder(graphics);
 
         int dividerX = leftPos + PADDING + (int) ((imageWidth - PADDING * 3) * LEFT_RATIO) + PADDING / 2;
         graphics.fill(dividerX, topPos + PADDING, dividerX + 1, topPos + imageHeight - PADDING, 0x40FFFFFF);
     }
 
-    private void renderBorder(GuiGraphics graphics) {
+    private void extractBorder(GuiGraphicsExtractor graphics) {
         int x1 = leftPos, y1 = topPos, x2 = leftPos + imageWidth, y2 = topPos + imageHeight;
         int borderColor = 0xFF2A3540;
         graphics.fill(x1, y1, x2, y1 + 1, borderColor);
@@ -285,24 +287,24 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        super.render(graphics, mouseX, mouseY, partialTick);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
 
         int leftWidth = (int) ((imageWidth - PADDING * 3) * LEFT_RATIO);
         int leftX = leftPos + PADDING;
         int rightX = leftX + leftWidth + PADDING;
         int rightWidth = imageWidth - PADDING * 3 - leftWidth;
 
-        graphics.drawString(font, "Tracks", leftX, topPos + PADDING, 0xFFFFFF);
+        graphics.text(font, "Tracks", leftX, topPos + PADDING, 0xFFFFFF);
         String countText = ClientAudioManager.getInstance().getAllResources().size() + " total";
         int countWidth = font.width(countText);
-        graphics.drawString(font, countText, leftX + leftWidth - countWidth, topPos + PADDING, 0x808080);
+        graphics.text(font, countText, leftX + leftWidth - countWidth, topPos + PADDING, 0x808080);
 
-        renderNowPlaying(graphics, rightX, topPos + PADDING, rightWidth);
+        extractNowPlaying(graphics, rightX, topPos + PADDING, rightWidth);
     }
 
-    private void renderNowPlaying(GuiGraphics graphics, int x, int y, int width) {
-        graphics.drawString(font, "Now Playing", x, y, 0xFFFFFF);
+    private void extractNowPlaying(GuiGraphicsExtractor graphics, int x, int y, int width) {
+        graphics.text(font, "Now Playing", x, y, 0xFFFFFF);
         y += 14;
 
         PlaybackState state = getCurrentState();
@@ -315,7 +317,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             if (font.width(trackName) > width) {
                 trackName = font.plainSubstrByWidth(trackName, width - 10) + "...";
             }
-            graphics.drawString(font, trackName, x, y, 0x40FF40);
+            graphics.text(font, trackName, x, y, 0x40FF40);
         } else if (state.isPaused()) {
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
@@ -324,42 +326,42 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             if (font.width(trackName) > width) {
                 trackName = font.plainSubstrByWidth(trackName, width - 10) + "...";
             }
-            graphics.drawString(font, trackName + " (Paused)", x, y, 0xFFFF40);
+            graphics.text(font, trackName + " (Paused)", x, y, 0xFFFF40);
         } else {
-            graphics.drawString(font, "Nothing playing", x, y, 0x606060);
+            graphics.text(font, "Nothing playing", x, y, 0x606060);
         }
     }
 
     @Override
-    protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
+    protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         // 禁用默认 inventory 标签
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    public boolean keyPressed(KeyEvent event) {
         if (searchBox != null && searchBox.isFocused()) {
-            if (keyCode == 256) { // ESC
+            if (event.isEscape()) {
                 searchBox.setFocused(false);
                 return true;
             }
-            return searchBox.keyPressed(keyCode, scanCode, modifiers);
+            return searchBox.keyPressed(event);
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
-    public boolean charTyped(char c, int modifiers) {
+    public boolean charTyped(CharacterEvent event) {
         if (searchBox != null && searchBox.isFocused()) {
-            return searchBox.charTyped(c, modifiers);
+            return searchBox.charTyped(event);
         }
-        return super.charTyped(c, modifiers);
+        return super.charTyped(event);
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (getFocused() != null && isDragging() && button == 0) {
-            return getFocused().mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (getFocused() != null && isDragging() && event.button() == 0) {
+            return getFocused().mouseDragged(event, dragX, dragY);
         }
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        return super.mouseDragged(event, dragX, dragY);
     }
 }

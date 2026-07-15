@@ -15,7 +15,7 @@ public class PhononNetwork {
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(Constants.MOD_ID)
-            .versioned("1.0.0")
+            .versioned("2.0.0")
             .optional();
 
         // Server -> Client packets
@@ -54,6 +54,12 @@ public class PhononNetwork {
             RequestAudioPacket.TYPE,
             RequestAudioPacket.CODEC,
             RequestAudioPacket::handle
+        );
+
+        registrar.playToServer(
+            CancelAudioStreamPacket.TYPE,
+            CancelAudioStreamPacket.CODEC,
+            CancelAudioStreamPacket::handle
         );
 
         registrar.playToServer(

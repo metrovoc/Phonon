@@ -2,26 +2,51 @@ package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.AudioStreamInfo;
+import com.metrovoc.phonon.audio.OggPageScanner;
 import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.network.packets.AudioChunkPacket;
 import com.metrovoc.phonon.network.packets.AudioStreamStartPacket;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class AudioTransferManager {
+/**
+ * Fair server-side stream scheduler. Disk reads are prefetched off-thread so a
+ * cold filesystem page never stalls the server tick.
+ */
+public final class AudioTransferManager {
+    private static final int READ_AHEAD_CHUNKS = 2;
+    private static final int MAX_TRANSFERS_PER_PLAYER = 16;
+    private static final int MAX_TOTAL_TRANSFERS = 256;
 
     private static AudioTransferManager instance;
 
-    private final Map<UUID, Queue<PendingTransfer>> playerQueues = new ConcurrentHashMap<>();
-    private final List<UUID> activePlayerOrder = new ArrayList<>();
-    private int roundRobinIndex = 0;
+    private final Map<UUID, ArrayDeque<PendingTransfer>> playerQueues = new HashMap<>();
+    private final List<UUID> activePlayers = new ArrayList<>();
+    private final ExecutorService readExecutor = Executors.newFixedThreadPool(4, runnable -> {
+        Thread thread = new Thread(runnable, "Phonon-AudioRead");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    private int roundRobinIndex;
 
     private AudioTransferManager() {}
 
@@ -32,224 +57,410 @@ public class AudioTransferManager {
         return instance;
     }
 
-    public void queueTransfer(ServerPlayer player, UUID resourceId) {
-        queueTransfer(player, resourceId, 0);
+    public static void reset() {
+        if (instance != null) {
+            instance.shutdown();
+            instance = null;
+        }
     }
 
-    public void queueTransfer(ServerPlayer player, UUID resourceId, long startPositionMs) {
+    public void queueTransfer(
+        ServerPlayer player,
+        long streamId,
+        UUID resourceId,
+        long requestedPositionMs
+    ) {
         ServerAudioStorage storage = ServerAudioStorage.getInstance();
         Path audioPath = storage.getAudioPath(resourceId).orElse(null);
-        if (audioPath == null) {
-            Phonon.LOGGER.warn("Cannot queue transfer: audio {} not found on server", resourceId);
+        AudioStreamInfo streamInfo = storage.getStreamInfo(resourceId).orElse(null);
+        if (audioPath == null || streamInfo == null) {
+            Phonon.LOGGER.warn("Cannot stream invalid or missing audio {}", resourceId);
             return;
         }
 
         UUID playerId = player.getUUID();
-        Queue<PendingTransfer> queue = playerQueues.computeIfAbsent(playerId, k -> new ConcurrentLinkedQueue<>());
-
-        for (PendingTransfer t : queue) {
-            if (t.resourceId.equals(resourceId)) {
-                Phonon.LOGGER.debug("Transfer {} already queued for player {}", resourceId, player.getName().getString());
-                return;
+        ArrayDeque<PendingTransfer> queue = playerQueues.computeIfAbsent(playerId, ignored -> new ArrayDeque<>());
+        if (queue.size() >= MAX_TRANSFERS_PER_PLAYER || getActiveTransferCount() >= MAX_TOTAL_TRANSFERS) {
+            Phonon.LOGGER.warn("Rejected excess audio stream request from {}", player.getName().getString());
+            if (queue.isEmpty()) {
+                playerQueues.remove(playerId);
             }
+            return;
+        }
+        if (queue.stream().anyMatch(transfer -> transfer.streamId == streamId)) {
+            return;
         }
 
+        long durationMs = streamInfo.durationMs();
+        long positionMs = Math.max(0, requestedPositionMs);
+        if (durationMs > 0) {
+            positionMs = Math.min(positionMs, Math.max(0, durationMs - 1));
+        }
+
+        OggPageScanner.SeekPoint seekPoint = streamInfo.findSeekPoint(positionMs);
         long fileSize = storage.getAudioSize(resourceId);
-        AudioStreamInfo streamInfo = storage.getStreamInfo(resourceId).orElse(null);
-
-        int startOffset;
-        long dataSize;
-        if (streamInfo != null) {
-            startOffset = streamInfo.findOffsetForTime(startPositionMs);
-            dataSize = fileSize - startOffset;
-        } else {
-            startOffset = 0;
-            dataSize = fileSize;
+        if (seekPoint.fileOffset() >= fileSize) {
+            return;
         }
 
-        int totalChunks = (int) Math.ceil((double) dataSize / PhononServerConfig.getChunkSize());
-        PendingTransfer transfer = new PendingTransfer(resourceId, audioPath, totalChunks, startPositionMs, streamInfo, startOffset);
-        queue.add(transfer);
+        int readSize = Math.max(1, Math.min(
+            PhononServerConfig.getChunkSize(),
+            Math.min(
+                PhononServerConfig.getMaxBytesPerTick(),
+                PhononServerConfig.getMaxBytesPerPlayerPerTick()
+            )
+        ));
 
-        synchronized (activePlayerOrder) {
-            if (!activePlayerOrder.contains(playerId)) {
-                activePlayerOrder.add(playerId);
+        try {
+            PendingTransfer transfer = new PendingTransfer(
+                streamId,
+                resourceId,
+                audioPath,
+                streamInfo,
+                seekPoint,
+                fileSize,
+                readSize,
+                readExecutor
+            );
+            queue.add(transfer);
+            if (!activePlayers.contains(playerId)) {
+                activePlayers.add(playerId);
+            }
+
+            Phonon.LOGGER.debug(
+                "Queued stream {} for {} at {}ms (file offset {})",
+                streamId,
+                player.getName().getString(),
+                seekPoint.timeMs(),
+                seekPoint.fileOffset()
+            );
+        } catch (IOException e) {
+            Phonon.LOGGER.error("Failed to open audio {} for streaming", resourceId, e);
+            if (queue.isEmpty()) {
+                playerQueues.remove(playerId);
             }
         }
-
-        Phonon.LOGGER.info("Queued transfer {} for player {} ({} chunks, startOffset={}, startPositionMs={})",
-            resourceId, player.getName().getString(), totalChunks, startOffset, startPositionMs);
     }
 
-    public void tick(net.minecraft.server.MinecraftServer server) {
-        if (activePlayerOrder.isEmpty()) return;
+    public void tick(MinecraftServer server) {
+        removeDisconnectedPlayers(server);
+        if (activePlayers.isEmpty()) {
+            return;
+        }
 
+        int maxTotal = PhononServerConfig.getMaxBytesPerTick();
+        int maxPerPlayer = PhononServerConfig.getMaxBytesPerPlayerPerTick();
         int totalBytesSent = 0;
         Map<UUID, Integer> playerBytesSent = new HashMap<>();
+        int consecutiveStalls = 0;
 
-        synchronized (activePlayerOrder) {
-            activePlayerOrder.removeIf(playerId -> {
-                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
-                if (player == null) {
-                    playerQueues.remove(playerId);
-                    return true;
-                }
-                return false;
-            });
+        while (!activePlayers.isEmpty()
+            && totalBytesSent < maxTotal
+            && consecutiveStalls < activePlayers.size()) {
+            normalizeRoundRobinIndex();
+            UUID playerId = activePlayers.get(roundRobinIndex);
+            ArrayDeque<PendingTransfer> queue = playerQueues.get(playerId);
+            ServerPlayer player = server.getPlayerList().getPlayer(playerId);
 
-            if (activePlayerOrder.isEmpty()) return;
+            if (player == null || queue == null || queue.isEmpty()) {
+                removeActivePlayerAt(roundRobinIndex);
+                continue;
+            }
 
-            int playersProcessed = 0;
-            int maxIterations = activePlayerOrder.size() * 10;
-            int iterations = 0;
+            int sentToPlayer = playerBytesSent.getOrDefault(playerId, 0);
+            if (sentToPlayer >= maxPerPlayer) {
+                advanceRoundRobin();
+                consecutiveStalls++;
+                continue;
+            }
 
-            int maxBytesPerTick = PhononServerConfig.getMaxBytesPerTick();
-            int maxBytesPerPlayerPerTick = PhononServerConfig.getMaxBytesPerPlayerPerTick();
+            PendingTransfer transfer = queue.peek();
+            if (!transfer.headerSent) {
+                PacketDistributor.sendToPlayer(player, transfer.createStartPacket());
+                transfer.headerSent = true;
+            }
 
-            while (totalBytesSent < maxBytesPerTick && playersProcessed < activePlayerOrder.size() && iterations < maxIterations) {
-                iterations++;
+            ChunkData chunk;
+            try {
+                chunk = transfer.peekReadyChunk();
+            } catch (CompletionException e) {
+                Phonon.LOGGER.error("Asynchronous read failed for stream {}", transfer.streamId, e.getCause());
+                finishHeadTransfer(playerId, queue, false);
+                consecutiveStalls = 0;
+                continue;
+            }
 
-                if (roundRobinIndex >= activePlayerOrder.size()) {
-                    roundRobinIndex = 0;
-                }
+            if (chunk == null) {
+                advanceRoundRobin();
+                consecutiveStalls++;
+                continue;
+            }
 
-                UUID playerId = activePlayerOrder.get(roundRobinIndex);
-                Queue<PendingTransfer> queue = playerQueues.get(playerId);
+            int remainingTotalBudget = maxTotal - totalBytesSent;
+            int remainingPlayerBudget = maxPerPlayer - sentToPlayer;
+            if (chunk.data.length > Math.min(remainingTotalBudget, remainingPlayerBudget)
+                && (totalBytesSent > 0 || sentToPlayer > 0)) {
+                advanceRoundRobin();
+                consecutiveStalls++;
+                continue;
+            }
 
-                if (queue == null || queue.isEmpty()) {
-                    activePlayerOrder.remove(roundRobinIndex);
-                    playerQueues.remove(playerId);
-                    continue;
-                }
+            chunk = transfer.consumeReadyChunk();
 
-                ServerPlayer player = server.getPlayerList().getPlayer(playerId);
-                if (player == null) {
-                    activePlayerOrder.remove(roundRobinIndex);
-                    playerQueues.remove(playerId);
-                    continue;
-                }
+            PacketDistributor.sendToPlayer(player, new AudioChunkPacket(
+                transfer.streamId,
+                chunk.index,
+                chunk.last,
+                chunk.data
+            ));
+            totalBytesSent += chunk.data.length;
+            playerBytesSent.put(playerId, sentToPlayer + chunk.data.length);
+            consecutiveStalls = 0;
 
-                int playerBytes = playerBytesSent.getOrDefault(playerId, 0);
-                if (playerBytes >= maxBytesPerPlayerPerTick) {
-                    roundRobinIndex++;
-                    playersProcessed++;
-                    continue;
-                }
-
-                PendingTransfer transfer = queue.peek();
-                if (transfer == null) {
-                    roundRobinIndex++;
-                    continue;
-                }
-
-                if (!transfer.headerSent && transfer.streamInfo != null) {
-                    AudioStreamStartPacket startPacket = new AudioStreamStartPacket(
-                        transfer.resourceId,
-                        transfer.streamInfo.headerBytes(),
-                        transfer.streamInfo.sampleRate(),
-                        transfer.startOffset,
-                        transfer.startPositionMs
-                    );
-                    PacketDistributor.sendToPlayer(player, startPacket);
-                    transfer.headerSent = true;
-                }
-
-                int chunkSize = PhononServerConfig.getChunkSize();
-                long readOffset = transfer.startOffset + (long) transfer.nextChunkIndex * chunkSize;
-                byte[] chunkData = readChunkAt(transfer.audioPath, readOffset, chunkSize);
-
-                if (chunkData != null) {
-                    AudioChunkPacket packet = new AudioChunkPacket(
-                        transfer.resourceId,
-                        transfer.nextChunkIndex,
-                        transfer.totalChunks,
-                        chunkData
-                    );
-
-                    PacketDistributor.sendToPlayer(player, packet);
-
-                    totalBytesSent += chunkData.length;
-                    playerBytesSent.merge(playerId, chunkData.length, Integer::sum);
-
-                    transfer.nextChunkIndex++;
-
-                    if (transfer.nextChunkIndex >= transfer.totalChunks) {
-                        queue.poll();
-                        Phonon.LOGGER.info("Transfer complete: {} to {}", transfer.resourceId, player.getName().getString());
-
-                        if (queue.isEmpty()) {
-                            activePlayerOrder.remove(roundRobinIndex);
-                            playerQueues.remove(playerId);
-                        }
-                    }
-                } else {
-                    queue.poll();
-                    Phonon.LOGGER.error("Failed to read chunk at offset {} for {}", readOffset, transfer.resourceId);
-                }
-
-                roundRobinIndex++;
+            if (chunk.last) {
+                finishHeadTransfer(playerId, queue, true);
+            } else {
+                advanceRoundRobin();
             }
         }
     }
 
-    private byte[] readChunkAt(Path audioPath, long offset, int maxSize) {
-        try (RandomAccessFile raf = new RandomAccessFile(audioPath.toFile(), "r")) {
-            if (offset >= raf.length()) return null;
+    private void removeDisconnectedPlayers(MinecraftServer server) {
+        for (int index = activePlayers.size() - 1; index >= 0; index--) {
+            UUID playerId = activePlayers.get(index);
+            if (server.getPlayerList().getPlayer(playerId) == null) {
+                closeQueue(playerQueues.remove(playerId));
+                activePlayers.remove(index);
+                if (index < roundRobinIndex) {
+                    roundRobinIndex--;
+                }
+            }
+        }
+        normalizeRoundRobinIndex();
+    }
 
-            raf.seek(offset);
-            long remaining = raf.length() - offset;
-            int bytesToRead = (int) Math.min(maxSize, remaining);
+    private void finishHeadTransfer(UUID playerId, ArrayDeque<PendingTransfer> queue, boolean completed) {
+        PendingTransfer transfer = queue.poll();
+        if (transfer != null) {
+            transfer.close();
+            Phonon.LOGGER.debug(
+                "Audio stream {} {}",
+                transfer.streamId,
+                completed ? "completed" : "aborted"
+            );
+        }
 
-            byte[] buffer = new byte[bytesToRead];
-            raf.readFully(buffer);
-            return buffer;
-
-        } catch (IOException e) {
-            Phonon.LOGGER.error("Failed to read audio chunk", e);
-            return null;
+        if (queue.isEmpty()) {
+            playerQueues.remove(playerId);
+            removeActivePlayerAt(roundRobinIndex);
+        } else {
+            advanceRoundRobin();
         }
     }
 
-    public boolean hasPendingTransfer(UUID playerId, UUID resourceId) {
-        Queue<PendingTransfer> queue = playerQueues.get(playerId);
-        if (queue == null) return false;
-        return queue.stream().anyMatch(t -> t.resourceId.equals(resourceId));
+    private void normalizeRoundRobinIndex() {
+        if (activePlayers.isEmpty()) {
+            roundRobinIndex = 0;
+        } else if (roundRobinIndex < 0 || roundRobinIndex >= activePlayers.size()) {
+            roundRobinIndex = 0;
+        }
+    }
+
+    private void advanceRoundRobin() {
+        roundRobinIndex++;
+        normalizeRoundRobinIndex();
+    }
+
+    private void removeActivePlayerAt(int index) {
+        activePlayers.remove(index);
+        normalizeRoundRobinIndex();
+    }
+
+    public void cancelTransfer(UUID playerId, long streamId) {
+        ArrayDeque<PendingTransfer> queue = playerQueues.get(playerId);
+        if (queue == null) {
+            return;
+        }
+
+        Iterator<PendingTransfer> iterator = queue.iterator();
+        while (iterator.hasNext()) {
+            PendingTransfer transfer = iterator.next();
+            if (transfer.streamId == streamId) {
+                iterator.remove();
+                transfer.close();
+                break;
+            }
+        }
+
+        if (queue.isEmpty()) {
+            playerQueues.remove(playerId);
+            int index = activePlayers.indexOf(playerId);
+            if (index >= 0) {
+                activePlayers.remove(index);
+                if (index < roundRobinIndex) {
+                    roundRobinIndex--;
+                }
+                normalizeRoundRobinIndex();
+            }
+        }
     }
 
     public void cancelPlayerTransfers(UUID playerId) {
-        playerQueues.remove(playerId);
-        synchronized (activePlayerOrder) {
-            activePlayerOrder.remove(playerId);
+        closeQueue(playerQueues.remove(playerId));
+        int index = activePlayers.indexOf(playerId);
+        if (index >= 0) {
+            activePlayers.remove(index);
+            if (index < roundRobinIndex) {
+                roundRobinIndex--;
+            }
+            normalizeRoundRobinIndex();
         }
     }
 
     public int getActiveTransferCount() {
-        return playerQueues.values().stream().mapToInt(Queue::size).sum();
+        return playerQueues.values().stream().mapToInt(ArrayDeque::size).sum();
     }
 
     public void shutdown() {
+        for (ArrayDeque<PendingTransfer> queue : playerQueues.values()) {
+            closeQueue(queue);
+        }
         playerQueues.clear();
-        activePlayerOrder.clear();
+        activePlayers.clear();
+        readExecutor.shutdownNow();
     }
 
-    private static class PendingTransfer {
-        final UUID resourceId;
-        final Path audioPath;
-        final int totalChunks;
-        final long startPositionMs;
-        final AudioStreamInfo streamInfo;
-        final int startOffset;
-        int nextChunkIndex = 0;
-        boolean headerSent = false;
-
-        PendingTransfer(UUID resourceId, Path audioPath, int totalChunks, long startPositionMs,
-                        AudioStreamInfo streamInfo, int startOffset) {
-            this.resourceId = resourceId;
-            this.audioPath = audioPath;
-            this.totalChunks = totalChunks;
-            this.startPositionMs = startPositionMs;
-            this.streamInfo = streamInfo;
-            this.startOffset = startOffset;
+    private static void closeQueue(ArrayDeque<PendingTransfer> queue) {
+        if (queue != null) {
+            queue.forEach(PendingTransfer::close);
+            queue.clear();
         }
     }
+
+    private static final class PendingTransfer implements AutoCloseable {
+        private final long streamId;
+        private final UUID resourceId;
+        private final AudioStreamInfo streamInfo;
+        private final OggPageScanner.SeekPoint seekPoint;
+        private final long endOffset;
+        private final int readSize;
+        private final ExecutorService executor;
+        private final FileChannel channel;
+        private final ArrayDeque<CompletableFuture<ChunkData>> readAhead = new ArrayDeque<>();
+
+        private long nextReadOffset;
+        private int nextChunkIndex;
+        private boolean headerSent;
+        private volatile boolean closed;
+
+        private PendingTransfer(
+            long streamId,
+            UUID resourceId,
+            Path audioPath,
+            AudioStreamInfo streamInfo,
+            OggPageScanner.SeekPoint seekPoint,
+            long endOffset,
+            int readSize,
+            ExecutorService executor
+        ) throws IOException {
+            this.streamId = streamId;
+            this.resourceId = resourceId;
+            this.streamInfo = streamInfo;
+            this.seekPoint = seekPoint;
+            this.endOffset = endOffset;
+            this.readSize = readSize;
+            this.executor = executor;
+            this.channel = FileChannel.open(audioPath, StandardOpenOption.READ);
+            this.nextReadOffset = seekPoint.fileOffset();
+            fillReadAhead();
+        }
+
+        private AudioStreamStartPacket createStartPacket() {
+            boolean cacheable = seekPoint.fileOffset() == streamInfo.headerBytes().length;
+            return new AudioStreamStartPacket(
+                streamId,
+                resourceId,
+                streamInfo.headerBytes(),
+                streamInfo.sampleRate(),
+                seekPoint.timeMs(),
+                cacheable
+            );
+        }
+
+        private ChunkData peekReadyChunk() {
+            CompletableFuture<ChunkData> next = readAhead.peek();
+            if (next == null || !next.isDone()) {
+                return null;
+            }
+
+            return next.join();
+        }
+
+        private ChunkData consumeReadyChunk() {
+            CompletableFuture<ChunkData> next = readAhead.poll();
+            if (next == null) {
+                throw new IllegalStateException("No prefetched chunk to consume");
+            }
+            ChunkData result = next.join();
+            fillReadAhead();
+            return result;
+        }
+
+        private void fillReadAhead() {
+            while (!closed && readAhead.size() < READ_AHEAD_CHUNKS && nextReadOffset < endOffset) {
+                long offset = nextReadOffset;
+                int length = (int) Math.min(readSize, endOffset - offset);
+                int index = nextChunkIndex++;
+                boolean last = offset + length >= endOffset;
+                nextReadOffset += length;
+
+                readAhead.add(CompletableFuture.supplyAsync(
+                    () -> readChunk(channel, offset, length, index, last),
+                    executor
+                ));
+            }
+        }
+
+        private static ChunkData readChunk(
+            FileChannel channel,
+            long offset,
+            int length,
+            int index,
+            boolean last
+        ) {
+            byte[] data = new byte[length];
+            ByteBuffer target = ByteBuffer.wrap(data);
+            try {
+                while (target.hasRemaining()) {
+                    int read = channel.read(target, offset + target.position());
+                    if (read < 0) {
+                        throw new IOException("Unexpected end of audio file");
+                    }
+                    if (read == 0) {
+                        Thread.onSpinWait();
+                    }
+                }
+                return new ChunkData(index, data, last);
+            } catch (IOException e) {
+                throw new CompletionException(e);
+            }
+        }
+
+        @Override
+        public void close() {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            readAhead.forEach(future -> future.cancel(true));
+            readAhead.clear();
+            try {
+                channel.close();
+            } catch (IOException e) {
+                Phonon.LOGGER.warn("Failed to close stream {}", streamId, e);
+            }
+        }
+    }
+
+    private record ChunkData(int index, byte[] data, boolean last) {}
 }

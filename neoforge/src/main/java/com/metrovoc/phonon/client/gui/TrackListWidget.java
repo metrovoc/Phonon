@@ -2,8 +2,9 @@ package com.metrovoc.phonon.client.gui;
 
 import com.metrovoc.phonon.audio.AudioResource;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.ObjectSelectionList;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -37,13 +38,12 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
     }
 
     @Override
-    protected int getScrollbarPosition() {
+    protected int scrollBarX() {
         return this.getX() + this.width - 6;
     }
 
     public class Entry extends ObjectSelectionList.Entry<Entry> {
         private final AudioResource resource;
-        private long lastClickTime;
 
         public Entry(AudioResource resource) {
             this.resource = resource;
@@ -59,27 +59,30 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
         }
 
         @Override
-        public void render(GuiGraphics graphics, int index, int top, int left, int width, int height,
-                           int mouseX, int mouseY, boolean hovered, float partialTick) {
+        public void extractContent(GuiGraphicsExtractor graphics, int mouseX, int mouseY,
+                                   boolean hovered, float partialTick) {
+            int top = getContentY();
+            int left = getContentX();
+            int width = getContentWidth();
             int textColor = isSelected() ? 0xFFFFFF : (hovered ? 0xE0E0E0 : 0xA0A0A0);
+
+            if (hovered) {
+                graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1,
+                    0x20FFFFFF);
+            }
 
             // Track name
             String name = resource.name();
             if (minecraft.font.width(name) > width - 50) {
                 name = minecraft.font.plainSubstrByWidth(name, width - 55) + "...";
             }
-            graphics.drawString(minecraft.font, name, left + 4, top + 4, textColor);
+            graphics.text(minecraft.font, name, left + 4, top + 4, textColor);
 
             // Duration (right-aligned)
             String duration = formatDuration(resource.durationMs());
             int durationWidth = minecraft.font.width(duration);
-            graphics.drawString(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0x808080);
+            graphics.text(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0x808080);
 
-            // Selection highlight
-            if (hovered || isSelected()) {
-                graphics.fill(left, top, left + width, top + height,
-                    isSelected() ? 0x40FFFFFF : 0x20FFFFFF);
-            }
         }
 
         private boolean isSelected() {
@@ -87,17 +90,15 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
         }
 
         @Override
-        public boolean mouseClicked(double mouseX, double mouseY, int button) {
-            if (button == 0) {
-                long now = System.currentTimeMillis();
+        public boolean mouseClicked(MouseButtonEvent event, boolean isDoubleClick) {
+            if (event.button() == 0) {
                 TrackListWidget.this.setSelected(this);
                 onSelect.accept(resource);
 
                 // Double-click to play
-                if (now - lastClickTime < 400) {
+                if (isDoubleClick) {
                     onPlay.accept(resource);
                 }
-                lastClickTime = now;
                 return true;
             }
             return false;
@@ -108,7 +109,7 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
             long seconds = ms / 1000;
             long minutes = seconds / 60;
             seconds = seconds % 60;
-            return String.format("%d:%02d", minutes, seconds);
+            return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
         }
     }
 }

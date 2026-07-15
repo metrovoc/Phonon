@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.client.gui;
 
 import net.minecraft.client.gui.components.AbstractSliderButton;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 
@@ -35,8 +36,8 @@ public class VolumeSlider extends AbstractSliderButton {
     }
 
     @Override
-    public void onRelease(double mouseX, double mouseY) {
-        super.onRelease(mouseX, mouseY);
+    public void onRelease(MouseButtonEvent event) {
+        super.onRelease(event);
         onCommit.run();
     }
 

@@ -4,57 +4,36 @@ import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.audio.AudioPlayer;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.network.packets.RequestAudioPacket;
+import com.metrovoc.phonon.network.packets.CancelAudioStreamPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.util.UUID;
 
 public class NeoForgePlatformHelper implements PlatformHelper {
 
-    @Override
-    public String getPlatformName() {
-        return "NeoForge";
-    }
-
-    @Override
-    public boolean isClient() {
-        return FMLEnvironment.dist.isClient();
-    }
-
-    @Override
-    public boolean isServer() {
-        return FMLEnvironment.dist.isDedicatedServer();
-    }
-
-    @Override
-    public void sendToClient(ServerPlayer player, Object packet) {
-        if (packet instanceof CustomPacketPayload payload) {
-            player.connection.send(new ClientboundCustomPayloadPacket(payload));
-        }
+    private boolean isClient() {
+        return FMLEnvironment.getDist().isClient();
     }
 
     @Override
     public void sendToServer(Object packet) {
         if (packet instanceof CustomPacketPayload payload) {
-            PacketDistributor.sendToServer(payload);
+            ClientPacketDistributor.sendToServer(payload);
         }
     }
 
     @Override
     public void sendToAllTracking(Level level, BlockPos pos, Object packet) {
         if (level instanceof ServerLevel serverLevel && packet instanceof CustomPacketPayload payload) {
-            ChunkPos chunkPos = new ChunkPos(pos);
-            serverLevel.getChunkSource().chunkMap.getPlayers(chunkPos, false).forEach(player -> {
-                player.connection.send(new ClientboundCustomPayloadPacket(payload));
-            });
+            PacketDistributor.sendToPlayersTrackingChunk(serverLevel, ChunkPos.containing(pos), payload);
         }
     }
 
@@ -98,14 +77,35 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void runOnClient(Runnable task) {
         if (isClient()) {
-            Minecraft.getInstance().tell(task);
+            Minecraft.getInstance().execute(task);
         }
     }
 
     @Override
-    public void requestAudioFromServer(UUID resourceId, long startPositionMs) {
-        if (isClient()) {
-            PacketDistributor.sendToServer(new RequestAudioPacket(resourceId, startPositionMs));
+    public void requestAudioFromServer(long streamId, UUID resourceId, long startPositionMs) {
+        if (isClient() && Minecraft.getInstance().getConnection() != null) {
+            ClientPacketDistributor.sendToServer(new RequestAudioPacket(streamId, resourceId, startPositionMs));
         }
+    }
+
+    @Override
+    public void cancelAudioStream(long streamId) {
+        if (isClient() && Minecraft.getInstance().getConnection() != null) {
+            ClientPacketDistributor.sendToServer(new CancelAudioStreamPacket(streamId));
+        }
+    }
+
+    @Override
+    public long getEstimatedOneWayLatencyMs() {
+        if (!isClient()) {
+            return 0;
+        }
+
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null || minecraft.getConnection() == null) {
+            return 0;
+        }
+        var playerInfo = minecraft.getConnection().getPlayerInfo(minecraft.player.getUUID());
+        return playerInfo == null ? 0 : Math.max(0, playerInfo.getLatency() / 2L);
     }
 }

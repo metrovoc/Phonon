@@ -6,149 +6,114 @@ import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import net.minecraft.core.BlockPos;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Client-side speaker manager.
- * Tracks all active speakers and their playback state.
+ * Client-thread owner of speaker playback and stream leases.
  */
-public class ClientSpeakerManager {
-    private static ClientSpeakerManager instance;
+public final class ClientSpeakerManager {
+    private static final ClientSpeakerManager INSTANCE = new ClientSpeakerManager();
 
-    private final Map<BlockPos, PlaybackState> speakers = new ConcurrentHashMap<>();
-    private final Map<BlockPos, Float> speakerVolumes = new ConcurrentHashMap<>();
-    private final Map<BlockPos, UUID> activeStreams = new ConcurrentHashMap<>();
-    private final Set<UUID> pendingRequests = ConcurrentHashMap.newKeySet();
+    private final Map<BlockPos, PlaybackState> speakers = new HashMap<>();
+    private final Map<BlockPos, Float> speakerVolumes = new HashMap<>();
+    private final Map<BlockPos, Long> activeStreams = new HashMap<>();
 
     private ClientSpeakerManager() {}
 
     public static ClientSpeakerManager getInstance() {
-        if (instance == null) {
-            instance = new ClientSpeakerManager();
-        }
-        return instance;
+        return INSTANCE;
     }
 
     public void updateSpeaker(BlockPos pos, PlaybackState playback, float volume) {
+        volume = sanitizeVolume(volume);
         speakerVolumes.put(pos, volume);
-        PlaybackState oldState = speakers.get(pos);
+        PlaybackState previous = speakers.get(pos);
 
-        // Stop old playback if resource changed
-        if (oldState != null && !java.util.Objects.equals(oldState.resourceId(), playback.resourceId())) {
-            stopAndCleanup(pos, oldState);
+        if (Objects.equals(previous, playback)) {
+            PlatformHelper.INSTANCE.setAudioVolume(pos, volume);
+            return;
         }
+
+        stopAndRelease(pos);
 
         if (playback.isPlaying()) {
             speakers.put(pos, playback);
             startPlayback(pos, playback, volume);
         } else if (playback.isPaused()) {
             speakers.put(pos, playback);
-            stopAndCleanup(pos, oldState);
         } else {
             speakers.remove(pos);
-            stopAndCleanup(pos, oldState);
         }
     }
 
-    private void stopAndCleanup(BlockPos pos, PlaybackState state) {
+    private void stopAndRelease(BlockPos pos) {
         PlatformHelper.INSTANCE.stopAudio(pos);
-
-        UUID streamResourceId = activeStreams.remove(pos);
-        if (streamResourceId != null) {
-            StreamingAudioManager.getInstance().releaseDownload(streamResourceId);
+        Long streamId = activeStreams.remove(pos);
+        if (streamId != null) {
+            StreamingAudioManager.getInstance().release(streamId);
         }
     }
 
     private void startPlayback(BlockPos pos, PlaybackState playback, float volume) {
         UUID resourceId = playback.resourceId();
-        if (resourceId == null) return;
+        if (resourceId == null) {
+            return;
+        }
 
-        // Priority 1: Use cache (fully downloaded file)
         if (AudioCache.getInstance().isCached(resourceId)) {
             PlatformHelper.INSTANCE.playAudio(pos, playback, resourceId, volume);
             return;
         }
 
-        long currentPositionMs = playback.getCurrentPositionMs(System.currentTimeMillis());
-        boolean canCache = currentPositionMs == 0;
+        long positionMs = playback.getCurrentPositionMs();
+        StreamingAudioManager.Acquisition acquisition = StreamingAudioManager.getInstance()
+            .acquire(resourceId, positionMs);
+        long streamId = acquisition.session().getStreamId();
+        activeStreams.put(pos, streamId);
 
-        // Priority 2: Check if download already in progress and ready
-        if (StreamingAudioManager.getInstance().isReady(resourceId)) {
-            startStreamingPlayback(pos, resourceId, currentPositionMs, volume);
-            return;
-        }
-
-        // Priority 3: Wait for in-progress transfer
-        if (AudioReceiver.getInstance().isTransferInProgress(resourceId)) {
-            AudioReceiver.getInstance().onTransferComplete(resourceId, file -> {
-                PlaybackState current = speakers.get(pos);
-                float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
-                if (current != null && current.isPlaying() && resourceId.equals(current.resourceId())) {
-                    PlatformHelper.INSTANCE.playAudio(pos, current, resourceId, currentVolume);
-                }
-            });
-            return;
-        }
-
-        // Priority 4: Start new streaming download
-        if (pendingRequests.contains(resourceId)) {
-            // Already requested, just add callback
-            addReadyCallback(pos, resourceId);
-            return;
-        }
-
-        pendingRequests.add(resourceId);
-
-        // Create download session (increments ref count)
-        StreamingAudioManager.getInstance().getOrCreateDownload(resourceId, canCache);
-        activeStreams.put(pos, resourceId);
-
-        // Request from server
-        PlatformHelper.INSTANCE.requestAudioFromServer(resourceId, currentPositionMs);
-        Phonon.LOGGER.info("Requesting streaming audio {} from position {}ms", resourceId, currentPositionMs);
-
-        // Add callback for when header is ready
-        addReadyCallback(pos, resourceId);
-    }
-
-    private void addReadyCallback(BlockPos pos, UUID resourceId) {
-        StreamingAudioManager.getInstance().addReadyCallback(resourceId, session -> {
-            pendingRequests.remove(resourceId);
-
+        StreamingAudioManager.getInstance().addReadyCallback(streamId, session -> {
             PlaybackState current = speakers.get(pos);
-            if (current == null || !current.isPlaying() || !resourceId.equals(current.resourceId())) {
+            Long activeStream = activeStreams.get(pos);
+            if (current == null || !current.isPlaying() || !resourceId.equals(current.resourceId())
+                || !Objects.equals(activeStream, streamId)) {
                 return;
             }
 
-            float volume = speakerVolumes.getOrDefault(pos, 0.5f);
-            long positionMs = current.getCurrentPositionMs(System.currentTimeMillis());
-            startStreamingPlayback(pos, resourceId, positionMs, volume);
+            float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
+            long currentPosition = current.getCurrentPositionMs();
+            startStreamingPlayback(pos, streamId, currentPosition, currentVolume);
         });
+
+        if (acquisition.requestRequired()) {
+            PlatformHelper.INSTANCE.requestAudioFromServer(streamId, resourceId, positionMs);
+            Phonon.LOGGER.info("Requested audio stream {} for {} at {}ms", streamId, resourceId, positionMs);
+        }
     }
 
-    private void startStreamingPlayback(BlockPos pos, UUID resourceId, long positionMs, float volume) {
-        StreamingAudioStream stream = StreamingAudioManager.getInstance().createStream(resourceId, positionMs);
+    private void startStreamingPlayback(BlockPos pos, long streamId, long positionMs, float volume) {
+        StreamingAudioStream stream = StreamingAudioManager.getInstance().createStream(streamId, positionMs);
         if (stream == null) {
-            Phonon.LOGGER.error("Failed to create stream for {}", resourceId);
+            Phonon.LOGGER.error("Failed to create decoder for audio stream {}", streamId);
             return;
         }
-
-        // Track this stream for cleanup
-        UUID oldResourceId = activeStreams.put(pos, resourceId);
-        if (oldResourceId != null && !oldResourceId.equals(resourceId)) {
-            StreamingAudioManager.getInstance().releaseDownload(oldResourceId);
-        }
-
         PlatformHelper.INSTANCE.playStreamingAudio(pos, stream, volume);
     }
 
     public void updateVolume(BlockPos pos, float volume) {
+        volume = sanitizeVolume(volume);
         speakerVolumes.put(pos, volume);
         PlatformHelper.INSTANCE.setAudioVolume(pos, volume);
+    }
+
+    private static float sanitizeVolume(float volume) {
+        return Float.isFinite(volume)
+            ? Math.max(0.0f, Math.min(1.0f, volume))
+            : 0.5f;
     }
 
     public Optional<PlaybackState> getSpeakerState(BlockPos pos) {
@@ -160,32 +125,31 @@ public class ClientSpeakerManager {
     }
 
     public void removeSpeaker(BlockPos pos) {
-        PlaybackState oldState = speakers.remove(pos);
+        speakers.remove(pos);
         speakerVolumes.remove(pos);
-        stopAndCleanup(pos, oldState);
+        stopAndRelease(pos);
     }
 
-    public void clearPendingRequests() {
-        pendingRequests.clear();
+    public void clear() {
+        for (BlockPos pos : List.copyOf(speakers.keySet())) {
+            stopAndRelease(pos);
+        }
+        PlatformHelper.INSTANCE.stopAllAudio();
+        speakers.clear();
+        speakerVolumes.clear();
+        StreamingAudioManager.getInstance().clear();
     }
 
-    /**
-     * Called after F3+T resource reload to restore playing audio.
-     */
+    /** Restores both cached and in-flight playback after F3+T. */
     public void onResourcesReloaded() {
-        for (Map.Entry<BlockPos, PlaybackState> entry : speakers.entrySet()) {
-            BlockPos pos = entry.getKey();
-            PlaybackState state = entry.getValue();
-
-            if (state.isPlaying()) {
-                UUID resourceId = state.resourceId();
-                float volume = speakerVolumes.getOrDefault(pos, 0.5f);
-
-                if (AudioCache.getInstance().isCached(resourceId)) {
-                    PlatformHelper.INSTANCE.playAudio(pos, state, resourceId, volume);
-                    Phonon.LOGGER.debug("Restored playback at {} after resource reload", pos);
-                }
+        for (Map.Entry<BlockPos, PlaybackState> entry : Map.copyOf(speakers).entrySet()) {
+            if (!entry.getValue().isPlaying()) {
+                continue;
             }
+            BlockPos pos = entry.getKey();
+            float volume = speakerVolumes.getOrDefault(pos, 0.5f);
+            stopAndRelease(pos);
+            startPlayback(pos, entry.getValue(), volume);
         }
     }
 }

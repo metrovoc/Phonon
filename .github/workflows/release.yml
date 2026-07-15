@@ -3,11 +3,84 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*+mc*'
 
 jobs:
-  build:
+  metadata:
     runs-on: ubuntu-latest
+    outputs:
+      channel: ${{ steps.release.outputs.channel }}
+      java: ${{ steps.release.outputs.java }}
+      minecraft: ${{ steps.release.outputs.minecraft }}
+      mod_version: ${{ steps.release.outputs.mod_version }}
+      platform_version: ${{ steps.release.outputs.platform_version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release tag
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          if [[ "${tag}" != v*+mc* ]]; then
+            echo "Expected v<semver>+mc<minecraft>, got ${tag}" >&2
+            exit 1
+          fi
+
+          mod_version="${tag#v}"
+          mod_version="${mod_version%%+mc*}"
+          minecraft="${tag##*+mc}"
+
+          if [[ ! "${minecraft}" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Invalid Minecraft version in tag: ${minecraft}" >&2
+            exit 1
+          fi
+
+          if [[ "${mod_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-alpha\.[1-9][0-9]*$ ]]; then
+            channel="alpha"
+            prerelease="true"
+          elif [[ "${mod_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[1-9][0-9]*$ ]]; then
+            channel="beta"
+            prerelease="true"
+          elif [[ "${mod_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            channel="release"
+            prerelease="false"
+          else
+            echo "Only stable, -alpha.N, and -beta.N SemVer versions are publishable" >&2
+            exit 1
+          fi
+
+          configured_minecraft="$(sed -n 's/^minecraft_version=//p' gradle.properties)"
+          configured_version="$(sed -n 's/^version=//p' gradle.properties)"
+          java_version="$(sed -n 's/^java_version=//p' gradle.properties)"
+
+          if [[ "${minecraft}" != "${configured_minecraft}" ]]; then
+            echo "Tag targets Minecraft ${minecraft}, but this commit targets ${configured_minecraft}" >&2
+            exit 1
+          fi
+          if [[ "${mod_version}" != "${configured_version}" ]]; then
+            echo "Tag uses ${mod_version}, but this commit declares ${configured_version}" >&2
+            exit 1
+          fi
+
+          platform_version="${mod_version}+mc${minecraft}"
+          {
+            echo "channel=${channel}"
+            echo "java=${java_version}"
+            echo "minecraft=${minecraft}"
+            echo "mod_version=${mod_version}"
+            echo "platform_version=${platform_version}"
+            echo "prerelease=${prerelease}"
+          } >> "${GITHUB_OUTPUT}"
+
+  publish:
+    needs: metadata
+    runs-on: ubuntu-latest
+    environment:
+      name: publish-${{ needs.metadata.outputs.channel }}
     permissions:
       contents: write
     steps:
@@ -15,17 +88,26 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          java-version: 21
+          java-version: ${{ needs.metadata.outputs.java }}
           distribution: temurin
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build
-        run: ./gradlew build
+      - name: Build and test
+        run: ./gradlew clean build --console=plain
         env:
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ needs.metadata.outputs.platform_version }}
 
-      - name: Publish to Modrinth & CurseForge
+      - name: Create checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact="$(find neoforge/build/libs -maxdepth 1 -type f -name '*.jar' \
+            ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name '*-dev.jar' -print -quit)"
+          test -n "${artifact}"
+          sha256sum "${artifact}" > "${artifact}.sha256"
+
+      - name: Publish to Modrinth and CurseForge
         uses: Kir-Antipov/mc-publish@v3.3
         with:
           modrinth-id: ${{ vars.MODRINTH_ID }}
@@ -33,24 +115,28 @@ jobs:
           curseforge-id: ${{ vars.CURSEFORGE_ID }}
           curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
           files: neoforge/build/libs/!(*-sources|*-dev|*-javadoc).jar
-          name: Phonon ${{ github.ref_name }}
-          version: ${{ github.ref_name }}
-          version-type: ${{ contains(github.ref_name, 'beta') && 'beta' || 'release' }}
+          name: Phonon ${{ needs.metadata.outputs.mod_version }} for Minecraft ${{ needs.metadata.outputs.minecraft }}
+          version: ${{ needs.metadata.outputs.platform_version }}
+          version-type: ${{ needs.metadata.outputs.channel }}
           loaders: neoforge
-          game-versions: 1.21.1
+          game-versions: ${{ needs.metadata.outputs.minecraft }}
           changelog-file: CHANGELOG.md
 
-      - name: Sync Modrinth Description
+      - name: Sync Modrinth description
+        if: needs.metadata.outputs.channel == 'release'
         run: |
-          curl -X PATCH "https://api.modrinth.com/v2/project/${{ vars.MODRINTH_ID }}" \
+          curl --fail-with-body -X PATCH "https://api.modrinth.com/v2/project/${{ vars.MODRINTH_ID }}" \
             -H "Authorization: ${{ secrets.MODRINTH_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "$(jq -n --rawfile body README.md '{body: $body}')"
 
-      - name: Create GitHub Release
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: neoforge/build/libs/!(*-sources|*-dev|*-javadoc).jar
+          name: Phonon ${{ needs.metadata.outputs.mod_version }} for Minecraft ${{ needs.metadata.outputs.minecraft }}
+          files: |
+            neoforge/build/libs/!(*-sources|*-dev|*-javadoc).jar
+            neoforge/build/libs/*.sha256
           body_path: CHANGELOG.md
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, 'beta') }}
+          prerelease: ${{ needs.metadata.outputs.prerelease }}

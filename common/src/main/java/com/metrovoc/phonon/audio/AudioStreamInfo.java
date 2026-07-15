@@ -1,29 +1,39 @@
 package com.metrovoc.phonon.audio;
 
-import java.util.Collections;
 import java.util.List;
 
 public record AudioStreamInfo(
     byte[] headerBytes,
     List<OggPageScanner.SeekPoint> seekTable,
-    int sampleRate
+    int sampleRate,
+    long durationMs
 ) {
-    public int findOffsetForTime(long timeMs) {
-        if (seekTable.isEmpty() || timeMs < seekTable.getFirst().timeMs()) {
-            return headerBytes.length;
+    public AudioStreamInfo {
+        seekTable = List.copyOf(seekTable);
+    }
+
+    public OggPageScanner.SeekPoint findSeekPoint(long timeMs) {
+        if (seekTable.isEmpty()) {
+            return new OggPageScanner.SeekPoint(0, headerBytes.length);
         }
 
-        int idx = Collections.binarySearch(
-            seekTable,
-            new OggPageScanner.SeekPoint(timeMs, 0),
-            (a, b) -> Long.compare(a.timeMs(), b.timeMs())
-        );
+        int low = 0;
+        int high = seekTable.size() - 1;
+        int match = -1;
 
-        if (idx >= 0) {
-            return seekTable.get(idx).fileOffset();
+        while (low <= high) {
+            int middle = (low + high) >>> 1;
+            OggPageScanner.SeekPoint point = seekTable.get(middle);
+            if (point.timeMs() <= timeMs) {
+                match = middle;
+                low = middle + 1;
+            } else {
+                high = middle - 1;
+            }
         }
 
-        int insertionPoint = -idx - 1;
-        return seekTable.get(insertionPoint - 1).fileOffset();
+        return match >= 0
+            ? seekTable.get(match)
+            : new OggPageScanner.SeekPoint(0, headerBytes.length);
     }
 }

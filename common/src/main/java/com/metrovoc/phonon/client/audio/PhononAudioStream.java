@@ -10,11 +10,10 @@ import org.lwjgl.system.MemoryUtil;
 import javax.sound.sampled.AudioFormat;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
-import java.nio.channels.FileChannel;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 
 /**
  * OGG Vorbis audio stream using LWJGL's STBVorbis.
@@ -25,26 +24,24 @@ import java.nio.file.StandardOpenOption;
 public class PhononAudioStream implements AudioStream {
     private final long decoder;
     private final ByteBuffer fileBuffer;
+    private final SharedOggFile sharedFile;
     private final AudioFormat format;
     private final int channels;
     private final int sampleRate;
     private final int totalSamples;
-    private int currentSample = 0;
+    private ShortBuffer pcmScratch;
     private boolean closed = false;
 
     public PhononAudioStream(Path oggFile) throws IOException {
-        try (FileChannel channel = FileChannel.open(oggFile, StandardOpenOption.READ)) {
-            this.fileBuffer = MemoryUtil.memAlloc((int) channel.size());
-            channel.read(fileBuffer);
-            fileBuffer.flip();
-        }
+        this.sharedFile = SharedOggFile.acquire(oggFile);
+        this.fileBuffer = sharedFile.decoderView();
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer error = stack.mallocInt(1);
             this.decoder = STBVorbis.stb_vorbis_open_memory(fileBuffer, error, null);
 
             if (decoder == 0) {
-                MemoryUtil.memFree(fileBuffer);
+                sharedFile.release();
                 throw new IOException("Failed to open OGG file: error code " + error.get(0));
             }
 
@@ -66,6 +63,7 @@ public class PhononAudioStream implements AudioStream {
             true,
             false
         );
+        this.pcmScratch = channels > 1 ? MemoryUtil.memAllocShort(8192 * channels) : null;
     }
 
     @Override
@@ -81,38 +79,31 @@ public class PhononAudioStream implements AudioStream {
 
         int samplesToRead = bufferSize / 2;
 
-        ByteBuffer outputBuffer = MemoryUtil.memAlloc(samplesToRead * 2);
+        ByteBuffer outputBuffer = MemoryUtil.memAlloc(samplesToRead * 2).order(ByteOrder.nativeOrder());
         ShortBuffer outputShorts = outputBuffer.asShortBuffer();
 
-        ShortBuffer pcmBuffer = MemoryUtil.memAllocShort(samplesToRead * channels);
-        try {
-            int samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(
-                decoder,
-                channels,
-                pcmBuffer
-            );
+        ShortBuffer pcmBuffer = channels == 1 ? outputShorts : ensurePcmScratch(samplesToRead * channels);
+        int samplesRead = STBVorbis.stb_vorbis_get_samples_short_interleaved(
+            decoder,
+            channels,
+            pcmBuffer
+        );
 
-            if (samplesRead == 0) {
-                MemoryUtil.memFree(outputBuffer);
-                return MemoryUtil.memAlloc(0);
-            }
+        if (samplesRead == 0) {
+            MemoryUtil.memFree(outputBuffer);
+            return MemoryUtil.memAlloc(0);
+        }
 
-            if (channels == 1) {
-                for (int i = 0; i < samplesRead; i++) {
-                    outputShorts.put(pcmBuffer.get(i));
+        if (channels == 1) {
+            outputShorts.position(samplesRead);
+        } else {
+            for (int i = 0; i < samplesRead; i++) {
+                int sum = 0;
+                for (int channel = 0; channel < channels; channel++) {
+                    sum += pcmBuffer.get(i * channels + channel);
                 }
-            } else {
-                for (int i = 0; i < samplesRead; i++) {
-                    short left = pcmBuffer.get(i * 2);
-                    short right = pcmBuffer.get(i * 2 + 1);
-                    int mixed = (left + right) / 2;
-                    outputShorts.put((short) Math.max(-32768, Math.min(32767, mixed)));
-                }
+                outputShorts.put((short) (sum / channels));
             }
-
-            currentSample += samplesRead;
-        } finally {
-            MemoryUtil.memFree(pcmBuffer);
         }
 
         outputBuffer.position(0);
@@ -120,35 +111,42 @@ public class PhononAudioStream implements AudioStream {
         return outputBuffer;
     }
 
+    private ShortBuffer ensurePcmScratch(int requiredSamples) {
+        if (pcmScratch.capacity() < requiredSamples) {
+            MemoryUtil.memFree(pcmScratch);
+            pcmScratch = MemoryUtil.memAllocShort(requiredSamples);
+        }
+        pcmScratch.clear();
+        pcmScratch.limit(requiredSamples);
+        return pcmScratch;
+    }
+
     public void seek(int samplePosition) {
         if (!closed && samplePosition >= 0 && samplePosition < totalSamples) {
             STBVorbis.stb_vorbis_seek(decoder, samplePosition);
-            currentSample = samplePosition;
         }
     }
 
     public void seekMs(long milliseconds) {
-        int samplePosition = (int) ((milliseconds * sampleRate) / 1000);
-        seek(samplePosition);
-    }
-
-    public int getCurrentSample() {
-        return currentSample;
-    }
-
-    public int getTotalSamples() {
-        return totalSamples;
-    }
-
-    public long getDurationMs() {
-        return (totalSamples * 1000L) / sampleRate;
+        if (milliseconds <= 0) {
+            seek(0);
+            return;
+        }
+        long samplePosition = milliseconds > Long.MAX_VALUE / sampleRate
+            ? Long.MAX_VALUE
+            : milliseconds * sampleRate / 1000L;
+        seek((int) Math.min(Math.max(0, totalSamples - 1L), samplePosition));
     }
 
     @Override
     public void close() {
         if (!closed) {
             STBVorbis.stb_vorbis_close(decoder);
-            MemoryUtil.memFree(fileBuffer);
+            sharedFile.release();
+            if (pcmScratch != null) {
+                MemoryUtil.memFree(pcmScratch);
+                pcmScratch = null;
+            }
             closed = true;
         }
     }

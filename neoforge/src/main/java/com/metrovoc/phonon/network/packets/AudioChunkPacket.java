@@ -1,40 +1,36 @@
 package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
-import com.metrovoc.phonon.client.AudioReceiver;
+import com.metrovoc.phonon.audio.AudioLimits;
 import com.metrovoc.phonon.client.StreamingAudioManager;
-import com.metrovoc.phonon.config.PhononServerConfig;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-import java.util.UUID;
-
+/**
+ * Sequential data for one explicitly identified stream. Resource UUID and
+ * total-chunk metadata are sent once in {@link AudioStreamStartPacket}.
+ */
 public record AudioChunkPacket(
-    UUID resourceId,
+    long streamId,
     int chunkIndex,
-    int totalChunks,
+    boolean last,
     byte[] data
 ) implements CustomPacketPayload {
-
-    public static int getChunkSize() {
-        return PhononServerConfig.getChunkSize();
-    }
-
     public static final Type<AudioChunkPacket> TYPE =
-        new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "audio_chunk"));
+        new Type<>(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "audio_chunk"));
 
     public static final StreamCodec<ByteBuf, AudioChunkPacket> CODEC = StreamCodec.composite(
-        UUIDCodec.STREAM_CODEC,
-        AudioChunkPacket::resourceId,
+        ByteBufCodecs.VAR_LONG,
+        AudioChunkPacket::streamId,
         ByteBufCodecs.VAR_INT,
         AudioChunkPacket::chunkIndex,
-        ByteBufCodecs.VAR_INT,
-        AudioChunkPacket::totalChunks,
-        ByteBufCodecs.BYTE_ARRAY,
+        ByteBufCodecs.BOOL,
+        AudioChunkPacket::last,
+        ByteBufCodecs.byteArray(AudioLimits.MAX_CHUNK_BYTES),
         AudioChunkPacket::data,
         AudioChunkPacket::new
     );
@@ -44,30 +40,12 @@ public record AudioChunkPacket(
         return TYPE;
     }
 
-    public static void handle(AudioChunkPacket packet, IPayloadContext ctx) {
-        ctx.enqueueWork(() -> {
-            if (StreamingAudioManager.getInstance().hasDownload(packet.resourceId())) {
-                StreamingAudioManager.getInstance().receiveChunk(
-                    packet.resourceId(),
-                    packet.data()
-                );
-
-                // Check if this is the last chunk
-                if (packet.isLastChunk()) {
-                    StreamingAudioManager.getInstance().completeDownload(packet.resourceId());
-                }
-            } else {
-                AudioReceiver.getInstance().receiveChunk(
-                    packet.resourceId(),
-                    packet.chunkIndex(),
-                    packet.totalChunks(),
-                    packet.data()
-                );
-            }
-        });
-    }
-
-    public boolean isLastChunk() {
-        return chunkIndex == totalChunks - 1;
+    public static void handle(AudioChunkPacket packet, IPayloadContext context) {
+        context.enqueueWork(() -> StreamingAudioManager.getInstance().receiveChunk(
+            packet.streamId,
+            packet.chunkIndex,
+            packet.data,
+            packet.last
+        ));
     }
 }

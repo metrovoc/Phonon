@@ -1,8 +1,10 @@
 package com.metrovoc.phonon.block;
 
+import com.mojang.serialization.Codec;
 import com.metrovoc.phonon.audio.PlaybackState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
@@ -10,6 +12,8 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -56,15 +60,21 @@ public class SpeakerBlockEntity extends BlockEntity {
     }
 
     public void setVolume(float volume) {
-        this.volume = volume;
+        this.volume = sanitizeVolume(volume);
         setChanged();
+    }
+
+    private static float sanitizeVolume(float volume) {
+        return Float.isFinite(volume)
+            ? Math.max(0.0f, Math.min(1.0f, volume))
+            : DEFAULT_VOLUME;
     }
 
     @Override
     public void setLevel(net.minecraft.world.level.Level level) {
         super.setLevel(level);
         if (level != null) {
-            if (!level.isClientSide) {
+            if (!level.isClientSide()) {
                 // 服务端加载时，如果有活跃播放状态，注册到 ServerSpeakerManager
                 if (playback.isPlaying() || playback.isPaused()) {
                     com.metrovoc.phonon.server.ServerSpeakerManager.getInstance().registerSpeaker(
@@ -85,7 +95,7 @@ public class SpeakerBlockEntity extends BlockEntity {
     public void setRemoved() {
         // BlockEntity 被移除时清理状态
         if (level != null) {
-            if (level.isClientSide) {
+            if (level.isClientSide()) {
                 com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().removeSpeaker(worldPosition);
             } else {
                 com.metrovoc.phonon.server.ServerSpeakerManager.getInstance()
@@ -102,61 +112,59 @@ public class SpeakerBlockEntity extends BlockEntity {
 
     @Override
     public CompoundTag getUpdateTag(HolderLookup.Provider provider) {
-        CompoundTag tag = new CompoundTag();
-        saveAdditional(tag, provider);
-        return tag;
+        return saveCustomOnly(provider);
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider provider) {
-        super.saveAdditional(tag, provider);
+    protected void saveAdditional(ValueOutput output) {
+        super.saveAdditional(output);
 
-        tag.putFloat("volume", volume);
+        output.putFloat("volume", volume);
 
         // 保存时"坍缩": 计算当前位置，不保存 anchorTime
         if (playback.resourceId() != null) {
-            tag.putUUID("resourceId", playback.resourceId());
-            long now = System.currentTimeMillis();
+            output.putIntArray("resourceId", UUIDUtil.uuidToIntArray(playback.resourceId()));
+            long now = PlaybackState.nowMs();
             long effectivePos = playback.getCurrentPositionMs(now);
-            tag.putLong("position", effectivePos);
-            tag.putFloat("speed", playback.speed());
+            output.putLong("position", effectivePos);
+            output.putFloat("speed", playback.speed());
         }
     }
 
     @Override
-    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
-        super.loadAdditional(tag, provider);
+    protected void loadAdditional(ValueInput input) {
+        super.loadAdditional(input);
 
-        volume = tag.contains("volume") ? tag.getFloat("volume") : DEFAULT_VOLUME;
+        volume = sanitizeVolume(input.getFloatOr("volume", DEFAULT_VOLUME));
 
         try {
             // 兼容旧格式: playing + startTime
-            if (tag.contains("playing")) {
-                loadLegacyFormat(tag);
+            if (input.read("playing", Codec.BOOL).isPresent()) {
+                loadLegacyFormat(input);
                 return;
             }
 
             // 新格式: resourceId + position + speed
-            if (!tag.contains("resourceId")) {
+            if (input.getIntArray("resourceId").isEmpty()) {
                 playback = PlaybackState.STOPPED;
                 return;
             }
 
-            UUID resourceId = tag.getUUID("resourceId");
+            UUID resourceId = readUuid(input, "resourceId");
             if (resourceId == null) {
                 playback = PlaybackState.STOPPED;
                 return;
             }
 
-            long savedPos = tag.getLong("position");
-            float speed = tag.contains("speed") ? tag.getFloat("speed") : 1.0f;
+            long savedPos = input.getLongOr("position", 0L);
+            float speed = input.getFloatOr("speed", 1.0f);
 
             // 读取时用当前时间作为新的 anchor
-            long now = System.currentTimeMillis();
+            long now = PlaybackState.nowMs();
             playback = new PlaybackState(resourceId, now, savedPos, speed);
 
             // 如果此时 level 已存在且为客户端，立即同步
-            if (level != null && level.isClientSide) {
+            if (level != null && level.isClientSide()) {
                 com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().updateSpeaker(worldPosition, playback, volume);
             }
         } catch (Exception e) {
@@ -167,28 +175,33 @@ public class SpeakerBlockEntity extends BlockEntity {
     /**
      * 兼容旧 NBT 格式 (playing + startTime)。
      */
-    private void loadLegacyFormat(CompoundTag tag) {
-        if (!tag.getBoolean("playing")) {
+    private void loadLegacyFormat(ValueInput input) {
+        if (!input.getBooleanOr("playing", false)) {
             playback = PlaybackState.STOPPED;
             return;
         }
 
-        if (!tag.contains("resourceId")) {
+        if (input.getIntArray("resourceId").isEmpty()) {
             playback = PlaybackState.STOPPED;
             return;
         }
 
-        UUID resourceId = tag.getUUID("resourceId");
+        UUID resourceId = readUuid(input, "resourceId");
         if (resourceId == null) {
             playback = PlaybackState.STOPPED;
             return;
         }
 
-        long startTime = tag.getLong("startTime");
-        long now = System.currentTimeMillis();
-        long elapsed = now - startTime;
+        long startTime = input.getLongOr("startTime", System.currentTimeMillis());
+        long elapsed = System.currentTimeMillis() - startTime;
+        long now = PlaybackState.nowMs();
 
         // 转换为新格式: anchor=now, position=elapsed, speed=1.0
         playback = new PlaybackState(resourceId, now, Math.max(0, elapsed), 1.0f);
+    }
+
+    private static UUID readUuid(ValueInput input, String key) {
+        int[] bits = input.getIntArray(key).orElse(null);
+        return bits != null && bits.length == 4 ? UUIDUtil.uuidFromIntArray(bits) : null;
     }
 }

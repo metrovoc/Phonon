@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0-alpha.2
+
+This Minecraft 26.2 replacement build contains no runtime changes. It corrects
+the GitHub Actions tag filter so the validated artifact can be published. The
+`v0.3.0-alpha.1+mc26.2` tag produced no GitHub, Modrinth, or CurseForge release
+and remains reserved rather than being moved or reused. Manual gameplay testing
+is still outstanding, so this build remains alpha.
+
 ## 0.3.0-alpha.1
 
 This is an alpha build. Every target passes compilation and automated tests,

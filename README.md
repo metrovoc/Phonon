@@ -78,7 +78,7 @@ all of them remain alpha.
 ## Releases
 
 Release tags use `v<mod-version>+mc<minecraft-version>`, for example
-`v0.3.0-alpha.1+mc26.2`. Untested ports remain alpha, manually smoke-tested
+`v0.3.0-alpha.2+mc26.2`. Untested ports remain alpha, manually smoke-tested
 builds may become beta, and only soaked beta builds become stable. See
 [RELEASING.md](RELEASING.md) for the branch model, promotion rules, and test
 checklist.

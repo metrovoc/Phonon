@@ -6,12 +6,12 @@ not how urgently a build is needed.
 
 ## Release identity
 
-- Source version: `0.3.0-alpha.1`
+- Source version: `0.3.0-alpha.2`
 - Minecraft target: `26.2`
-- Git tag: `v0.3.0-alpha.1+mc26.2`
-- Platform version: `0.3.0-alpha.1+mc26.2`
-- Published artifact: `phonon-neoforge-26.2-0.3.0-alpha.1+mc26.2.jar`
-- Local development artifact: `phonon-neoforge-26.2-0.3.0-alpha.1.jar`
+- Git tag: `v0.3.0-alpha.2+mc26.2`
+- Platform version: `0.3.0-alpha.2+mc26.2`
+- Published artifact: `phonon-neoforge-26.2-0.3.0-alpha.2+mc26.2.jar`
+- Local development artifact: `phonon-neoforge-26.2-0.3.0-alpha.2.jar`
 
 The pre-release identifier controls the release channel. The `+mc26.2` build
 metadata makes releases for different game versions unique without changing
@@ -82,7 +82,7 @@ release branches are not force-updated after publication.
 5. Create an annotated tag, for example:
 
    ```bash
-   git tag -a 'v0.3.0-alpha.1+mc26.2' -m 'Phonon 0.3.0-alpha.1 for Minecraft 26.2'
+   git tag -a 'v0.3.0-alpha.2+mc26.2' -m 'Phonon 0.3.0-alpha.2 for Minecraft 26.2'
    ```
 
 6. Push the branch before the tag. The release workflow validates that the tag,

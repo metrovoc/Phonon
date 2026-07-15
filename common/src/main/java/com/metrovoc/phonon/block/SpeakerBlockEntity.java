@@ -3,6 +3,7 @@ package com.metrovoc.phonon.block;
 import com.metrovoc.phonon.audio.PlaybackState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
@@ -121,7 +122,7 @@ public class SpeakerBlockEntity extends BlockEntity {
 
         // 保存时"坍缩": 计算当前位置，不保存 anchorTime
         if (playback.resourceId() != null) {
-            tag.putUUID("resourceId", playback.resourceId());
+            tag.putIntArray("resourceId", UUIDUtil.uuidToIntArray(playback.resourceId()));
             long now = PlaybackState.nowMs();
             long effectivePos = playback.getCurrentPositionMs(now);
             tag.putLong("position", effectivePos);
@@ -133,7 +134,7 @@ public class SpeakerBlockEntity extends BlockEntity {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider provider) {
         super.loadAdditional(tag, provider);
 
-        volume = sanitizeVolume(tag.contains("volume") ? tag.getFloat("volume") : DEFAULT_VOLUME);
+        volume = sanitizeVolume(tag.getFloatOr("volume", DEFAULT_VOLUME));
 
         try {
             // 兼容旧格式: playing + startTime
@@ -148,14 +149,14 @@ public class SpeakerBlockEntity extends BlockEntity {
                 return;
             }
 
-            UUID resourceId = tag.getUUID("resourceId");
+            UUID resourceId = readUuid(tag, "resourceId");
             if (resourceId == null) {
                 playback = PlaybackState.STOPPED;
                 return;
             }
 
-            long savedPos = tag.getLong("position");
-            float speed = tag.contains("speed") ? tag.getFloat("speed") : 1.0f;
+            long savedPos = tag.getLongOr("position", 0L);
+            float speed = tag.getFloatOr("speed", 1.0f);
 
             // 读取时用当前时间作为新的 anchor
             long now = PlaybackState.nowMs();
@@ -174,7 +175,7 @@ public class SpeakerBlockEntity extends BlockEntity {
      * 兼容旧 NBT 格式 (playing + startTime)。
      */
     private void loadLegacyFormat(CompoundTag tag) {
-        if (!tag.getBoolean("playing")) {
+        if (!tag.getBooleanOr("playing", false)) {
             playback = PlaybackState.STOPPED;
             return;
         }
@@ -184,17 +185,22 @@ public class SpeakerBlockEntity extends BlockEntity {
             return;
         }
 
-        UUID resourceId = tag.getUUID("resourceId");
+        UUID resourceId = readUuid(tag, "resourceId");
         if (resourceId == null) {
             playback = PlaybackState.STOPPED;
             return;
         }
 
-        long startTime = tag.getLong("startTime");
+        long startTime = tag.getLongOr("startTime", System.currentTimeMillis());
         long elapsed = System.currentTimeMillis() - startTime;
         long now = PlaybackState.nowMs();
 
         // 转换为新格式: anchor=now, position=elapsed, speed=1.0
         playback = new PlaybackState(resourceId, now, Math.max(0, elapsed), 1.0f);
+    }
+
+    private static UUID readUuid(CompoundTag tag, String key) {
+        int[] bits = tag.getIntArray(key).orElse(null);
+        return bits != null && bits.length == 4 ? UUIDUtil.uuidFromIntArray(bits) : null;
     }
 }

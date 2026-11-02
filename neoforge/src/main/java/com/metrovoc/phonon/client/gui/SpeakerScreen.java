@@ -296,16 +296,16 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         int rightX = leftX + leftWidth + PADDING;
         int rightWidth = imageWidth - PADDING * 3 - leftWidth;
 
-        graphics.drawString(font, "Tracks", leftX, topPos + PADDING, 0xFFFFFF);
+        graphics.drawString(font, "Tracks", leftX, topPos + PADDING, 0xFFFFFFFF);
         String countText = ClientAudioManager.getInstance().getAllResources().size() + " total";
         int countWidth = font.width(countText);
-        graphics.drawString(font, countText, leftX + leftWidth - countWidth, topPos + PADDING, 0x808080);
+        graphics.drawString(font, countText, leftX + leftWidth - countWidth, topPos + PADDING, 0xFF808080);
 
         renderNowPlaying(graphics, rightX, topPos + PADDING, rightWidth);
     }
 
     private void renderNowPlaying(GuiGraphics graphics, int x, int y, int width) {
-        graphics.drawString(font, "Now Playing", x, y, 0xFFFFFF);
+        graphics.drawString(font, "Now Playing", x, y, 0xFFFFFFFF);
         y += 14;
 
         PlaybackState state = getCurrentState();
@@ -318,7 +318,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             if (font.width(trackName) > width) {
                 trackName = font.plainSubstrByWidth(trackName, width - 10) + "...";
             }
-            graphics.drawString(font, trackName, x, y, 0x40FF40);
+            graphics.drawString(font, trackName, x, y, 0xFF40FF40);
         } else if (state.isPaused()) {
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
@@ -327,9 +327,9 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
             if (font.width(trackName) > width) {
                 trackName = font.plainSubstrByWidth(trackName, width - 10) + "...";
             }
-            graphics.drawString(font, trackName + " (Paused)", x, y, 0xFFFF40);
+            graphics.drawString(font, trackName + " (Paused)", x, y, 0xFFFFFF40);
         } else {
-            graphics.drawString(font, "Nothing playing", x, y, 0x606060);
+            graphics.drawString(font, "Nothing playing", x, y, 0xFF606060);
         }
     }
 

@@ -47,3 +47,5 @@ neoForge {
 }
 
 sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+apply from: 'driver.gradle'

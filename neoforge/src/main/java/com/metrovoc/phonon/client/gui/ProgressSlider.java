@@ -56,7 +56,7 @@ public class ProgressSlider extends AbstractWidget {
         String timeText = formatTime(positionMs) + " / " + (durationMs > 0 ? formatTime(durationMs) : "--:--");
         int textWidth = net.minecraft.client.Minecraft.getInstance().font.width(timeText);
         graphics.drawString(net.minecraft.client.Minecraft.getInstance().font,
-            timeText, getX() + (width - textWidth) / 2, getY() + height - 8, 0xA0A0A0);
+            timeText, getX() + (width - textWidth) / 2, getY() + height - 8, 0xFFA0A0A0);
     }
 
     @Override

@@ -61,7 +61,7 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
         @Override
         public void render(GuiGraphics graphics, int index, int top, int left, int width, int height,
                            int mouseX, int mouseY, boolean hovered, float partialTick) {
-            int textColor = isSelected() ? 0xFFFFFF : (hovered ? 0xE0E0E0 : 0xA0A0A0);
+            int textColor = isSelected() ? 0xFFFFFFFF : (hovered ? 0xFFE0E0E0 : 0xFFA0A0A0);
 
             if (hovered || isSelected()) {
                 graphics.fill(left, top, left + width, top + height,
@@ -78,7 +78,7 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
             // Duration (right-aligned)
             String duration = formatDuration(resource.durationMs());
             int durationWidth = minecraft.font.width(duration);
-            graphics.drawString(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0x808080);
+            graphics.drawString(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0xFF808080);
 
         }
 

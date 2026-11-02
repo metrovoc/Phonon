@@ -71,8 +71,15 @@ public final class PhononConfigScreen extends Screen {
         java.util.function.Predicate<String> filter
     ) {
         EditBox field = new EditBox(font, x, y, FIELD_WIDTH, FIELD_HEIGHT, Component.empty());
-        field.setFilter(filter);
+        String[] lastValid = {value};
         field.setValue(value);
+        field.setResponder(text -> {
+            if (filter.test(text)) {
+                lastValid[0] = text;
+            } else {
+                field.setValue(lastValid[0]);
+            }
+        });
         addRenderableWidget(field);
         return field;
     }

@@ -29,6 +29,25 @@ Server-side (for audio downloading):
 Direct OGG URLs work without yt-dlp. Other media sites require yt-dlp and its
 FFmpeg integration.
 
+### Windows setup
+
+Follow these steps on the computer that runs the server. In singleplayer, that
+is your own PC.
+
+1. Open Terminal and install yt-dlp. winget also installs FFmpeg and Deno, which
+   yt-dlp needs.
+
+   ```powershell
+   winget install --source winget --id yt-dlp.yt-dlp
+   ```
+
+2. Open a new Terminal and check that `yt-dlp --version` and `ffmpeg -version`
+   each print a version.
+3. Quit the Minecraft Launcher completely and start it again.
+4. In game, run `/phonon add <name> <url>` as an operator.
+
+If it fails, search `logs/latest.log` for `yt-dlp` to see the exact error.
+
 ## Commands
 
 | Command | Description |

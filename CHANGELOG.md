@@ -1,5 +1,67 @@
 # Changelog
 
+## 0.3.0-beta.2
+
+First published beta, for Minecraft 26.2 and 1.21.1. Other targets stay at
+`0.3.0-alpha.3`. The `0.3.0-beta.1` tags pointed at the wrong commits, so the
+release checks rejected them. They produced no release and remain reserved. The
+only change since the tested commit is this version number and these notes.
+
+### Test evidence
+
+- Target: Minecraft 26.2, NeoForge 26.2.0.93, Java 25, commit `ed93699`, tested on macOS on Apple Silicon.
+- Automated tests and the scripted checklist (`neoforge/driver/checklist`) pass in
+  the real client and on a dedicated server: play, pause, resume, seek, stop,
+  volume, several speakers, automatic stop, resource reload, rejoin, server
+  restart, and a player without operator permission.
+- Sync between two clients on one machine: a late joiner's playback clock was
+  within 21 ms of the first player's, and 16 ms after a seek. This compares
+  playback clocks, not the sound itself.
+- In-game tool install, YouTube link and music folder import pass on this target.
+
+### Not tested
+
+- Nobody has listened to this build, including the volume slider change.
+- Windows and Linux, including the tool downloads on those systems.
+- Two computers over a real network, and multi-hour sessions.
+- `/phonon tools update`, `allowToolInstall=false`, and non-default `audioQuality`.
+
+### Known issues
+
+- Pausing a singleplayer game may leave audio behind the playback clock. This is
+  suspected from the code and hasn't been measured.
+- On 1.21.1, resource reload can log `Stop: Invalid name parameter`. Playback
+  recovers.
+
+### Getting started
+
+- List the Speaker in the creative menu, unlock its recipe on picking up a
+  jukebox, and add a first advancement.
+- Offer to install yt-dlp, FFmpeg and Deno from chat when an operator needs them,
+  using pinned builds with verified checksums, then retry the add. Turn this off
+  with `allowToolInstall`. Add `/phonon tools` to see what was found and update
+  yt-dlp.
+- Import audio files from `phonon_music` in the world folder on startup and on
+  `/phonon reload`.
+- `/phonon add` no longer needs a name or quotes: it can use the video's title.
+
+### Playback
+
+- Follow the Jukebox/Note Blocks volume slider instead of Blocks.
+- Show the vanilla "Now Playing" line when a nearby speaker starts a new track.
+
+### Messages
+
+- Say why adding audio failed and what to do about it, instead of always blaming
+  yt-dlp.
+- Translate all GUI and command text, and add Simplified Chinese.
+
+### Fixes and settings
+
+- Save the track list on every change, so `/phonon reload` no longer forgets
+  tracks added since the server started.
+- Add the `audioQuality` server setting.
+
 ## 0.3.0-alpha.3
 
 This alpha fixes bugs reported by players. It passes compilation and automated

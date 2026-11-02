@@ -41,6 +41,10 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     private static final float DEFAULT_VOLUME = 0.5f;
     private static final float LEFT_RATIO = 0.55f;
 
+    private static final Component PLAY = Component.translatable("gui.phonon.speaker.play");
+    private static final Component PAUSE = Component.translatable("gui.phonon.speaker.pause");
+    private static final Component STOP = Component.translatable("gui.phonon.speaker.stop");
+
     private EditBox searchBox;
     private TrackListWidget trackList;
     private VolumeSlider volumeSlider;
@@ -76,8 +80,8 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     private void initLeftColumn(int x, int y, int width) {
         y += 14;
 
-        searchBox = new EditBox(font, x, y, width, SEARCH_HEIGHT, Component.literal("Search"));
-        searchBox.setHint(Component.literal("Search tracks..."));
+        searchBox = new EditBox(font, x, y, width, SEARCH_HEIGHT, Component.translatable("gui.phonon.speaker.search"));
+        searchBox.setHint(Component.translatable("gui.phonon.speaker.search_hint"));
         searchBox.setResponder(this::onSearchChanged);
         searchBox.setMaxLength(100);
         addRenderableWidget(searchBox);
@@ -110,15 +114,14 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         int halfWidth = (width - GAP) / 2;
         PlaybackState state = getCurrentState();
 
-        String playPauseText = state.isPlaying() ? "\u23F8 Pause" : "\u25B6 Play";
-        playPauseButton = Button.builder(Component.literal(playPauseText), btn -> togglePlayPause())
+        playPauseButton = Button.builder(state.isPlaying() ? PAUSE : PLAY, btn -> togglePlayPause())
             .bounds(x, y, halfWidth, BUTTON_HEIGHT)
             .build();
         playPauseButton.active = state.isPlaying() || state.isPaused() || selectedTrack != null;
         addRenderableWidget(playPauseButton);
 
         // Stop 按钮
-        stopButton = Button.builder(Component.literal("\u25A0 Stop"), btn -> stopPlayback())
+        stopButton = Button.builder(STOP, btn -> stopPlayback())
             .bounds(x + halfWidth + GAP, y, halfWidth, BUTTON_HEIGHT)
             .build();
         stopButton.active = !state.isStopped();
@@ -253,13 +256,13 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
 
         // 更新 Play/Pause 按钮
         if (state.isPlaying()) {
-            playPauseButton.setMessage(Component.literal("\u23F8 Pause"));
+            playPauseButton.setMessage(PAUSE);
             playPauseButton.active = true;
         } else if (state.isPaused()) {
-            playPauseButton.setMessage(Component.literal("\u25B6 Play"));
+            playPauseButton.setMessage(PLAY);
             playPauseButton.active = true;
         } else {
-            playPauseButton.setMessage(Component.literal("\u25B6 Play"));
+            playPauseButton.setMessage(PLAY);
             playPauseButton.active = selectedTrack != null;
         }
 
@@ -295,8 +298,9 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         int rightX = leftX + leftWidth + PADDING;
         int rightWidth = imageWidth - PADDING * 3 - leftWidth;
 
-        graphics.text(font, "Tracks", leftX, topPos + PADDING, 0xFFFFFFFF);
-        String countText = ClientAudioManager.getInstance().getAllResources().size() + " total";
+        graphics.text(font, Component.translatable("gui.phonon.speaker.tracks"), leftX, topPos + PADDING, 0xFFFFFFFF);
+        Component countText = Component.translatable("gui.phonon.speaker.total",
+            ClientAudioManager.getInstance().getAllResources().size());
         int countWidth = font.width(countText);
         graphics.text(font, countText, leftX + leftWidth - countWidth, topPos + PADDING, 0xFF808080);
 
@@ -304,7 +308,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     }
 
     private void extractNowPlaying(GuiGraphicsExtractor graphics, int x, int y, int width) {
-        graphics.text(font, "Now Playing", x, y, 0xFFFFFFFF);
+        graphics.text(font, Component.translatable("gui.phonon.speaker.now_playing"), x, y, 0xFFFFFFFF);
         y += 14;
 
         PlaybackState state = getCurrentState();
@@ -312,7 +316,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         if (state.isPlaying()) {
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
-            String trackName = resourceOpt.map(AudioResource::name).orElse("Unknown");
+            String trackName = resourceOpt.map(AudioResource::name).orElseGet(() -> Component.translatable("gui.phonon.speaker.unknown").getString());
 
             if (font.width(trackName) > width) {
                 trackName = font.plainSubstrByWidth(trackName, width - 10) + "...";
@@ -321,14 +325,14 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         } else if (state.isPaused()) {
             UUID resourceId = state.resourceId();
             Optional<AudioResource> resourceOpt = ClientAudioManager.getInstance().getResource(resourceId);
-            String trackName = resourceOpt.map(AudioResource::name).orElse("Unknown");
+            String trackName = resourceOpt.map(AudioResource::name).orElseGet(() -> Component.translatable("gui.phonon.speaker.unknown").getString());
 
             if (font.width(trackName) > width) {
                 trackName = font.plainSubstrByWidth(trackName, width - 10) + "...";
             }
-            graphics.text(font, trackName + " (Paused)", x, y, 0xFFFFFF40);
+            graphics.text(font, Component.translatable("gui.phonon.speaker.paused", trackName), x, y, 0xFFFFFF40);
         } else {
-            graphics.text(font, "Nothing playing", x, y, 0xFF606060);
+            graphics.text(font, Component.translatable("gui.phonon.speaker.nothing_playing"), x, y, 0xFF606060);
         }
     }
 

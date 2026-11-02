@@ -27,6 +27,10 @@ public class NeoForgeServerConfig {
     public final ModConfigSpec.IntValue downloadConnectTimeoutSeconds;
     public final ModConfigSpec.IntValue downloadReadTimeoutSeconds;
     public final ModConfigSpec.IntValue maxAudioSizeMB;
+    public final ModConfigSpec.IntValue audioQuality;
+
+    // Tool settings
+    public final ModConfigSpec.BooleanValue allowToolInstall;
 
     private NeoForgeServerConfig(ModConfigSpec.Builder builder) {
         builder.push("transfer");
@@ -79,6 +83,21 @@ public class NeoForgeServerConfig {
                 16,
                 PhononServerConfig.MAX_AUDIO_SIZE_MB);
 
+        audioQuality = builder
+            .comment("Vorbis quality for newly added audio, 0 (smallest) to 10 (best). Existing tracks keep theirs.")
+            .defineInRange("audioQuality",
+                PhononServerConfig.DEFAULT_AUDIO_QUALITY,
+                0,
+                10);
+
+        builder.pop();
+
+        builder.push("tools");
+
+        allowToolInstall = builder
+            .comment("Let operators install yt-dlp, FFmpeg and Deno into the game folder from an in-game prompt.")
+            .define("allowToolInstall", true);
+
         builder.pop();
     }
 
@@ -93,5 +112,7 @@ public class NeoForgeServerConfig {
         PhononServerConfig.setDownloadConnectTimeoutSeconds(INSTANCE.downloadConnectTimeoutSeconds::get);
         PhononServerConfig.setDownloadReadTimeoutSeconds(INSTANCE.downloadReadTimeoutSeconds::get);
         PhononServerConfig.setMaxAudioSizeMB(INSTANCE.maxAudioSizeMB::get);
+        PhononServerConfig.setAudioQuality(INSTANCE.audioQuality::get);
+        PhononServerConfig.setAllowToolInstall(INSTANCE.allowToolInstall::get);
     }
 }

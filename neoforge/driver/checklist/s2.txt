@@ -1,0 +1,187 @@
+join 127.0.0.1:PORT
+wait 60
+fly on
+cmd phonon list
+wait 40
+wait 20
+pstate s2_t0 -2 120 2
+wait 20
+pstate s2_t1 -2 120 2
+wait 20
+pstate s2_t2 -2 120 2
+wait 20
+pstate s2_t3 -2 120 2
+wait 20
+pstate s2_t4 -2 120 2
+wait 20
+pstate s2_t5 -2 120 2
+wait 20
+pstate s2_t6 -2 120 2
+wait 20
+pstate s2_t7 -2 120 2
+wait 20
+pstate s2_t8 -2 120 2
+wait 20
+pstate s2_t9 -2 120 2
+wait 20
+pstate s2_t10 -2 120 2
+wait 20
+pstate s2_t11 -2 120 2
+wait 20
+pstate s2_t12 -2 120 2
+wait 20
+pstate s2_t13 -2 120 2
+wait 20
+pstate s2_t14 -2 120 2
+wait 20
+pstate s2_t15 -2 120 2
+wait 20
+pstate s2_t16 -2 120 2
+wait 20
+pstate s2_t17 -2 120 2
+wait 20
+pstate s2_t18 -2 120 2
+wait 20
+pstate s2_t19 -2 120 2
+wait 20
+pstate s2_t20 -2 120 2
+wait 20
+pstate s2_t21 -2 120 2
+wait 20
+pstate s2_t22 -2 120 2
+wait 20
+pstate s2_t23 -2 120 2
+wait 20
+pstate s2_t24 -2 120 2
+wait 20
+pstate s2_t25 -2 120 2
+wait 20
+pstate s2_t26 -2 120 2
+wait 20
+pstate s2_t27 -2 120 2
+wait 20
+pstate s2_t28 -2 120 2
+wait 20
+pstate s2_t29 -2 120 2
+wait 20
+pstate s2_t30 -2 120 2
+wait 20
+pstate s2_t31 -2 120 2
+wait 20
+pstate s2_t32 -2 120 2
+wait 20
+pstate s2_t33 -2 120 2
+wait 20
+pstate s2_t34 -2 120 2
+wait 20
+pstate s2_t35 -2 120 2
+wait 20
+pstate s2_t36 -2 120 2
+wait 20
+pstate s2_t37 -2 120 2
+wait 20
+pstate s2_t38 -2 120 2
+wait 20
+pstate s2_t39 -2 120 2
+wait 20
+pstate s2_t40 -2 120 2
+wait 20
+pstate s2_t41 -2 120 2
+wait 20
+pstate s2_t42 -2 120 2
+wait 20
+pstate s2_t43 -2 120 2
+wait 20
+pstate s2_t44 -2 120 2
+wait 20
+pstate s2_t45 -2 120 2
+wait 20
+pstate s2_t46 -2 120 2
+wait 20
+pstate s2_t47 -2 120 2
+wait 20
+pstate s2_t48 -2 120 2
+wait 20
+pstate s2_t49 -2 120 2
+wait 20
+pstate s2_t50 -2 120 2
+wait 20
+pstate s2_t51 -2 120 2
+wait 20
+pstate s2_t52 -2 120 2
+wait 20
+pstate s2_t53 -2 120 2
+wait 20
+pstate s2_t54 -2 120 2
+wait 20
+pstate s2_t55 -2 120 2
+wait 20
+pstate s2_t56 -2 120 2
+wait 20
+pstate s2_t57 -2 120 2
+wait 20
+pstate s2_t58 -2 120 2
+wait 20
+pstate s2_t59 -2 120 2
+wait 20
+pstate s2_t60 -2 120 2
+wait 20
+pstate s2_t61 -2 120 2
+wait 20
+pstate s2_t62 -2 120 2
+wait 20
+pstate s2_t63 -2 120 2
+wait 20
+pstate s2_t64 -2 120 2
+wait 20
+pstate s2_t65 -2 120 2
+wait 20
+pstate s2_t66 -2 120 2
+wait 20
+pstate s2_t67 -2 120 2
+wait 20
+pstate s2_t68 -2 120 2
+wait 20
+pstate s2_t69 -2 120 2
+wait 20
+pstate s2_t70 -2 120 2
+wait 20
+pstate s2_t71 -2 120 2
+wait 20
+pstate s2_t72 -2 120 2
+wait 20
+pstate s2_t73 -2 120 2
+wait 20
+pstate s2_t74 -2 120 2
+wait 20
+pstate s2_t75 -2 120 2
+wait 20
+pstate s2_t76 -2 120 2
+wait 20
+pstate s2_t77 -2 120 2
+wait 20
+pstate s2_t78 -2 120 2
+wait 20
+pstate s2_t79 -2 120 2
+wait 20
+pstate s2_t80 -2 120 2
+wait 20
+pstate s2_t81 -2 120 2
+wait 20
+pstate s2_t82 -2 120 2
+wait 20
+pstate s2_t83 -2 120 2
+wait 20
+pstate s2_t84 -2 120 2
+wait 20
+pstate s2_t85 -2 120 2
+wait 20
+pstate s2_t86 -2 120 2
+wait 20
+pstate s2_t87 -2 120 2
+wait 20
+pstate s2_t88 -2 120 2
+wait 20
+pstate s2_t89 -2 120 2
+wait 20
+quit

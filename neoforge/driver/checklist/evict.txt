@@ -1,0 +1,31 @@
+world 12345
+gui 3
+wait 20
+cmd phonon add n1 http://127.0.0.1:51990/n1.ogg
+wait 120
+cmd phonon add n2 http://127.0.0.1:51990/n2.ogg
+wait 120
+fly on
+cmd tp @s 0 120 0 0 0
+wait 40
+cmd setblock 1 120 2 phonon:speaker
+wait 20
+use 1 120 2
+wait 30
+click 100 54
+wait 6
+press ▶ Play
+wait 120
+pstate e_n1 1 120 2
+press ■ Stop
+wait 20
+click 100 72
+wait 6
+press ▶ Play
+wait 120
+pstate e_n2 1 120 2
+press ■ Stop
+wait 20
+key escape
+wait 20
+quit

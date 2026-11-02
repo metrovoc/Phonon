@@ -2,7 +2,7 @@
 
 A custom audio system designed to orchestrate an immersive soundscape in your game.
 
-Phonon is currently in alpha. The default branch targets Minecraft 26.2, and
+Phonon is currently in beta. The default branch targets Minecraft 26.2, and
 every supported Minecraft release receives its own NeoForge artifact. The
 Minecraft version in the filename must match the game exactly.
 
@@ -95,16 +95,14 @@ newest target (26.2); older targets live on permanent release branches.
 | 26.1.2 | 26.1.2.80 | 25 | `release/minecraft-26.1.2` |
 | 26.2 | 26.2.0.15-beta | 25 | `release/minecraft-26.2` |
 
-All targets pass compilation and the automated test suite. Dedicated-server
-startup has additionally been exercised on 1.21.1, 1.21.2, 1.21.4, 1.21.9,
-26.1, and 26.2; 26.2 also passes a client startup and resource/audio-engine
-smoke test. No target has completed the full manual gameplay checklist yet, so
-all of them remain alpha.
+The beta line currently covers 26.2 and 1.21.1, which pass a scripted checklist
+in the real client and on a dedicated server. The other targets remain at
+`0.3.0-alpha.3`.
 
 ## Releases
 
 Release tags use `v<mod-version>+mc<minecraft-version>`, for example
-`v0.3.0-alpha.2+mc26.2`. Untested ports remain alpha, manually smoke-tested
-builds may become beta, and only soaked beta builds become stable. See
+`v0.3.0-beta.1+mc26.2`. New releases start at beta, and only soaked beta builds
+become stable. See
 [RELEASING.md](RELEASING.md) for the branch model, promotion rules, and test
 checklist.

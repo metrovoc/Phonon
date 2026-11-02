@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-beta.1
+
+First beta, for Minecraft 26.2 and 1.21.1. Other targets stay at `0.3.0-alpha.3`.
 
 ### Getting started
 

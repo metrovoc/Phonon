@@ -141,7 +141,7 @@ jobs:
           changelog-file: CHANGELOG.md
 
       - name: Sync Modrinth description
-        if: needs.metadata.outputs.channel == 'release'
+        if: needs.metadata.outputs.channel != 'alpha'
         run: |
           curl --fail-with-body -X PATCH "https://api.modrinth.com/v2/project/${{ vars.MODRINTH_ID }}" \
             -H "Authorization: ${{ secrets.MODRINTH_TOKEN }}" \

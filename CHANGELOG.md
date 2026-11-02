@@ -1,8 +1,11 @@
 # Changelog
 
-## 0.3.0-beta.1
+## 0.3.0-beta.2
 
-First beta, for Minecraft 26.2 and 1.21.1. Other targets stay at `0.3.0-alpha.3`.
+First published beta, for Minecraft 26.2 and 1.21.1. Other targets stay at
+`0.3.0-alpha.3`. The `0.3.0-beta.1` tags pointed at the wrong commits, so the
+release checks rejected them. They produced no release and remain reserved. The
+only change since the tested commit is this version number and these notes.
 
 ### Test evidence
 

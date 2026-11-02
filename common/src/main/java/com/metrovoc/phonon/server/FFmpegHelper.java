@@ -4,6 +4,8 @@ import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.config.PhononServerConfig;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -19,29 +21,6 @@ import java.util.stream.Stream;
  */
 public class FFmpegHelper {
 
-    public static boolean isFFmpegAvailable() {
-        return checkCommand("ffprobe", "-version");
-    }
-
-    public static boolean isYtDlpAvailable() {
-        return checkCommand("yt-dlp", "--version");
-    }
-
-    private static boolean checkCommand(String cmd, String arg) {
-        try {
-            Process process = new ProcessBuilder(cmd, arg)
-                .redirectErrorStream(true)
-                .start();
-            boolean finished = process.waitFor(5, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-            }
-            return finished && process.exitValue() == 0;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     /**
      * Download any URL using yt-dlp and convert to OGG Vorbis.
      * Supports YouTube, Bilibili, and many other video/audio sites,
@@ -52,14 +31,11 @@ public class FFmpegHelper {
      * @return true if download and conversion succeeded
      */
     public static boolean downloadAndConvert(String url, Path targetFile) {
-        if (!isYtDlpAvailable()) {
-            return false;
-        }
-
         Path tempDir = null;
         Process process = null;
         try {
             tempDir = Files.createTempDirectory("phonon_dl_");
+            Path log = tempDir.resolve("yt-dlp.log");
 
             ProcessBuilder pb = new ProcessBuilder(
                 "yt-dlp",
@@ -70,11 +46,12 @@ public class FFmpegHelper {
                 "--no-playlist",                // Download single video only
                 "--max-filesize", PhononServerConfig.getMaxAudioSizeMB() + "M",
                 "--no-warnings",
+                "--no-progress",
                 url
             );
             pb.directory(tempDir.toFile());
-            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
-            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(log.toFile());
 
             Phonon.LOGGER.info("Running yt-dlp for: {}", url);
             process = pb.start();
@@ -85,7 +62,7 @@ public class FFmpegHelper {
             );
             if (!finished) {
                 process.destroyForcibly();
-                Phonon.LOGGER.error("yt-dlp timeout");
+                Phonon.LOGGER.error("yt-dlp timed out:\n{}", readLog(log));
                 return false;
             }
 
@@ -102,14 +79,14 @@ public class FFmpegHelper {
                         Phonon.LOGGER.info("yt-dlp successfully converted to: {}", targetFile);
                         return true;
                     } else {
-                        Phonon.LOGGER.error("yt-dlp produced no .ogg file");
+                        Phonon.LOGGER.error("yt-dlp produced no .ogg file:\n{}", readLog(log));
                     }
                 }
             } else {
-                Phonon.LOGGER.error("yt-dlp failed with exit code: {}", process.exitValue());
+                Phonon.LOGGER.error("yt-dlp failed with exit code {}:\n{}", process.exitValue(), readLog(log));
             }
         } catch (Exception e) {
-            Phonon.LOGGER.error("yt-dlp download failed", e);
+            Phonon.LOGGER.error("yt-dlp could not run (PATH={})", System.getenv("PATH"), e);
         } finally {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();
@@ -128,11 +105,11 @@ public class FFmpegHelper {
         return false;
     }
 
-    public static Optional<Long> getDurationMs(Path audioFile) {
-        if (!isFFmpegAvailable()) {
-            return Optional.empty();
-        }
+    private static String readLog(Path log) throws IOException {
+        return new String(Files.readAllBytes(log), StandardCharsets.UTF_8);
+    }
 
+    public static Optional<Long> getDurationMs(Path audioFile) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                 "ffprobe",

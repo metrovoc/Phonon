@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Getting started
+
+- List the Speaker in the creative menu, unlock its recipe on picking up a
+  jukebox, and add a first advancement.
+- Offer to install yt-dlp, FFmpeg and Deno from chat when an operator needs them,
+  using pinned builds with verified checksums, then retry the add. Turn this off
+  with `allowToolInstall`. Add `/phonon tools` to see what was found and update
+  yt-dlp.
+- Import audio files from `phonon_music` in the world folder on startup and on
+  `/phonon reload`.
+- `/phonon add` no longer needs a name or quotes: it can use the video's title.
+
+### Playback
+
+- Follow the Jukebox/Note Blocks volume slider instead of Blocks.
+- Show the vanilla "Now Playing" line when a nearby speaker starts a new track.
+
+### Messages
+
+- Say why adding audio failed and what to do about it, instead of always blaming
+  yt-dlp.
+- Translate all GUI and command text, and add Simplified Chinese.
+
+### Fixes and settings
+
+- Save the track list on every change, so `/phonon reload` no longer forgets
+  tracks added since the server started.
+- Add the `audioQuality` server setting.
+
 ## 0.3.0-alpha.3
 
 This alpha fixes bugs reported by players. It passes compilation and automated

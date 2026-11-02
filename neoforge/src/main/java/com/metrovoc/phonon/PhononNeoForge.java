@@ -14,6 +14,8 @@ import com.metrovoc.phonon.config.NeoForgeServerConfig;
 import com.metrovoc.phonon.network.PhononNetwork;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
 import com.metrovoc.phonon.registry.PhononRegistry;
+import com.metrovoc.phonon.server.AudioLibrary;
+import com.metrovoc.phonon.server.AudioTools;
 import com.metrovoc.phonon.server.AudioTransferManager;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import com.metrovoc.phonon.server.ServerSpeakerManager;
@@ -61,6 +63,7 @@ public class PhononNeoForge {
             modBus.addListener(this::onRegisterClientReloadListeners);
         }
 
+        modBus.addListener(PhononRegistry::addToCreativeTabs);
         modBus.addListener(PhononNetwork::register);
         modBus.addListener(this::onConfigLoad);
 
@@ -80,12 +83,13 @@ public class PhononNeoForge {
         Path worldDir = event.getServer()
             .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT);
 
+        AudioTools.initialize(event.getServer().getServerDirectory());
+
         ServerAudioStorage storage = ServerAudioStorage.getInstance();
         storage.initialize(worldDir);
 
-        Path dataFile = worldDir.resolve("phonon_audio.json");
         AudioManager manager = AudioManager.getInstance();
-        manager.loadResources(AudioPersistence.load(dataFile));
+        manager.loadResources(AudioPersistence.load(AudioLibrary.dataFile(event.getServer())));
 
         repairMissingDurations(manager, storage);
 
@@ -101,6 +105,11 @@ public class PhononNeoForge {
         });
 
         Phonon.LOGGER.info("Loaded {} audio resources", manager.getAllResources().size());
+        AudioLibrary.importMusicFolder(event.getServer(), (file, failure) -> {
+            if (failure == null) {
+                Phonon.LOGGER.info("Imported {} from the music folder", file);
+            }
+        });
     }
 
     private void repairMissingDurations(AudioManager manager, ServerAudioStorage storage) {
@@ -122,9 +131,7 @@ public class PhononNeoForge {
     }
 
     private void onServerStopping(ServerStoppingEvent event) {
-        Path dataFile = event.getServer()
-            .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
-            .resolve("phonon_audio.json");
+        Path dataFile = AudioLibrary.dataFile(event.getServer());
 
         try {
             AudioPersistence.save(dataFile, AudioManager.getInstance().getAllResources());

@@ -116,50 +116,95 @@ public final class ServerAudioStorage {
         return Optional.ofNullable(streamInfoCache.get(resourceId));
     }
 
-    public CompletableFuture<Boolean> downloadAndStore(UUID resourceId, String url) {
-        ExecutorService executor = downloadExecutor;
-        return CompletableFuture.supplyAsync(() -> downloadAndStoreBlocking(resourceId, url), executor);
+    public CompletableFuture<DownloadResult> downloadAndStore(UUID resourceId, String url) {
+        return CompletableFuture.supplyAsync(() -> downloadAndStoreBlocking(resourceId, url), downloadExecutor);
     }
 
-    private boolean downloadAndStoreBlocking(UUID resourceId, String url) {
+    /** Stores a local audio file, leaving the original where it is. */
+    public CompletableFuture<DownloadResult> importAndStore(UUID resourceId, Path source) {
+        return CompletableFuture.supplyAsync(() -> importBlocking(resourceId, source), downloadExecutor);
+    }
+
+    /** Runs slow work on the download threads. */
+    public CompletableFuture<Void> runAsync(Runnable task) {
+        return CompletableFuture.runAsync(task, downloadExecutor);
+    }
+
+    private DownloadResult downloadAndStoreBlocking(UUID resourceId, String url) {
+        Path targetFile = storageDir.resolve(resourceId + ".ogg");
+        Phonon.LOGGER.info("Processing audio: {}", url);
+        DownloadResult result = FFmpegHelper.downloadAndConvert(url, targetFile);
+
+        if (!result.success() && isDirectOggUrl(url)) {
+            Phonon.LOGGER.info("Falling back to direct OGG download");
+            AudioFailure failure = directDownload(url, targetFile);
+            result = failure == null ? DownloadResult.ok(fileTitle(url)) : DownloadResult.failed(failure);
+        }
+        return result.success() ? validateStored(resourceId, targetFile, result) : deleteAndReturn(targetFile, result);
+    }
+
+    private DownloadResult importBlocking(UUID resourceId, Path source) {
         Path targetFile = storageDir.resolve(resourceId + ".ogg");
         try {
-            Phonon.LOGGER.info("Processing audio: {}", url);
-            boolean success = FFmpegHelper.downloadAndConvert(url, targetFile);
-
-            if (!success && isDirectOggUrl(url)) {
-                Phonon.LOGGER.info("Falling back to direct OGG download");
-                success = directDownload(url, targetFile);
+            String fileName = source.getFileName().toString();
+            String title = stripExtension(fileName);
+            if (fileName.toLowerCase(Locale.ROOT).endsWith(".ogg") && OggPageScanner.scan(source) != null) {
+                if (Files.size(source) > getMaxAudioBytes()) {
+                    return DownloadResult.failed(AudioFailure.TOO_LARGE);
+                }
+                Files.copy(source, targetFile, StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                AudioFailure failure = FFmpegHelper.convertToOgg(source, targetFile);
+                if (failure != null) {
+                    return deleteAndReturn(targetFile, DownloadResult.failed(failure));
+                }
             }
+            return validateStored(resourceId, targetFile, DownloadResult.ok(title));
+        } catch (IOException e) {
+            Phonon.LOGGER.error("Failed to import {}", source, e);
+            return deleteAndReturn(targetFile, DownloadResult.failed(AudioFailure.UNKNOWN));
+        }
+    }
 
-            if (!success || !Files.isRegularFile(targetFile)) {
-                Files.deleteIfExists(targetFile);
-                return false;
+    private DownloadResult validateStored(UUID resourceId, Path targetFile, DownloadResult result) {
+        try {
+            long size = Files.isRegularFile(targetFile) ? Files.size(targetFile) : 0;
+            if (size <= 0) {
+                return deleteAndReturn(targetFile, DownloadResult.failed(AudioFailure.INVALID_AUDIO));
             }
-
-            long size = Files.size(targetFile);
-            if (size <= 0 || size > getMaxAudioBytes()) {
-                Phonon.LOGGER.error("Rejected audio {}: invalid size {} bytes", resourceId, size);
-                Files.deleteIfExists(targetFile);
-                return false;
+            if (size > getMaxAudioBytes()) {
+                Phonon.LOGGER.error("Rejected audio {}: {} bytes exceeds the limit", resourceId, size);
+                return deleteAndReturn(targetFile, DownloadResult.failed(AudioFailure.TOO_LARGE));
             }
-
             if (!scanAndCacheStreamInfo(resourceId, targetFile)) {
                 Phonon.LOGGER.error("Rejected audio {}: not a valid seekable OGG Vorbis file", resourceId);
-                Files.deleteIfExists(targetFile);
-                return false;
+                return deleteAndReturn(targetFile, DownloadResult.failed(AudioFailure.INVALID_AUDIO));
             }
-
             Phonon.LOGGER.info("Stored audio {} ({} bytes)", resourceId, size);
-            return true;
+            return result;
         } catch (Exception e) {
             Phonon.LOGGER.error("Failed to store audio {}", resourceId, e);
-            try {
-                Files.deleteIfExists(targetFile);
-            } catch (IOException ignored) {
-            }
-            return false;
+            return deleteAndReturn(targetFile, DownloadResult.failed(AudioFailure.UNKNOWN));
         }
+    }
+
+    private static DownloadResult deleteAndReturn(Path targetFile, DownloadResult result) {
+        try {
+            Files.deleteIfExists(targetFile);
+        } catch (IOException ignored) {
+        }
+        return result;
+    }
+
+    static String fileTitle(String url) {
+        String path = URI.create(url).getPath();
+        String decoded = path == null ? "" : path.substring(path.lastIndexOf('/') + 1);
+        return stripExtension(decoded);
+    }
+
+    private static String stripExtension(String fileName) {
+        int dot = fileName.lastIndexOf('.');
+        return dot > 0 ? fileName.substring(0, dot) : fileName;
     }
 
     private static boolean isDirectOggUrl(String url) {
@@ -167,7 +212,8 @@ public final class ServerAudioStorage {
         return lower.endsWith(".ogg") || lower.contains(".ogg?");
     }
 
-    private boolean directDownload(String url, Path targetFile) {
+    /** Returns the failure, or null on success. */
+    private AudioFailure directDownload(String url, Path targetFile) {
         Path temporary = targetFile.resolveSibling(targetFile.getFileName() + ".part");
         HttpClient client = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(PhononServerConfig.getDownloadConnectTimeoutSeconds()))
@@ -185,28 +231,42 @@ public final class ServerAudioStorage {
             try (InputStream input = response.body()) {
                 if (response.statusCode() != 200) {
                     Phonon.LOGGER.error("HTTP download failed: {}", response.statusCode());
-                    return false;
+                    return AudioFailure.fromHttpStatus(response.statusCode());
                 }
 
                 long declaredLength = response.headers().firstValueAsLong("Content-Length").orElse(-1);
                 if (declaredLength > getMaxAudioBytes()) {
                     Phonon.LOGGER.error("HTTP audio exceeds configured size limit: {} bytes", declaredLength);
-                    return false;
+                    return AudioFailure.TOO_LARGE;
                 }
 
                 Files.createDirectories(targetFile.getParent());
                 copyWithLimit(input, temporary, getMaxAudioBytes());
                 moveAtomically(temporary, targetFile);
-                return true;
+                return null;
             }
+        } catch (AudioTooLargeException e) {
+            deleteQuietly(temporary);
+            return AudioFailure.TOO_LARGE;
+        } catch (IOException e) {
+            Phonon.LOGGER.error("Direct download failed", e);
+            deleteQuietly(temporary);
+            return AudioFailure.NETWORK;
         } catch (Exception e) {
             Phonon.LOGGER.error("Direct download failed", e);
-            try {
-                Files.deleteIfExists(temporary);
-            } catch (IOException ignored) {
-            }
-            return false;
+            deleteQuietly(temporary);
+            return AudioFailure.UNKNOWN;
         }
+    }
+
+    private static void deleteQuietly(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private static final class AudioTooLargeException extends IOException {
     }
 
     private static void copyWithLimit(InputStream input, Path output, long maxBytes) throws IOException {
@@ -217,7 +277,7 @@ public final class ServerAudioStorage {
             while ((read = input.read(transferBuffer)) >= 0) {
                 written += read;
                 if (written > maxBytes) {
-                    throw new IOException("Download exceeds configured audio size limit");
+                    throw new AudioTooLargeException();
                 }
                 destination.write(transferBuffer, 0, read);
             }

@@ -11,6 +11,9 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import com.metrovoc.phonon.audio.AudioManager;
+import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
+import net.minecraft.server.MinecraftServer;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -35,6 +38,11 @@ public class NeoForgePlatformHelper implements PlatformHelper {
         if (level instanceof ServerLevel serverLevel && packet instanceof CustomPacketPayload payload) {
             PacketDistributor.sendToPlayersTrackingChunk(serverLevel, ChunkPos.containing(pos), payload);
         }
+    }
+
+    @Override
+    public void broadcastAudioResources(MinecraftServer server) {
+        PacketDistributor.sendToAllPlayers(new SyncAudioResourcesPacket(AudioManager.getInstance().getAllResources()));
     }
 
     // Client-side audio methods - delegate to AudioPlayer

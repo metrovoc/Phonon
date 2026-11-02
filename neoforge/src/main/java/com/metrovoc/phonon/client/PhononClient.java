@@ -18,7 +18,7 @@ public final class PhononClient {
                 mc.gui.setScreen(new com.metrovoc.phonon.client.gui.SpeakerScreen(
                     new com.metrovoc.phonon.menu.SpeakerMenu(0, mc.player.getInventory(), pos),
                     mc.player.getInventory(),
-                    net.minecraft.network.chat.Component.literal("Speaker")
+                    net.minecraft.network.chat.Component.translatable("block.phonon.speaker")
                 ));
             });
         });

@@ -83,7 +83,7 @@ import org.slf4j.Logger;
 
 /**
  * Plays a script in the client, so that a mod can be played, looked at and recorded with no one at the keyboard.
- * Written against Minecraft 26.2 with vanilla code only; a loader hook calls {@link #tick()} at the end of every
+ * Written against Minecraft 26.1.2 with vanilla code only; a loader hook calls {@link #tick()} at the end of every
  * client tick. The script comes from the {@code driver.script} system property, and {@code driver.monitor} names a
  * monitor (such as a virtual display) to put the window on.
  *
@@ -202,7 +202,7 @@ public final class Driver {
             }
             loading = false;
         }
-        if (hover && !mc.player.getAbilities().flying) {
+        if (hover && mc.player != null && !mc.player.getAbilities().flying) {
             mc.player.getAbilities().flying = true;
             mc.player.onUpdateAbilities();
         }
@@ -252,7 +252,7 @@ public final class Driver {
         mc.options.pauseOnLostFocus = false;
         mc.options.onboardAccessibility = false;
         mc.options.tutorialStep = TutorialSteps.NONE;
-        mc.options.getSoundSourceOptionInstance(SoundSource.MASTER).set(0.0);
+        mc.options.getSoundSourceOptionInstance(SoundSource.MASTER).set(0.01);
         mc.options.save();
     }
 
@@ -374,6 +374,7 @@ public final class Driver {
                 press.invoke(mc.keyboardHandler, mc.getWindow().handle(), GLFW.GLFW_PRESS, key);
                 press.invoke(mc.keyboardHandler, mc.getWindow().handle(), GLFW.GLFW_RELEASE, key);
             }
+            case "typespace" -> mc.gui.screen().charTyped(new CharacterEvent(32));
             case "type" -> arg.codePoints().forEach(c -> mc.gui.screen().charTyped(new CharacterEvent(c)));
             case "slot" -> mc.player.getInventory().setSelectedSlot(hotbar(mc, arg));
             case "frame" -> frame(mc, args);
@@ -384,7 +385,7 @@ public final class Driver {
                 mc.player.onUpdateAbilities();
             }
             case "sneak" -> mc.options.keyShift.setDown(arg.equals("on"));
-            case "hud" -> { if (mc.gui.hud.isHidden() != arg.equals("off")) mc.gui.hud.toggle(); }
+            case "hud" -> {}
             case "toasts" -> toasts = arg.equals("on");
             case "gui" -> {
                 mc.options.guiScale().set(Integer.parseInt(arg));
@@ -395,6 +396,16 @@ public final class Driver {
             case "shot" -> Screenshot.grab(mc.gameDirectory, arg + ".png", mc.gameRenderer.mainRenderTarget(), 1,
                     message -> LOG.info("[driver] {}", message.getString()));
             case "clip" -> clip(mc, args);
+            case "join" -> {
+                net.minecraft.client.gui.screens.ConnectScreen.startConnecting(new net.minecraft.client.gui.screens.TitleScreen(), mc,
+                        net.minecraft.client.multiplayer.resolver.ServerAddress.parseString(arg),
+                        new net.minecraft.client.multiplayer.ServerData("test", arg, net.minecraft.client.multiplayer.ServerData.Type.OTHER), false, null);
+                loading = true;
+            }
+            case "leave" -> {
+                hover = false;
+                mc.disconnectFromWorld(ClientLevel.DEFAULT_QUIT_MESSAGE);
+            }
             case "quit" -> {
                 LOG.info("[driver] done: {} step(s) failed", failed);
                 quitting = true;
@@ -423,7 +434,7 @@ public final class Driver {
                 new LevelSettings.DifficultySettings(Difficulty.PEACEFUL, false, false), true, WorldDataConfiguration.DEFAULT);
         if (seed.isEmpty()) {
             mc.createWorldOpenFlows().createFreshLevel(WORLD, settings, new WorldOptions(0, false, false),
-                    WorldPresets::createTestWorldDimensions, mc.gui.screen());
+                    WorldPresets::createNormalWorldDimensions, mc.gui.screen());
         } else {
             mc.createWorldOpenFlows().createFreshLevel(WORLD, settings, new WorldOptions(Long.parseLong(seed), true, false),
                     WorldPresets::createNormalWorldDimensions, mc.gui.screen());

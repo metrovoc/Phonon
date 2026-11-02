@@ -64,7 +64,7 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
             int top = getContentY();
             int left = getContentX();
             int width = getContentWidth();
-            int textColor = isSelected() ? 0xFFFFFF : (hovered ? 0xE0E0E0 : 0xA0A0A0);
+            int textColor = isSelected() ? 0xFFFFFFFF : (hovered ? 0xFFE0E0E0 : 0xFFA0A0A0);
 
             if (hovered) {
                 graphics.fill(getX() + 1, getY() + 1, getX() + getWidth() - 1, getY() + getHeight() - 1,
@@ -81,7 +81,7 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
             // Duration (right-aligned)
             String duration = formatDuration(resource.durationMs());
             int durationWidth = minecraft.font.width(duration);
-            graphics.drawString(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0x808080);
+            graphics.drawString(minecraft.font, duration, left + width - durationWidth - 4, top + 4, 0xFF808080);
 
         }
 

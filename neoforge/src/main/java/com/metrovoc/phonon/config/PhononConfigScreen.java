@@ -133,13 +133,13 @@ public final class PhononConfigScreen extends Screen {
 
         int left = (width - FIELD_WIDTH) / 2;
         int top = Math.max(38, height / 2 - 105);
-        graphics.drawCenteredString(font, title, width / 2, top - 22, 0xFFFFFF);
+        graphics.drawCenteredString(font, title, width / 2, top - 22, 0xFFFFFFFF);
         graphics.drawString(font, Component.translatable("config.phonon.client.cacheDirectory"),
-            left, top, 0xA0A0A0);
+            left, top, 0xFFA0A0A0);
         graphics.drawString(font, Component.translatable("config.phonon.client.maxCacheSizeMB"),
-            left, top + ROW_HEIGHT, 0xA0A0A0);
+            left, top + ROW_HEIGHT, 0xFFA0A0A0);
         graphics.drawString(font, Component.translatable("config.phonon.client.maxAudioDistance"),
-            left, top + ROW_HEIGHT * 2, 0xA0A0A0);
+            left, top + ROW_HEIGHT * 2, 0xFFA0A0A0);
     }
 
     @Override

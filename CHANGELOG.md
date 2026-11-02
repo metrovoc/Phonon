@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0-alpha.3
+
+This alpha fixes bugs reported by players. It passes compilation and automated
+tests on every target. Manual gameplay testing is still outstanding, so this
+build remains alpha.
+
+### Fixes
+
+- Restore speaker and config screen text on targets where the game skips
+  colours with zero alpha.
+- Run yt-dlp directly instead of probing it with a 5 second limit, which could
+  report a slow start as "not found" and block the server thread.
+- Log yt-dlp's output when it fails, and the `PATH` when it cannot start.
+- Keep the track list highlight inside the selection box on Minecraft 1.21.1
+  through 1.21.8.
+
 ## 0.3.0-alpha.1
 
 This is an alpha build. Every target passes compilation and automated tests,

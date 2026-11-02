@@ -4,7 +4,11 @@ import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.platform.PlatformHelper;
+import com.metrovoc.phonon.config.PhononClientConfig;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.List;
@@ -44,11 +48,25 @@ public final class ClientSpeakerManager {
         if (playback.isPlaying()) {
             speakers.put(pos, playback);
             startPlayback(pos, playback, volume);
+            if (previous == null || !Objects.equals(previous.resourceId(), playback.resourceId())) {
+                announce(pos, playback.resourceId());
+            }
         } else if (playback.isPaused()) {
             speakers.put(pos, playback);
         } else {
             speakers.remove(pos);
         }
+    }
+
+    /** The same "Now Playing" line a jukebox shows, for players close enough to hear it. */
+    private static void announce(BlockPos pos, UUID resourceId) {
+        Minecraft minecraft = Minecraft.getInstance();
+        double range = PhononClientConfig.getMaxAudioDistance();
+        if (minecraft.player == null || minecraft.player.position().distanceToSqr(Vec3.atCenterOf(pos)) > range * range) {
+            return;
+        }
+        ClientAudioManager.getInstance().getResource(resourceId).ifPresent(resource ->
+            minecraft.gui.setNowPlaying(Component.literal(resource.name())));
     }
 
     private void stopAndRelease(BlockPos pos) {

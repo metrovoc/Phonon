@@ -9,10 +9,15 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.CreativeModeTab;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.function.Supplier;
@@ -50,6 +55,16 @@ public class PhononRegistry {
         MENU_TYPES.register("speaker", () ->
             new MenuType<>((id, inv) -> new SpeakerMenu(id, inv, BlockPos.ZERO), FeatureFlags.DEFAULT_FLAGS)
         );
+
+    /** Beside the blocks players would look for it next to. */
+    public static void addToCreativeTabs(BuildCreativeModeTabContentsEvent event) {
+        ItemStack speaker = new ItemStack(SPEAKER_ITEM.get());
+        if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) {
+            event.insertAfter(new ItemStack(Items.JUKEBOX), speaker, CreativeModeTab.TabVisibility.PARENT_AND_SEARCH_TABS);
+        } else if (event.getTabKey() == CreativeModeTabs.REDSTONE_BLOCKS) {
+            event.insertAfter(new ItemStack(Items.NOTE_BLOCK), speaker, CreativeModeTab.TabVisibility.PARENT_TAB_ONLY);
+        }
+    }
 
     public static void register(IEventBus modBus) {
         SpeakerBlockEntity.setTypeSupplier(SPEAKER_BLOCK_ENTITY);

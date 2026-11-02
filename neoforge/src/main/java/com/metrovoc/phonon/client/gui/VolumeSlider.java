@@ -26,7 +26,7 @@ public class VolumeSlider extends AbstractSliderButton {
     @Override
     protected void updateMessage() {
         int percent = (int) (this.value * 100);
-        this.setMessage(Component.literal("Volume: " + percent + "%"));
+        this.setMessage(Component.translatable("gui.phonon.speaker.volume", percent));
     }
 
     @Override

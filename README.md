@@ -11,6 +11,7 @@ Minecraft version in the filename must match the game exactly.
 - **Speaker Blocks** - Place in-world speakers that play custom audio
 - **Real-time Sync** - All players hear the same audio at the same time
 - **Universal URL Support** - YouTube, Bilibili, or any URL via yt-dlp integration
+- **Music Folder** - Drop audio files into the world and they become tracks
 - **Spatial Audio** - Sound emanates from speaker locations
 - **Streaming Playback** - Playback can begin before a track finishes downloading
 - **Bounded Cache** - Downloaded OGG files are cached with configurable LRU-style eviction
@@ -21,30 +22,55 @@ Client and server:
 
 - Java and NeoForge versions declared by the selected Minecraft artifact
 
-Server-side (for audio downloading):
+Adding audio happens on the machine that runs the server, which in singleplayer
+is your own PC. Direct links to OGG files need nothing else. Other links and
+non-OGG files need yt-dlp, FFmpeg and Deno.
 
-- [FFmpeg](https://ffmpeg.org/)
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (optional, for URL support)
+If they are missing, Phonon offers to install them in chat the first time they
+are needed. An operator clicks to accept, and pinned builds with verified
+checksums go into `phonon/tools` in the game folder. Server owners can turn this
+off with `allowToolInstall` in the server config, and tools already on `PATH`
+are used when Phonon hasn't installed its own.
 
-Direct OGG URLs work without yt-dlp. Other media sites require yt-dlp and its
-FFmpeg integration.
+To install them yourself on Windows:
 
-## Commands
+```powershell
+winget install --source winget --id yt-dlp.yt-dlp
+```
 
-| Command | Description |
-|---------|-------------|
-| `/phonon add <name> <url>` | Download and register audio |
-| `/phonon list` | View registered audio |
-| `/phonon remove <name>` | Remove audio |
-| `/phonon reload` | Reload configuration |
+winget also installs FFmpeg and Deno. Restart the Minecraft Launcher afterwards.
 
 ## Usage
 
-1. Place a Speaker block
-2. Right-click to open the control GUI
-3. Select a track and press play
+1. Find the Speaker in the creative menu under Functional Blocks or Redstone
+   Blocks, or craft it once you have a jukebox
+2. Add a song with `/phonon add <link>`
+3. Right-click the Speaker, select the track and press play
 
 All players near the speaker will hear synchronized playback.
+
+Volume follows the game's Jukebox/Note Blocks slider.
+
+To add local files, put them in `phonon_music` inside the world folder and run
+`/phonon reload`. MP3, WAV, FLAC, M4A, AAC, Opus, WMA and OGG are accepted. The
+originals stay in the folder.
+
+## Commands
+
+All commands need operator permission.
+
+| Command | Description |
+|---------|-------------|
+| `/phonon add [name] <link>` | Download and register audio. Without a name, it uses the video's title |
+| `/phonon list` | View registered audio |
+| `/phonon remove <name>` | Remove audio |
+| `/phonon reload` | Reload configuration and import new files from the music folder |
+| `/phonon tools` | Show which audio tools were found |
+| `/phonon tools install` | Install yt-dlp, FFmpeg and Deno into the game folder |
+| `/phonon tools update` | Update the yt-dlp that Phonon installed |
+
+The server config's `audioQuality` sets the Vorbis quality of newly added audio,
+from 0 (smallest) to 10 (best).
 
 ## Compatibility
 

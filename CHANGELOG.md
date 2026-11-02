@@ -4,6 +4,32 @@
 
 First beta, for Minecraft 26.2 and 1.21.1. Other targets stay at `0.3.0-alpha.3`.
 
+### Test evidence
+
+- Target: Minecraft 26.2, NeoForge 26.2.0.93, Java 25, commit `ed93699`, tested on macOS on Apple Silicon.
+- Automated tests and the scripted checklist (`neoforge/driver/checklist`) pass in
+  the real client and on a dedicated server: play, pause, resume, seek, stop,
+  volume, several speakers, automatic stop, resource reload, rejoin, server
+  restart, and a player without operator permission.
+- Sync between two clients on one machine: a late joiner's playback clock was
+  within 21 ms of the first player's, and 16 ms after a seek. This compares
+  playback clocks, not the sound itself.
+- In-game tool install, YouTube link and music folder import pass on this target.
+
+### Not tested
+
+- Nobody has listened to this build, including the volume slider change.
+- Windows and Linux, including the tool downloads on those systems.
+- Two computers over a real network, and multi-hour sessions.
+- `/phonon tools update`, `allowToolInstall=false`, and non-default `audioQuality`.
+
+### Known issues
+
+- Pausing a singleplayer game may leave audio behind the playback clock. This is
+  suspected from the code and hasn't been measured.
+- On 1.21.1, resource reload can log `Stop: Invalid name parameter`. Playback
+  recovers.
+
 ### Getting started
 
 - List the Speaker in the creative menu, unlock its recipe on picking up a

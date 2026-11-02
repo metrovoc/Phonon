@@ -64,7 +64,7 @@ public class TrackListWidget extends ObjectSelectionList<TrackListWidget.Entry> 
             int textColor = isSelected() ? 0xFFFFFFFF : (hovered ? 0xFFE0E0E0 : 0xFFA0A0A0);
 
             if (hovered || isSelected()) {
-                graphics.fill(left, top, left + width, top + height,
+                graphics.fill(left, top, left + width - 4, top + height,
                     isSelected() ? 0x40FFFFFF : 0x20FFFFFF);
             }
 

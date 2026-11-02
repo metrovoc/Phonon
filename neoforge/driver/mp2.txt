@@ -1,0 +1,26 @@
+join 127.0.0.1:25612
+wait 80
+fly on
+cmd tp @s 0 120 0 0 0
+wait 60
+gui 3
+cmd phonon list
+wait 20
+pstate r_a_after_restart 1 120 2
+shot r_list
+use -2 120 2
+wait 30
+click 100 54
+wait 6
+shot r_ui
+press ▶ Play
+wait 60
+pstate r_b_play -2 120 2
+press ■ Stop
+wait 20
+pstate r_b_stop -2 120 2
+key escape
+wait 10
+cmd stop
+wait 60
+quit

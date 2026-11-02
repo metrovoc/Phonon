@@ -24,11 +24,11 @@ neoForge {
         driver {
             client()
             sourceSet = sourceSets.driver
-            gameDirectory = file('run/driver')
+            gameDirectory = file(providers.gradleProperty('gdir').orElse('run/driver').get())
             var projectDir = layout.projectDirectory
             systemProperties.put 'driver.script', providers.gradleProperty('script').map { projectDir.file(it).asFile.absolutePath }.orElse('')
             systemProperties.put 'driver.monitor', providers.gradleProperty('monitor').orElse('')
-            programArguments.addAll '--width', '1600', '--height', '1000'
+            programArguments.addAll '--username', providers.gradleProperty('uname').orElse('Dev').get(), '--width', '1600', '--height', '1000'
         }
     }
 

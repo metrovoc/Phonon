@@ -1,0 +1,101 @@
+world 12345
+cmd gamerule send_command_feedback true
+cmd gamerule spawn_mobs false
+cmd gamerule advance_time false
+cmd time set noon
+gui 3
+wait 20
+cmd phonon add long http://127.0.0.1:51990/long.wav
+wait 240
+cmd phonon add short http://127.0.0.1:51990/short.ogg
+wait 100
+cmd phonon list
+wait 20
+fly on
+cmd tp @s 0 120 0 0 0
+wait 40
+cmd setblock 1 120 2 phonon:speaker
+cmd setblock -2 120 2 phonon:speaker
+cmd setblock 4 120 2 phonon:speaker
+wait 20
+use 1 120 2
+wait 30
+inspect
+shot a_open
+click 100 54
+wait 6
+press ▶ Play
+wait 80
+pstate a_play 1 120 2
+shot a_playing
+press ⏸ Pause
+wait 30
+pstate a_pause1 1 120 2
+wait 40
+pstate a_pause2 1 120 2
+shot a_paused
+press ▶ Play
+wait 30
+pstate a_resume 1 120 2
+click 310 52
+wait 30
+pstate a_seek_fwd 1 120 2
+click 215 52
+wait 30
+pstate a_seek_back 1 120 2
+shot a_seek
+click 320 88
+wait 20
+pstate a_vol 1 120 2
+shot a_vol
+key escape
+wait 10
+use -2 120 2
+wait 30
+click 100 54
+wait 6
+press ▶ Play
+wait 40
+pstate b_same -2 120 2
+pstate a_during_b 1 120 2
+key escape
+wait 10
+use 4 120 2
+wait 30
+click 100 70
+wait 6
+shot c_pick
+press ▶ Play
+wait 30
+pstate c_diff 4 120 2
+pstate a_during_c 1 120 2
+pstate b_during_c -2 120 2
+shot c_playing
+wait 140
+pstate c_autostop 4 120 2
+shot c_after
+key escape
+wait 10
+reload
+wait 200
+pstate a_after_reload 1 120 2
+pstate b_after_reload -2 120 2
+use 1 120 2
+wait 30
+press ■ Stop
+wait 30
+pstate a_stop 1 120 2
+shot a_stopped
+key escape
+wait 10
+config
+wait 20
+shot config_open
+click 500 290
+type abc
+wait 4
+inspect
+shot config_typed
+key escape
+wait 10
+quit

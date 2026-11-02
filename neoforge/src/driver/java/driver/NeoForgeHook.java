@@ -13,6 +13,7 @@ public final class NeoForgeHook {
 
     @SubscribeEvent
     static void tick(ClientTickEvent.Post event) {
+        PhononSteps.init();
         Driver.tick();
     }
 }

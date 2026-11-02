@@ -1,0 +1,64 @@
+join 127.0.0.1:25612
+wait 80
+fly on
+cmd tp @s 0 120 0 0 0
+wait 60
+gui 3
+cmd phonon list
+wait 20
+cmd phonon add long http://127.0.0.1:51990/long.wav
+wait 240
+cmd phonon add short http://127.0.0.1:51990/short.ogg
+wait 100
+cmd phonon list
+wait 20
+cmd setblock 1 120 2 phonon:speaker
+cmd setblock -2 120 2 phonon:speaker
+cmd setblock 4 120 2 phonon:speaker
+wait 30
+use 1 120 2
+wait 30
+click 100 54
+wait 6
+press ▶ Play
+wait 80
+pstate mp_a_play 1 120 2
+shot mp_a
+key escape
+wait 10
+use 4 120 2
+wait 30
+click 100 72
+wait 6
+press ▶ Play
+wait 40
+pstate mp_c_diff 4 120 2
+pstate mp_a_during 1 120 2
+wait 120
+pstate mp_c_autostop 4 120 2
+key escape
+wait 10
+pstate mp_a_before_leave 1 120 2
+leave
+wait 200
+join 127.0.0.1:25612
+wait 60
+pstate mp_a_rejoin 1 120 2
+shot mp_rejoin
+use 1 120 2
+wait 30
+press ⏸ Pause
+wait 30
+pstate mp_a_pause 1 120 2
+click 310 52
+wait 30
+pstate mp_a_seek 1 120 2
+press ▶ Play
+wait 40
+pstate mp_a_resume 1 120 2
+key escape
+wait 10
+wait 20
+cmd stop
+wait 60
+quit

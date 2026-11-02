@@ -125,8 +125,7 @@ public final class ServerAudioStorage {
         Path targetFile = storageDir.resolve(resourceId + ".ogg");
         try {
             Phonon.LOGGER.info("Processing audio: {}", url);
-            boolean success = FFmpegHelper.isYtDlpAvailable()
-                && FFmpegHelper.downloadAndConvert(url, targetFile);
+            boolean success = FFmpegHelper.downloadAndConvert(url, targetFile);
 
             if (!success && isDirectOggUrl(url)) {
                 Phonon.LOGGER.info("Falling back to direct OGG download");

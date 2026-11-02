@@ -10,7 +10,6 @@ import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.config.NeoForgeServerConfig;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
-import com.metrovoc.phonon.server.FFmpegHelper;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -24,7 +23,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -74,19 +72,6 @@ public class PhononCommand {
         String name = StringArgumentType.getString(ctx, "name");
         String url = StringArgumentType.getString(ctx, "url");
 
-        // Check tool availability
-        boolean hasYtDlp = FFmpegHelper.isYtDlpAvailable();
-        String normalizedUrl = url.toLowerCase(Locale.ROOT);
-        boolean isDirectOgg = normalizedUrl.endsWith(".ogg") || normalizedUrl.contains(".ogg?");
-
-        if (!hasYtDlp && !isDirectOgg) {
-            ctx.getSource().sendFailure(Component.literal(
-                "yt-dlp not found. Only direct .ogg URLs are supported.\n" +
-                "Install yt-dlp: https://github.com/yt-dlp/yt-dlp"
-            ));
-            return 0;
-        }
-
         AudioManager manager = AudioManager.getInstance();
         if (manager.getResourceByName(name).isPresent()) {
             ctx.getSource().sendFailure(Component.literal("Resource '" + name + "' already exists"));
@@ -127,7 +112,7 @@ public class PhononCommand {
                         );
                     } else {
                         ctx.getSource().sendFailure(Component.literal(
-                            "\u00A7cFailed to download/convert audio. Check server logs."
+                            "\u00A7cFailed to download/convert audio. Non-OGG URLs need yt-dlp and FFmpeg on the server. Check server logs."
                         ));
                     }
                 });

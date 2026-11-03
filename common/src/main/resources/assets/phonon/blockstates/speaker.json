@@ -1,12 +1,12 @@
 {
     "variants": {
         "facing=north,playing=false": { "model": "phonon:block/speaker" },
-        "facing=north,playing=true": { "model": "phonon:block/speaker" },
+        "facing=north,playing=true": { "model": "phonon:block/speaker_playing" },
         "facing=south,playing=false": { "model": "phonon:block/speaker", "y": 180 },
-        "facing=south,playing=true": { "model": "phonon:block/speaker", "y": 180 },
+        "facing=south,playing=true": { "model": "phonon:block/speaker_playing", "y": 180 },
         "facing=east,playing=false": { "model": "phonon:block/speaker", "y": 90 },
-        "facing=east,playing=true": { "model": "phonon:block/speaker", "y": 90 },
+        "facing=east,playing=true": { "model": "phonon:block/speaker_playing", "y": 90 },
         "facing=west,playing=false": { "model": "phonon:block/speaker", "y": 270 },
-        "facing=west,playing=true": { "model": "phonon:block/speaker", "y": 270 }
+        "facing=west,playing=true": { "model": "phonon:block/speaker_playing", "y": 270 }
     }
 }

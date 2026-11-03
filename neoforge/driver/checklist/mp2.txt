@@ -13,10 +13,10 @@ wait 30
 click 100 54
 wait 6
 shot r_ui
-press ▶ Play
+press Play
 wait 60
 pstate r_b_play -2 120 2
-press ■ Stop
+press Stop
 wait 20
 pstate r_b_stop -2 120 2
 key escape

@@ -1,0 +1,36 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "down": "phonon:block/speaker_down",
+    "up": "phonon:block/speaker_up",
+    "north": "phonon:block/speaker_north_playing",
+    "south": "phonon:block/speaker_south",
+    "east": "phonon:block/speaker_east",
+    "west": "phonon:block/speaker_west",
+    "light": "phonon:block/speaker_light",
+    "particle": "phonon:block/speaker_north"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "down": { "texture": "#down", "cullface": "down" },
+        "up": { "texture": "#up", "cullface": "up" },
+        "north": { "texture": "#north", "cullface": "north" },
+        "south": { "texture": "#south", "cullface": "south" },
+        "west": { "texture": "#west", "cullface": "west" },
+        "east": { "texture": "#east", "cullface": "east" }
+      }
+    },
+    {
+      "from": [2, 13, -0.01],
+      "to": [4, 14, -0.01],
+      "shade": false,
+      "neoforge_data": { "block_light": 15, "sky_light": 15 },
+      "faces": {
+        "north": { "uv": [0, 0, 2, 1], "texture": "#light" }
+      }
+    }
+  ]
+}

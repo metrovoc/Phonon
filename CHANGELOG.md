@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Show "Now Playing" when the Speaker screen closes if a track started behind it,
+  since the screen hid the line for its whole 3 seconds.
+
 ## 0.3.0-beta.2
 
 First published beta, for Minecraft 26.2 and 1.21.1. Other targets stay at

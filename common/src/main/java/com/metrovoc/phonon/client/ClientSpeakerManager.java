@@ -11,10 +11,12 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -28,6 +30,8 @@ public final class ClientSpeakerManager {
     private final Map<BlockPos, Long> activeStreams = new HashMap<>();
     private boolean holdNowPlaying;
     private BlockPos heldNowPlaying;
+    private final Set<BlockPos> buffering = new HashSet<>();
+    private final Set<BlockPos> failed = new HashSet<>();
 
     private ClientSpeakerManager() {}
 
@@ -94,7 +98,17 @@ public final class ClientSpeakerManager {
         }
     }
 
+    public boolean isBuffering(BlockPos pos) {
+        return buffering.contains(pos);
+    }
+
+    public boolean hasFailed(BlockPos pos) {
+        return failed.contains(pos);
+    }
+
     private void stopAndRelease(BlockPos pos) {
+        buffering.remove(pos);
+        failed.remove(pos);
         PlatformHelper.INSTANCE.stopAudio(pos);
         Long streamId = activeStreams.remove(pos);
         if (streamId != null) {
@@ -118,6 +132,7 @@ public final class ClientSpeakerManager {
             .acquire(resourceId, positionMs);
         long streamId = acquisition.session().getStreamId();
         activeStreams.put(pos, streamId);
+        buffering.add(pos);
 
         StreamingAudioManager.getInstance().addReadyCallback(streamId, session -> {
             PlaybackState current = speakers.get(pos);
@@ -127,6 +142,7 @@ public final class ClientSpeakerManager {
                 return;
             }
 
+            buffering.remove(pos);
             float currentVolume = speakerVolumes.getOrDefault(pos, 0.5f);
             long currentPosition = current.getCurrentPositionMs();
             startStreamingPlayback(pos, streamId, currentPosition, currentVolume);
@@ -142,6 +158,7 @@ public final class ClientSpeakerManager {
         StreamingAudioStream stream = StreamingAudioManager.getInstance().createStream(streamId, positionMs);
         if (stream == null) {
             Phonon.LOGGER.error("Failed to create decoder for audio stream {}", streamId);
+            failed.add(pos);
             return;
         }
         PlatformHelper.INSTANCE.playStreamingAudio(pos, stream, volume);

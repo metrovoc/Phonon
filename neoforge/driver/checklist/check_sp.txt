@@ -24,17 +24,17 @@ inspect
 shot a_open
 click 100 54
 wait 6
-press ▶ Play
+press Play
 wait 80
 pstate a_play 1 120 2
 shot a_playing
-press ⏸ Pause
+press Pause
 wait 30
 pstate a_pause1 1 120 2
 wait 40
 pstate a_pause2 1 120 2
 shot a_paused
-press ▶ Play
+press Play
 wait 30
 pstate a_resume 1 120 2
 click 310 52
@@ -54,7 +54,7 @@ use -2 120 2
 wait 30
 click 100 54
 wait 6
-press ▶ Play
+press Play
 wait 40
 pstate b_same -2 120 2
 pstate a_during_b 1 120 2
@@ -65,7 +65,7 @@ wait 30
 click 100 70
 wait 6
 shot c_pick
-press ▶ Play
+press Play
 wait 30
 pstate c_diff 4 120 2
 pstate a_during_c 1 120 2
@@ -82,7 +82,7 @@ pstate a_after_reload 1 120 2
 pstate b_after_reload -2 120 2
 use 1 120 2
 wait 30
-press ■ Stop
+press Stop
 wait 30
 pstate a_stop 1 120 2
 shot a_stopped

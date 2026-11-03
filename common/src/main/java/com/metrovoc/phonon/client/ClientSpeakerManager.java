@@ -26,6 +26,8 @@ public final class ClientSpeakerManager {
     private final Map<BlockPos, PlaybackState> speakers = new HashMap<>();
     private final Map<BlockPos, Float> speakerVolumes = new HashMap<>();
     private final Map<BlockPos, Long> activeStreams = new HashMap<>();
+    private boolean holdNowPlaying;
+    private BlockPos heldNowPlaying;
 
     private ClientSpeakerManager() {}
 
@@ -59,14 +61,37 @@ public final class ClientSpeakerManager {
     }
 
     /** The same "Now Playing" line a jukebox shows, for players close enough to hear it. */
-    private static void announce(BlockPos pos, UUID resourceId) {
+    private void announce(BlockPos pos, UUID resourceId) {
         Minecraft minecraft = Minecraft.getInstance();
         double range = PhononClientConfig.getMaxAudioDistance();
         if (minecraft.player == null || minecraft.player.position().distanceToSqr(Vec3.atCenterOf(pos)) > range * range) {
             return;
         }
+        if (holdNowPlaying) {
+            heldNowPlaying = pos;
+        } else {
+            showNowPlaying(resourceId);
+        }
+    }
+
+    private static void showNowPlaying(UUID resourceId) {
+        Minecraft minecraft = Minecraft.getInstance();
         ClientAudioManager.getInstance().getResource(resourceId).ifPresent(resource ->
             minecraft.gui.hud.setNowPlaying(Component.literal(resource.name())));
+    }
+
+    /** The speaker screen covers the line, so tracks started behind it announce when it closes. */
+    public void holdNowPlaying() {
+        holdNowPlaying = true;
+    }
+
+    public void releaseNowPlaying() {
+        holdNowPlaying = false;
+        PlaybackState held = heldNowPlaying == null ? null : speakers.get(heldNowPlaying);
+        heldNowPlaying = null;
+        if (held != null && held.isPlaying()) {
+            showNowPlaying(held.resourceId());
+        }
     }
 
     private void stopAndRelease(BlockPos pos) {

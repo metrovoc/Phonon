@@ -63,6 +63,7 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
     @Override
     protected void init() {
         super.init();
+        ClientSpeakerManager.getInstance().holdNowPlaying();
 
         currentVolume = ClientSpeakerManager.getInstance().getSpeakerVolume(menu.getSpeakerPos());
 
@@ -75,6 +76,12 @@ public class SpeakerScreen extends AbstractContainerScreen<SpeakerMenu> {
         initLeftColumn(leftX, topY, leftWidth);
         initRightColumn(rightX, topY, rightWidth);
         refreshTrackList();
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        ClientSpeakerManager.getInstance().releaseNowPlaying();
     }
 
     private void initLeftColumn(int x, int y, int width) {

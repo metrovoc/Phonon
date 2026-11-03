@@ -78,16 +78,47 @@ public final class Driver {
                 if (mc.screen instanceof AbstractContainerScreen<?> s) { x += s.getGuiLeft(); y += s.getGuiTop(); } click(mc, x, y); }
             case "press" -> { var w = mc.screen.children().stream().filter(c -> c instanceof AbstractWidget v && v.getMessage().getString().contains(arg)).map(c -> (AbstractWidget) c).findFirst().orElseThrow();
                 click(mc, w.getX() + w.getWidth() / 2.0, w.getY() + w.getHeight() / 2.0); }
-            case "key" -> mc.screen.onClose();
+            case "key" -> { int key = GLFW.class.getField("GLFW_KEY_" + arg.toUpperCase(java.util.Locale.ROOT)).getInt(null);
+                if (mc.screen != null) { mc.screen.keyPressed(key, 0, 0); } }
+            case "hover" -> { double[] at = spot(mc, a[0], a[1]); moveMouse(mc, at[0], at[1]); }
+            case "scroll" -> mc.screen.mouseScrolled(mouseX, mouseY, 0, Double.parseDouble(arg));
+            case "drag" -> { double[] from = spot(mc, a[0], a[1]), to = spot(mc, a[2], a[3]); moveMouse(mc, from[0], from[1]);
+                mc.screen.mouseClicked(from[0], from[1], 0); int steps = a.length > 4 ? Integer.parseInt(a[4]) : 4;
+                for (int i = 1; i <= steps; i++) { double x = from[0] + (to[0] - from[0]) * i / steps, y = from[1] + (to[1] - from[1]) * i / steps;
+                    mc.screen.mouseDragged(x, y, 0, x - mouseX, y - mouseY); moveMouse(mc, x, y); }
+                mc.screen.mouseReleased(to[0], to[1], 0); }
+            case "hud" -> mc.options.hideGui = arg.equals("off");
             case "type" -> { for (char c : arg.toCharArray()) charTyped(mc, c); }
             case "typespace" -> charTyped(mc, ' ');
-            case "inspect" -> mc.screen.children().forEach(c -> { if (c instanceof AbstractWidget w) LOG.info("[driver]   {} \"{}\" at {},{}", w.getClass().getSimpleName(), w.getMessage().getString(), w.getX(), w.getY()); });
+            case "inspect" -> { if (mc.screen == null) { LOG.info("[driver] no screen open"); } else mc.screen.children().forEach(c -> { if (c instanceof AbstractWidget w) LOG.info("[driver]   {} \"{}\" at {},{}", w.getClass().getSimpleName(), w.getMessage().getString(), w.getX(), w.getY()); }); }
             case "shot" -> shot(mc, arg);
             case "join" -> { ConnectScreen.startConnecting(new TitleScreen(), mc, ServerAddress.parseString(arg), new ServerData("test", arg, ServerData.Type.OTHER), false, null); loading = true; }
             case "leave" -> { hover = false; disconnect(mc); }
             case "quit" -> { LOG.info("[driver] done: {} step(s) failed", failed); quitting = true; if (mc.level != null) disconnect(mc); }
             default -> { Step s = STEPS.get(parts[0]); if (s == null) throw new IllegalArgumentException("unknown step " + parts[0]); s.run(mc, arg); }
         }
+    }
+
+    private static double mouseX;
+    private static double mouseY;
+
+    private static double[] spot(Minecraft mc, String x, String y) {
+        double[] at = {Integer.parseInt(x) + 0.5, Integer.parseInt(y) + 0.5};
+        if (mc.screen instanceof AbstractContainerScreen<?> s) { at[0] += s.getGuiLeft(); at[1] += s.getGuiTop(); }
+        return at;
+    }
+
+    private static void moveMouse(Minecraft mc, double x, double y) throws ReflectiveOperationException {
+        mouseX = x;
+        mouseY = y;
+        var window = mc.getWindow();
+        for (String[] axis : new String[][] {{"xpos", String.valueOf(x * window.getScreenWidth() / window.getGuiScaledWidth())},
+                {"ypos", String.valueOf(y * window.getScreenHeight() / window.getGuiScaledHeight())}}) {
+            var field = net.minecraft.client.MouseHandler.class.getDeclaredField(axis[0]);
+            field.setAccessible(true);
+            field.setDouble(mc.mouseHandler, Double.parseDouble(axis[1]));
+        }
+        if (mc.screen != null) { mc.screen.mouseMoved(x, y); }
     }
 
     private static void createWorld(Minecraft mc, String seed) throws Exception {

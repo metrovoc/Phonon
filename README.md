@@ -2,10 +2,6 @@
 
 Give your world a soundtrack. Play your music through placed speakers, tune them to a shared station, or carry it with you in a boombox.
 
-[![Phonon trailer: a speaker and boombox on a warm background](https://github.com/metrovoc/Phonon/releases/download/v0.3.0-beta.3%2Bmc26.2/Phonon-cover.jpg)](https://github.com/metrovoc/Phonon/releases/download/v0.3.0-beta.3%2Bmc26.2/Phonon-trailer.mp4)
-
-**[Watch the trailer](https://github.com/metrovoc/Phonon/releases/download/v0.3.0-beta.3%2Bmc26.2/Phonon-trailer.mp4)** · Real gameplay featuring speakers, stations, playlists and the boombox.
-
 Phonon is currently in beta. The default branch targets Minecraft 26.2, and
 every supported Minecraft release receives its own NeoForge artifact. The
 Minecraft version in the filename must match the game exactly.

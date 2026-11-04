@@ -1,16 +1,9 @@
 [
   {
-    "file": "docs/gallery/cover.jpg",
-    "title": "Phonon",
-    "description": "Your music, wherever you build.",
-    "featured": true,
-    "ordering": 0
-  },
-  {
     "file": "docs/gallery/speakers.jpg",
     "title": "Shared stations",
     "description": "Two speakers tuned to Harbor FM.",
-    "featured": false,
+    "featured": true,
     "ordering": 1
   },
   {

@@ -32,6 +32,11 @@ request("PATCH", data=json.dumps({"body": body, "description": summary}).encode(
 project = json.loads(request("GET"))
 existing = {item.get("title") for item in project["gallery"]}
 gallery = json.loads((ROOT / "docs/gallery.json").read_text())
+desired_titles = {item["title"] for item in gallery}
+for item in project["gallery"]:
+    if item.get("title") not in desired_titles:
+        request("DELETE", "/gallery?" + urlencode({"url": item["url"]}))
+        print(f"Removed gallery image absent from manifest: {item.get('title')}")
 for item in gallery:
     if item["title"] in existing:
         continue

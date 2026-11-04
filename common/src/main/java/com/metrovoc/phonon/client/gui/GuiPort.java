@@ -6,11 +6,13 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.PlayerFaceExtractor;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.permissions.Permissions;
@@ -18,6 +20,8 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
 
 /** The only GUI file that touches APIs which change between Minecraft versions. */
 final class GuiPort {
@@ -62,6 +66,13 @@ final class GuiPort {
 
         void unclip() {
             graphics.disableScissor();
+        }
+
+        /** A player's face, from their skin if they're online and the default for their ID if not. */
+        void head(UUID player, int x, int y, int size) {
+            var connection = Minecraft.getInstance().getConnection();
+            var info = connection == null ? null : connection.getPlayerInfo(player);
+            PlayerFaceExtractor.extractRenderState(graphics, info != null ? info.getSkin() : DefaultPlayerSkin.get(player), x, y, size);
         }
 
         void tooltip(Component text, int mouseX, int mouseY) {
@@ -141,6 +152,9 @@ final class GuiPort {
         @Nullable
         abstract EditBox textField();
 
+        /** Enter was pressed in the text field. */
+        abstract void submitField();
+
         @Override
         public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(graphics, mouseX, mouseY, partialTick);
@@ -162,6 +176,10 @@ final class GuiPort {
         public boolean keyPressed(KeyEvent event) {
             EditBox field = textField();
             if (field != null && field.isFocused() && !event.isEscape()) {
+                if (event.isConfirmation()) {
+                    submitField();
+                    return true;
+                }
                 return field.keyPressed(event);
             }
             return super.keyPressed(event);

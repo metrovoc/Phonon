@@ -32,6 +32,10 @@ public class NeoForgeServerConfig {
     // Tool settings
     public final ModConfigSpec.BooleanValue allowToolInstall;
 
+    // Permission settings
+    public final ModConfigSpec.BooleanValue ownerOnlySpeakers;
+    public final ModConfigSpec.BooleanValue anyoneCanAddTracks;
+
     private NeoForgeServerConfig(ModConfigSpec.Builder builder) {
         builder.push("transfer");
 
@@ -99,6 +103,18 @@ public class NeoForgeServerConfig {
             .define("allowToolInstall", true);
 
         builder.pop();
+
+        builder.push("permissions");
+
+        ownerOnlySpeakers = builder
+            .comment("Only the player who placed a speaker, and operators, can control it. Older speakers stay open.")
+            .define("ownerOnlySpeakers", false);
+
+        anyoneCanAddTracks = builder
+            .comment("Let every player add and delete library tracks from the speaker screen, not only operators.")
+            .define("anyoneCanAddTracks", false);
+
+        builder.pop();
     }
 
     /**
@@ -114,5 +130,7 @@ public class NeoForgeServerConfig {
         PhononServerConfig.setMaxAudioSizeMB(INSTANCE.maxAudioSizeMB::get);
         PhononServerConfig.setAudioQuality(INSTANCE.audioQuality::get);
         PhononServerConfig.setAllowToolInstall(INSTANCE.allowToolInstall::get);
+        PhononServerConfig.setOwnerOnlySpeakers(INSTANCE.ownerOnlySpeakers::get);
+        PhononServerConfig.setAnyoneCanAddTracks(INSTANCE.anyoneCanAddTracks::get);
     }
 }

@@ -12,26 +12,20 @@ import com.metrovoc.phonon.config.NeoForgeServerConfig;
 import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.platform.PlatformHelper;
-import com.metrovoc.phonon.server.AddRequest;
+import com.metrovoc.phonon.server.AddFlow;
 import com.metrovoc.phonon.server.AudioFailure;
 import com.metrovoc.phonon.server.AudioLibrary;
 import com.metrovoc.phonon.server.AudioTools;
-import com.metrovoc.phonon.server.DownloadResult;
 import com.metrovoc.phonon.server.ServerAudioStorage;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentUtils;
-import net.minecraft.network.chat.HoverEvent;
-import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.permissions.Permissions;
 
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -41,9 +35,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class PhononCommand {
     private static final AtomicBoolean installing = new AtomicBoolean();
-
-    /** An add that failed for lack of tools, retried once they are installed. */
-    private static Runnable retryAfterInstall;
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("phonon")
@@ -89,74 +80,9 @@ public class PhononCommand {
     }
 
     private static int addResource(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack source = ctx.getSource();
-        AddRequest request = AddRequest.parse(StringArgumentType.getString(ctx, "name and link"));
-        if (request == null) {
-            source.sendFailure(Component.translatable("phonon.add.error.bad_link"));
-            return 0;
-        }
-        if (request.hasName() && AudioManager.getInstance().getResourceByName(request.name()).isPresent()) {
-            source.sendFailure(Component.translatable("phonon.add.error.name_taken", request.name()));
-            return 0;
-        }
-        startAdd(source, request);
-        return 1;
+        return AddFlow.addFromText(ctx.getSource(), StringArgumentType.getString(ctx, "name and link")) ? 1 : 0;
     }
 
-    private static void startAdd(CommandSourceStack source, AddRequest request) {
-        tell(source, Component.translatable("phonon.add.processing", request.hasName() ? request.name() : request.url())
-            .withStyle(ChatFormatting.YELLOW));
-
-        UUID resourceId = UUID.randomUUID();
-        MinecraftServer server = source.getServer();
-        ServerAudioStorage.getInstance().downloadAndStore(resourceId, request.url())
-            .thenAccept(result -> server.execute(() -> finishAdd(source, request, resourceId, result)));
-    }
-
-    private static void finishAdd(CommandSourceStack source, AddRequest request, UUID id, DownloadResult result) {
-        if (!result.success()) {
-            source.sendFailure(Component.translatable(result.failure().translationKey()));
-            if (result.failure() == AudioFailure.TOOLS_MISSING) {
-                retryAfterInstall = () -> startAdd(source, request);
-                offerInstall(source);
-            }
-            return;
-        }
-
-        String name = AudioLibrary.uniqueName(request.hasName() ? request.name() : result.title());
-        AudioResource resource = AudioLibrary.register(source.getServer(), id, name, request.url());
-        if (resource == null) {
-            source.sendFailure(Component.translatable("phonon.add.error.unknown"));
-            return;
-        }
-        source.sendSuccess(() -> Component.translatable("phonon.add.done",
-            Component.literal(name).withStyle(ChatFormatting.WHITE),
-            formatDuration(resource.durationMs()),
-            formatSize(resource.sizeBytes())
-        ).withStyle(ChatFormatting.GREEN), true);
-    }
-
-    private static void offerInstall(CommandSourceStack source) {
-        if (!PhononServerConfig.getAllowToolInstall()) {
-            tell(source, Component.translatable("phonon.tools.install_disabled").withStyle(ChatFormatting.GRAY));
-        } else if (!AudioTools.canInstall()) {
-            tell(source, Component.translatable("phonon.tools.unsupported").withStyle(ChatFormatting.GRAY));
-        } else {
-            tell(source, Component.translatable("phonon.tools.offer",
-                action("/phonon tools install", Component.translatable(
-                    "phonon.tools.install_button", formatSize(AudioTools.installBytes())))));
-        }
-    }
-
-    /** Bracketed, clickable chat text that runs a command, like vanilla's chat actions. */
-    private static MutableComponent action(String command, Component label) {
-        return ComponentUtils.wrapInSquareBrackets(label).withStyle(style -> style
-            .withColor(ChatFormatting.GREEN)
-            .withClickEvent(new ClickEvent.RunCommand(command))
-            .withHoverEvent(new HoverEvent.ShowText(Component.literal(command))));
-    }
-
-    /** Delivered even with sendCommandFeedback off, since these are replies the player is waiting for. */
     private static void tell(CommandSourceStack source, Component message) {
         source.sendSystemMessage(message);
     }
@@ -170,7 +96,7 @@ public class PhononCommand {
                 status.tool()));
         }
         if (missing) {
-            offerInstall(source);
+            AddFlow.offerInstall(source);
         }
         return 1;
     }
@@ -215,11 +141,7 @@ public class PhononCommand {
             return;
         }
         tell(source, Component.translatable("phonon.tools.installed").withStyle(ChatFormatting.GREEN));
-        Runnable retry = retryAfterInstall;
-        retryAfterInstall = null;
-        if (retry != null) {
-            retry.run();
-        }
+        AddFlow.retryAfterInstall();
     }
 
     private static int updateTools(CommandContext<CommandSourceStack> ctx) {

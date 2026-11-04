@@ -6,6 +6,7 @@ import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.platform.PlatformHelper;
+import com.metrovoc.phonon.station.StationManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
@@ -71,6 +72,7 @@ public final class AudioLibrary {
     public static void remove(MinecraftServer server, AudioResource resource) {
         AudioManager.getInstance().removeResource(resource.id());
         ServerAudioStorage.getInstance().deleteAudio(resource.id());
+        StationManager.getInstance().forgetTrack(resource.id());
         changed(server);
     }
 

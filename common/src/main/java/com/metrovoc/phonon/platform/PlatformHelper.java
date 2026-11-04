@@ -3,10 +3,14 @@ package com.metrovoc.phonon.platform;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
+import com.metrovoc.phonon.server.LibraryJob;
+import com.metrovoc.phonon.server.SpeakerAction;
+import com.metrovoc.phonon.station.StationView;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 
+import java.util.List;
 import java.util.ServiceLoader;
 import java.util.UUID;
 
@@ -29,12 +33,16 @@ public interface PlatformHelper {
 
     void broadcastSpeakerState(Level level, BlockPos pos, SpeakerBlockEntity speaker);
 
+    /** A private station's details, for players near its speaker. */
+    void broadcastStationView(Level level, BlockPos pos, StationView view);
+
+    /** Shared stations and playlists, for everyone. */
+    void broadcastStations(MinecraftServer server);
+
+    void broadcastLibraryJobs(MinecraftServer server, List<LibraryJob> jobs);
+
     // Speaker controls (only called on client)
-    void playOnSpeaker(BlockPos pos, UUID resourceId);
-
-    void pauseSpeaker(BlockPos pos, UUID resourceId);
-
-    void stopSpeaker(BlockPos pos);
+    void sendSpeakerAction(BlockPos pos, SpeakerAction action, UUID target, UUID second, int number, String text);
 
     void seekSpeaker(BlockPos pos, long positionMs);
 

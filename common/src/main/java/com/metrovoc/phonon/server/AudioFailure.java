@@ -9,6 +9,8 @@ public enum AudioFailure {
     NOT_FOUND,
     RESTRICTED,
     BOT_CHECK,
+    REFUSED,
+    RATE_LIMITED,
     REGION,
     TOO_LARGE,
     UNSUPPORTED,
@@ -23,6 +25,8 @@ public enum AudioFailure {
     private static final List<Rule> RULES = List.of(
         new Rule(TOO_LARGE, List.of("larger than max-filesize")),
         new Rule(BOT_CHECK, List.of("not a bot")),
+        new Rule(REFUSED, List.of("http error 412", "precondition failed")),
+        new Rule(RATE_LIMITED, List.of("http error 429", "too many requests", "try again later", "rate-limit")),
         new Rule(REGION, List.of("not available in your country", "not available from your location",
             "blocked in your country", "geo restrict", "geo-restrict")),
         new Rule(RESTRICTED, List.of("private video", "sign in", "login required", "members-only",

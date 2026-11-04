@@ -98,6 +98,7 @@ import org.slf4j.Logger;
  * creative TAB               open the creative inventory on a tab, by id (minecraft:building_blocks)
  * press LABEL                click the open screen's first widget whose label starts with LABEL
  * click X Y [right]          click the open screen
+ * dclick X Y                 double-click the open screen
  * shift N|ITEM               shift-click hotbar slot N (0-8), or the first one holding ITEM, in the open container
  * take N                     shift-click slot number N of the open container (see inspect)
  * hover X Y [TICKS]          move the mouse; with TICKS, glide there in that many ticks
@@ -318,6 +319,15 @@ public final class Driver {
                 AbstractWidget button = widget(mc, rest[1]);
                 glide(button.getX() + button.getWidth() / 2.0, button.getY() + button.getHeight() / 2.0,
                         Integer.parseInt(rest[0]));
+            }
+            case "dclick" -> {
+                double[] at = spot(mc, args[0], args[1]);
+                moveMouse(mc, at[0], at[1]);
+                MouseButtonEvent event = new MouseButtonEvent(mouseX, mouseY, LEFT);
+                mc.gui.screen().mouseClicked(event, true);
+                if (mc.gui.screen() != null) {
+                    mc.gui.screen().mouseReleased(event);
+                }
             }
             case "click" -> {
                 point(mc, args);

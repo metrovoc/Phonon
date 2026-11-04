@@ -1,11 +1,77 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-beta.4
 
-- Find tracks by title: press **+** on the Tracks tab, type a title and press Enter, then
-  add a result with its **+** or a double click. Results show thumbnails, uploader and length.
-- `/phonon add <title>` adds the first result.
-- The server does the searching and fetches the thumbnails, so players never contact YouTube.
+For Minecraft 26.2 and 1.21.1. Other targets stay at `0.3.0-alpha.3`. The only change since the
+tested commits is this version number and these notes.
+
+### Finding tracks
+
+- Find tracks by title in the game. On the Tracks tab, type a title, press Enter, and add a result
+  with its **+** or a double click. Results show pictures, uploader and length.
+- `/phonon add <title>` adds the first YouTube result.
+- Search YouTube, SoundCloud or Bilibili from the list beside the results. Bilibili often refuses,
+  so it says so and offers another try.
+- The server does the searching and fetches the pictures, so players never contact the sites.
+
+### Speaker screen
+
+- One search box. Typing filters your library, and a green row offers to find it online or add a pasted link.
+- Playlists: add songs by typing, without leaving the playlist. Drag to reorder, and rename in place.
+- Add a song to playlists from the Tracks tab, with ticks showing where it already is.
+- Once tuned in, the screen says who a button affects. Locked controls go grey and say why, instead of a chat error.
+- Tuning in pauses your own music, and leaving brings it back where it was.
+- Starting a station shares what's playing, so the music carries on.
+- The main button only pauses and resumes. Songs play from their row: double-click or the play icon.
+- Long names run under Now Playing, one way and wrapping around. Lists stay still and keep their tooltips.
+
+### Permissions
+
+- Stations answer to whoever created them and operators. `anyoneCanControlStations` opens them up.
+- Deleting a track is for operators and whoever added it, even with `anyoneCanAddTracks` on.
+- `anyoneCanAddTracks` now also shows the search to the players it allows.
+- Redstone on a speaker tuned to a station only works if that speaker's owner created the station,
+  unless `anyoneCanControlStations` is on.
+- A speaker or boombox can only be tuned to a shared station, never to another speaker's own music.
+
+### Download tools
+
+- Failures say what happened and offer what could help, including "Update yt-dlp and try again" for operators.
+- `/phonon tools` shows versions and age, and which sites last worked or were blocked. `/phonon tools help` covers blocked servers.
+- Operators are told on joining if yt-dlp is over 30 days old. Updating installs Phonon's own copy if it's only on the system.
+- New server settings: `downloadProxy`, `cookiesFile` and `autoUpdateYtDlp`, all off by default.
+
+### Test evidence
+
+- Targets: Minecraft 26.2, NeoForge 26.2.0.93, Java 25, and Minecraft 1.21.1, NeoForge 21.1.235,
+  Java 21, both tested on macOS on Apple Silicon.
+- Automated tests and the scripted checklist pass on both, in the real client and on a dedicated server.
+- Two clients on a dedicated server, on both: locked controls and tooltips for a player who doesn't
+  own a speaker or station, deleting only your own track, a boombox resuming its own music after
+  leaving a station, playlist reorder and rename, and all of it after a server restart.
+- Redstone on someone else's speaker left a station alone, and on the creator's own speaker paused
+  and resumed it.
+- Real searches on YouTube and SoundCloud returned results with pictures, and adding a YouTube result
+  worked. Bilibili refused the search in-game, and showed its message and Try again.
+- "Update yt-dlp and try again" installed and ran Phonon's own copy.
+
+### Not tested
+
+- Nobody has listened to this build, and no new player has tried the screen.
+- A successful Bilibili search in the game. Tests outside the game with a login worked 5 times in 9,
+  and without one 1 time in 7, on one home connection.
+- A real YouTube block, and `downloadProxy` or `cookiesFile` against a real site. A bad proxy address
+  did reach yt-dlp and fail as expected.
+- A cloud server, Windows and Linux, and two computers over a real network.
+- Very long names on the Chinese translation, and long playlist menus.
+
+### Known issues
+
+- A boombox in a chest or another container is silent until someone takes it out.
+- In creative mode the server can't see the cursor, so a boombox held there for over 5 seconds goes
+  quiet until it's put down.
+- Pasted links and search results are downloaded by the server, so a site that blocks the server
+  blocks both.
 
 ## 0.3.0-beta.3
 

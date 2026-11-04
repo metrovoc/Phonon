@@ -44,20 +44,33 @@ public final class SpeakerControl {
             || speaker.getOwnerId().equals(player.getUUID());
     }
 
-    /** Whether this player may change what plays: a shared station answers to its owner, not to whoever tuned in. */
+    /** Whether this player may change what plays: a shared station answers to whoever runs it, not to whoever tuned in. */
     public static boolean canControl(ServerPlayer player, StationListener speaker) {
         Station station = speaker.station();
-        return station.shared() && PhononServerConfig.getOwnerOnlySpeakers()
+        return station.shared() && !PhononServerConfig.getAnyoneCanControlStations()
             ? ownsOrOperates(player, station.ownerId())
             : canTune(player, speaker);
+    }
+
+    /** A wire can't be asked who pulled the lever, so a station only listens to redstone on its creator's own speakers. */
+    public static boolean redstoneMayControl(StationListener speaker) {
+        Station station = speaker.station();
+        return !station.shared() || PhononServerConfig.getAnyoneCanControlStations()
+            || (station.ownerId() != null && station.ownerId().equals(speaker.getOwnerId()));
     }
 
     private static boolean ownsOrOperates(ServerPlayer player, @Nullable UUID owner) {
         return PlayerPermissions.isOperator(player) || player.getUUID().equals(owner);
     }
 
-    private static boolean canManageLibrary(ServerPlayer player) {
+    public static boolean canAddTracks(ServerPlayer player) {
         return PhononServerConfig.getAnyoneCanAddTracks() || PlayerPermissions.isOperator(player);
+    }
+
+    /** Deleting affects every queue and playlist, so it stays with operators and whoever added the track. */
+    private static boolean canDeleteTrack(ServerPlayer player, @Nullable UUID track) {
+        return PlayerPermissions.isOperator(player) || AudioManager.getInstance().getResource(track)
+            .map(resource -> player.getUUID().equals(resource.addedBy())).orElse(false);
     }
 
     private static void deny(ServerPlayer player) {
@@ -70,13 +83,39 @@ public final class SpeakerControl {
         @Nullable UUID target, @Nullable UUID second, int number, String text
     ) {
         switch (action) {
-            case CREATE_PLAYLIST, ADD_TO_PLAYLIST, REMOVE_FROM_PLAYLIST, DELETE_PLAYLIST -> {
-                handlePlaylist(player, action, target, second, text);
+            case CREATE_PLAYLIST, ADD_TO_PLAYLIST, REMOVE_FROM_PLAYLIST, DELETE_PLAYLIST, RENAME_PLAYLIST, MOVE_IN_PLAYLIST -> {
+                handlePlaylist(player, action, target, second, number, text);
                 return;
             }
-            case ADD_LINK, DELETE_TRACK, SEARCH -> {
-                if (canManageLibrary(player)) {
-                    handleLibrary(player, action, target, number, text);
+            case ADD_LINK -> {
+                if (canAddTracks(player)) {
+                    AddFlow.addFromText(player.createCommandSourceStack(), text);
+                } else {
+                    deny(player);
+                }
+                return;
+            }
+            case ADD_RESULT -> {
+                if (canAddTracks(player)) {
+                    AddFlow.addResult(player.createCommandSourceStack(), text);
+                } else {
+                    deny(player);
+                }
+                return;
+            }
+            case DELETE_STATION -> {
+                Station shared = stations().get(target);
+                if (shared == null || !shared.shared() || !ownsOrOperates(player, shared.ownerId())) {
+                    deny(player);
+                } else {
+                    stations().deleteShared(shared);
+                }
+                return;
+            }
+            case DELETE_TRACK -> {
+                if (canDeleteTrack(player, target)) {
+                    AudioManager.getInstance().getResource(target)
+                        .ifPresent(resource -> AudioLibrary.remove(player.level().getServer(), resource));
                 } else {
                     deny(player);
                 }
@@ -86,7 +125,7 @@ public final class SpeakerControl {
             }
         }
 
-        boolean tuning = action == SpeakerAction.CREATE_STATION || action == SpeakerAction.TUNE || action == SpeakerAction.DELETE_STATION;
+        boolean tuning = action == SpeakerAction.CREATE_STATION || action == SpeakerAction.TUNE;
         if (!(tuning ? canTune(player, speaker) : canControl(player, speaker))) {
             deny(player);
             return;
@@ -116,26 +155,22 @@ public final class SpeakerControl {
             case PLAY_PLAYLIST -> {
                 Playlist playlist = stations().playlist(target);
                 if (playlist != null && !playlist.tracks().isEmpty()) {
-                    station.playFrom(playlist.tracks(), 0, stations().random());
+                    station.playFrom(playlist.tracks(), number, stations().random());
                 }
             }
             case CREATE_STATION -> {
                 String name = cleanName(text);
                 if (!name.isEmpty() && stations().sharedStations().size() < StationManager.MAX_SHARED_STATIONS) {
-                    Station created = stations().createShared(name, player.getUUID(), player.getGameProfile().name());
+                    Station created = stations().shareAsStation(station, name, player.getUUID(), player.getName().getString());
+                    if (!station.shared()) {
+                        station.stop();
+                    }
                     speaker.tune(created.id());
                 }
                 return;
             }
             case TUNE -> {
                 speaker.tune(target);
-                return;
-            }
-            case DELETE_STATION -> {
-                Station shared = stations().get(target);
-                if (shared != null && shared.shared() && ownsOrOperates(player, shared.ownerId())) {
-                    stations().deleteShared(shared);
-                }
                 return;
             }
             default -> {
@@ -146,12 +181,13 @@ public final class SpeakerControl {
     }
 
     private static void handlePlaylist(
-        ServerPlayer player, SpeakerAction action, @Nullable UUID target, @Nullable UUID second, String text
+        ServerPlayer player, SpeakerAction action, @Nullable UUID target, @Nullable UUID second, int number, String text
     ) {
         if (action == SpeakerAction.CREATE_PLAYLIST) {
             String name = cleanName(text);
             if (!name.isEmpty() && stations().playlists().size() < StationManager.MAX_PLAYLISTS) {
-                stations().putPlaylist(new Playlist(UUID.randomUUID(), name, player.getUUID(), player.getGameProfile().name(), List.of()));
+                stations().putPlaylist(new Playlist(UUID.randomUUID(), name, player.getUUID(), player.getName().getString(),
+                    known(second) ? List.of(second) : List.of()));
             }
             return;
         }
@@ -171,19 +207,15 @@ public final class SpeakerControl {
             }
             case REMOVE_FROM_PLAYLIST -> stations().putPlaylist(playlist.withoutTrack(second));
             case DELETE_PLAYLIST -> stations().deletePlaylist(playlist.id());
+            case RENAME_PLAYLIST -> {
+                String name = cleanName(text);
+                if (!name.isEmpty()) {
+                    stations().putPlaylist(playlist.renamed(name));
+                }
+            }
+            case MOVE_IN_PLAYLIST -> stations().putPlaylist(playlist.withTrackAt(second, number));
             default -> {
             }
-        }
-    }
-
-    private static void handleLibrary(ServerPlayer player, SpeakerAction action, @Nullable UUID target, int number, String text) {
-        if (action == SpeakerAction.SEARCH) {
-            TitleSearch.search(player, number, text);
-        } else if (action == SpeakerAction.ADD_LINK) {
-            AddFlow.addFromText(player.createCommandSourceStack(), text);
-        } else {
-            AudioManager.getInstance().getResource(target)
-                .ifPresent(resource -> AudioLibrary.remove(player.level().getServer(), resource));
         }
     }
 

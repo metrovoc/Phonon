@@ -25,10 +25,12 @@ public final class AddFlow {
 
     private static final class Job {
         final String label;
+        final String url;
         int percent = -1;
 
-        Job(String label) {
+        Job(String label, String url) {
             this.label = label;
+            this.url = url;
         }
     }
 
@@ -49,13 +51,21 @@ public final class AddFlow {
         return true;
     }
 
+    /** A search result, as "title, newline, link". Its title may repeat one already in the library: it gets a unique name. */
+    public static void addResult(CommandSourceStack source, String text) {
+        int split = text.lastIndexOf('\n');
+        if (split > 0 && text.startsWith("http", split + 1)) {
+            start(source, new AddRequest(text.substring(0, split), text.substring(split + 1)));
+        }
+    }
+
     static void start(CommandSourceStack source, AddRequest request) {
         String label = request.hasName() ? request.name() : request.url();
         source.sendSystemMessage(Component.translatable("phonon.add.processing", label).withStyle(ChatFormatting.YELLOW));
 
         UUID resourceId = UUID.randomUUID();
         MinecraftServer server = source.getServer();
-        Job job = new Job(label);
+        Job job = new Job(label, request.url());
         jobs.add(job);
         publish(server);
         ServerAudioStorage.getInstance()
@@ -73,7 +83,7 @@ public final class AddFlow {
     private static void publish(MinecraftServer server) {
         List<LibraryJob> view = new ArrayList<>();
         for (Job job : jobs) {
-            view.add(new LibraryJob(job.label, job.percent));
+            view.add(new LibraryJob(job.label, job.percent, job.url));
         }
         PlatformHelper.INSTANCE.broadcastLibraryJobs(server, view);
     }
@@ -85,7 +95,11 @@ public final class AddFlow {
 
     private static void finish(CommandSourceStack source, AddRequest request, UUID id, DownloadResult result) {
         if (!result.success()) {
+            ToolsFlow.failed(ToolsFlow.siteOf(request.url()), result.failure());
             source.sendFailure(Component.translatable(result.failure().translationKey()));
+            if (source.getPlayer() != null) {
+                PlatformHelper.INSTANCE.sendAddFailed(source.getPlayer(), request.url(), result.failure());
+            }
             if (result.failure() == AudioFailure.TOOLS_MISSING) {
                 retryAfterInstall = () -> start(source, request);
                 offerInstall(source);
@@ -93,8 +107,11 @@ public final class AddFlow {
             return;
         }
 
+        ToolsFlow.worked(ToolsFlow.siteOf(request.url()));
         String name = AudioLibrary.uniqueName(request.hasName() ? request.name() : result.title());
-        AudioResource resource = AudioLibrary.register(source.getServer(), id, name, request.url());
+        var adder = source.getPlayer();
+        AudioResource resource = AudioLibrary.register(source.getServer(), id, name, request.url(),
+            adder == null ? null : adder.getUUID(), adder == null ? "" : adder.getName().getString());
         if (resource == null) {
             source.sendFailure(Component.translatable("phonon.add.error.unknown"));
             return;
@@ -127,7 +144,7 @@ public final class AddFlow {
     }
 
     /** Bracketed, clickable chat text that runs a command, like vanilla's chat actions. */
-    private static MutableComponent action(String command, Component label) {
+    static MutableComponent action(String command, Component label) {
         return ComponentUtils.wrapInSquareBrackets(label).withStyle(style -> style
             .withColor(ChatFormatting.GREEN)
             .withClickEvent(new ClickEvent.RunCommand(command))

@@ -139,6 +139,7 @@ public class FFmpegHelper {
             arguments.addAll(List.of("--ffmpeg-location", ffmpeg.getParent().toString())));
         AudioTools.installed("deno").ifPresent(deno ->
             arguments.addAll(List.of("--js-runtimes", "deno:" + deno)));
+        arguments.addAll(AudioTools.networkArguments());
         arguments.addAll(List.of("--", url));
         return arguments;
     }

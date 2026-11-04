@@ -110,7 +110,11 @@ public final class Station {
                 cursor = Math.max(0, queue.size() - 1);
                 stop();
             } else if (!playback.isStopped()) {
+                boolean wasPaused = playback.isPaused();
                 startCurrent();
+                if (wasPaused) {
+                    pause();
+                }
             }
         }
     }
@@ -256,6 +260,20 @@ public final class Station {
         if (json.has("track")) {
             station.playback = new PlaybackState(UUID.fromString(json.get("track").getAsString()),
                 PlaybackState.nowMs(), json.get("position").getAsLong(), json.get("speed").getAsFloat());
+        }
+        return station;
+    }
+
+    /** A new shared station that carries on from where another one is. */
+    public static Station sharedCopyOf(Station from, UUID id, String name, UUID ownerId, String ownerName) {
+        Station station = new Station(id, name, ownerId, ownerName, true);
+        station.queue.addAll(from.queue);
+        station.cursor = from.cursor;
+        station.repeat = from.repeat;
+        station.shuffle = from.shuffle;
+        PlaybackState source = from.playback;
+        if (source.resourceId() != null) {
+            station.playback = new PlaybackState(source.resourceId(), PlaybackState.nowMs(), source.getCurrentPositionMs(), source.speed());
         }
         return station;
     }

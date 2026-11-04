@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.server.AudioToolManifest.Asset;
 
 import java.io.File;
@@ -19,6 +20,8 @@ import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -198,21 +201,104 @@ public final class AudioTools {
         }
     }
 
+    /** The server's proxy and cookies settings, as yt-dlp arguments. */
+    public static List<String> networkArguments() {
+        List<String> arguments = new ArrayList<>();
+        String proxy = PhononServerConfig.getDownloadProxy().strip();
+        if (!proxy.isEmpty()) {
+            arguments.addAll(List.of("--proxy", proxy));
+        }
+        String cookies = PhononServerConfig.getCookiesFile().strip();
+        if (!cookies.isEmpty()) {
+            // Downloads run in a temporary folder, so a relative path has to be pinned to the server's
+            arguments.addAll(List.of("--cookies", Path.of(cookies).toAbsolutePath().toString()));
+        }
+        return arguments;
+    }
+
+    /** Blocking. A command's output, or null if it failed or ran out of time. */
+    private static String run(int timeoutSeconds, String... command) throws InterruptedException {
+        Path output = null;
+        Process process = null;
+        try {
+            output = Files.createTempFile("phonon_tool_", ".txt");
+            process = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output.toFile()).start();
+            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+                return null;
+            }
+            String text = Files.readString(output, StandardCharsets.UTF_8);
+            return process.exitValue() == 0 ? text : null;
+        } catch (IOException e) {
+            return null;
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            if (output != null) {
+                try {
+                    Files.deleteIfExists(output);
+                } catch (IOException e) {
+                    Phonon.LOGGER.debug("Could not delete {}", output, e);
+                }
+            }
+        }
+    }
+
+    /** Blocking. What a tool reports as its version, or null if it can't be run. */
+    public static String version(String tool) {
+        String flag = tool.equals("ffmpeg") || tool.equals("ffprobe") ? "-version" : "--version";
+        try {
+            String output = run(10, command(tool), flag);
+            return output == null || output.isBlank() ? null : shortVersion(tool, output.lines().findFirst().orElse(""));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+    }
+
+    /** "ffmpeg version 6.1.1 Copyright..." and "deno 2.9.8 (...)" down to the number. */
+    static String shortVersion(String tool, String line) {
+        String[] words = line.strip().split("\\s+");
+        return switch (tool) {
+            case "ffmpeg", "ffprobe" -> words.length > 2 ? words[2] : line.strip();
+            case "deno" -> words.length > 1 ? words[1] : line.strip();
+            default -> words[0];
+        };
+    }
+
+    /** yt-dlp versions are release dates. Days since this one, or -1 if it isn't one. */
+    public static long ageInDays(String ytDlpVersion, LocalDate today) {
+        String[] parts = ytDlpVersion == null ? new String[0] : ytDlpVersion.split("\\.");
+        if (parts.length < 3) {
+            return -1;
+        }
+        try {
+            return ChronoUnit.DAYS.between(LocalDate.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2])), today);
+        } catch (RuntimeException notADate) {
+            return -1;
+        }
+    }
+
+    /** Blocking. Installs Phonon's own yt-dlp, which then takes over from any copy on the system. */
+    public static void installYtDlp() throws IOException {
+        List<Asset> assets = assets().orElseThrow(() -> new IOException("No tool builds for this platform"));
+        Files.createDirectories(toolsDir);
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+        for (Asset asset : assets) {
+            if (asset.tool().equals("yt-dlp")) {
+                installAsset(client, asset);
+            }
+        }
+    }
+
     /** Blocking. Lets the installed yt-dlp update itself, since video sites change faster than mod releases. */
     public static boolean updateYtDlp() throws IOException, InterruptedException {
-        Path ytDlp = installed("yt-dlp").orElseThrow(() -> new IOException("yt-dlp was not installed by Phonon"));
-        Process process = new ProcessBuilder(ytDlp.toString(), "--update-to", "stable")
-            .redirectErrorStream(true)
-            .start();
-        String output;
-        try (InputStream input = process.getInputStream()) {
-            output = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        if (installed("yt-dlp").isEmpty()) {
+            installYtDlp();
         }
-        boolean finished = process.waitFor(5, TimeUnit.MINUTES);
-        if (!finished) {
-            process.destroyForcibly();
-        }
+        Path ytDlp = installed("yt-dlp").orElseThrow(() -> new IOException("yt-dlp couldn't be installed"));
+        String output = run(300, ytDlp.toString(), "--update-to", "stable");
         Phonon.LOGGER.info("yt-dlp update:\n{}", output);
-        return finished && process.exitValue() == 0;
+        return output != null;
     }
 }

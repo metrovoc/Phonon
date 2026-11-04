@@ -4,6 +4,7 @@ import com.metrovoc.phonon.audio.AudioLimits;
 
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 
 /**
  * Server-side configuration values.
@@ -39,6 +40,10 @@ public final class PhononServerConfig {
     // Permission settings
     private static BooleanSupplier ownerOnlySpeakers = () -> false;
     private static BooleanSupplier anyoneCanAddTracks = () -> false;
+    private static BooleanSupplier anyoneCanControlStations = () -> false;
+    private static BooleanSupplier autoUpdateYtDlp = () -> false;
+    private static Supplier<String> downloadProxy = () -> "";
+    private static Supplier<String> cookiesFile = () -> "";
 
     // Getters
     public static int getChunkSize() { return chunkSize.getAsInt(); }
@@ -51,6 +56,10 @@ public final class PhononServerConfig {
     public static boolean getAllowToolInstall() { return allowToolInstall.getAsBoolean(); }
     public static boolean getOwnerOnlySpeakers() { return ownerOnlySpeakers.getAsBoolean(); }
     public static boolean getAnyoneCanAddTracks() { return anyoneCanAddTracks.getAsBoolean(); }
+    public static boolean getAnyoneCanControlStations() { return anyoneCanControlStations.getAsBoolean(); }
+    public static boolean getAutoUpdateYtDlp() { return autoUpdateYtDlp.getAsBoolean(); }
+    public static String getDownloadProxy() { return downloadProxy.get(); }
+    public static String getCookiesFile() { return cookiesFile.get(); }
 
     // Setters (called by platform-specific config registration)
     public static void setChunkSize(IntSupplier supplier) { chunkSize = supplier; }
@@ -63,4 +72,8 @@ public final class PhononServerConfig {
     public static void setAllowToolInstall(BooleanSupplier supplier) { allowToolInstall = supplier; }
     public static void setOwnerOnlySpeakers(BooleanSupplier supplier) { ownerOnlySpeakers = supplier; }
     public static void setAnyoneCanAddTracks(BooleanSupplier supplier) { anyoneCanAddTracks = supplier; }
+    public static void setAnyoneCanControlStations(BooleanSupplier supplier) { anyoneCanControlStations = supplier; }
+    public static void setAutoUpdateYtDlp(BooleanSupplier supplier) { autoUpdateYtDlp = supplier; }
+    public static void setDownloadProxy(Supplier<String> supplier) { downloadProxy = supplier; }
+    public static void setCookiesFile(Supplier<String> supplier) { cookiesFile = supplier; }
 }

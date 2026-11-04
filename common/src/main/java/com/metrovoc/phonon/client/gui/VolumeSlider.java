@@ -45,9 +45,9 @@ final class VolumeSlider extends GuiPort.Control {
         SteelStyle.plate(canvas, getX(), getY(), getWidth(), getHeight(), SteelStyle.WELL, false);
         canvas.fill(getX(), getY(), getX() + getWidth(), getY() + 1, SteelStyle.SHADOW);
         int handle = getX() + Math.round(value * (getWidth() - HANDLE_WIDTH));
-        canvas.fill(getX(), getY() + getHeight() - 1, handle, getY() + getHeight(), SteelStyle.PLAYING);
-        int face = dragging || isMouseOver(mouseX, mouseY) ? SteelStyle.STEEL_HOVER : SteelStyle.STEEL;
-        SteelStyle.plate(canvas, handle, getY(), HANDLE_WIDTH, getHeight(), face, true);
+        canvas.fill(getX(), getY() + getHeight() - 1, handle, getY() + getHeight(), active ? SteelStyle.PLAYING : SteelStyle.TEXT_OFF);
+        int face = !active ? SteelStyle.STEEL_DISABLED : dragging || isMouseOver(mouseX, mouseY) ? SteelStyle.STEEL_HOVER : SteelStyle.STEEL;
+        SteelStyle.plate(canvas, handle, getY(), HANDLE_WIDTH, getHeight(), face, active);
         canvas.text(getMessage(), getX() + (getWidth() - canvas.font.width(getMessage())) / 2,
             getY() + (getHeight() - canvas.font.lineHeight) / 2 + 1, SteelStyle.TEXT);
     }

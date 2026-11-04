@@ -38,6 +38,10 @@ final class GuiPort {
         return player != null && player.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
     }
 
+    static boolean speakerScreenOpen() {
+        return Minecraft.getInstance().gui.screen() instanceof SpeakerScreen;
+    }
+
     static void playClick() {
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
     }
@@ -203,6 +207,17 @@ final class GuiPort {
         /** Enter was pressed in the text field. */
         abstract void submitField();
 
+        /** A menu drawn over everything gets the click first. Returns whether it was used. */
+        abstract boolean overlayPressed(double mouseX, double mouseY);
+
+        /** A menu drawn over everything gets the wheel first. Returns whether it was used. */
+        abstract boolean overlayScrolled(double amount);
+
+        @Override
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            return event.button() == 0 && overlayPressed(event.x(), event.y()) || super.mouseClicked(event, doubleClick);
+        }
+
         @Override
         public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(graphics, mouseX, mouseY, partialTick);
@@ -241,7 +256,7 @@ final class GuiPort {
 
         @Override
         public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-            return getChildAt(mouseX, mouseY).filter(child -> child.mouseScrolled(mouseX, mouseY, scrollX, scrollY)).isPresent();
+            return overlayScrolled(scrollY) || getChildAt(mouseX, mouseY).filter(child -> child.mouseScrolled(mouseX, mouseY, scrollX, scrollY)).isPresent();
         }
 
         @Override

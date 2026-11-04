@@ -29,6 +29,10 @@ public class AudioPersistence {
             obj.addProperty("url", resource.url());
             obj.addProperty("duration", resource.durationMs());
             obj.addProperty("size", resource.sizeBytes());
+            if (resource.addedBy() != null) {
+                obj.addProperty("addedBy", resource.addedBy().toString());
+                obj.addProperty("addedByName", resource.addedByName());
+            }
             array.add(obj);
         }
 
@@ -74,7 +78,9 @@ public class AudioPersistence {
                     if (!name.isBlank()
                         && name.length() <= AudioLimits.MAX_RESOURCE_NAME_CHARS
                         && url.length() <= AudioLimits.MAX_RESOURCE_URL_CHARS) {
-                        resources.add(new AudioResource(id, name, url, duration, size));
+                        UUID addedBy = obj.has("addedBy") ? UUID.fromString(obj.get("addedBy").getAsString()) : null;
+                        String addedByName = obj.has("addedByName") ? obj.get("addedByName").getAsString() : "";
+                        resources.add(new AudioResource(id, name, url, duration, size, addedBy, addedByName));
                     }
                 } catch (RuntimeException invalidEntry) {
                     Phonon.LOGGER.warn("Skipping malformed audio resource entry in {}", file);

@@ -20,6 +20,9 @@ public final class ClientStations {
     private List<StationView> shared = List.of();
     private List<Playlist> playlists = List.of();
     private List<LibraryJob> jobs = List.of();
+    private boolean ownerOnlySpeakers;
+    private boolean anyoneCanAddTracks;
+    private boolean anyoneCanControlStations;
 
     private ClientStations() {}
 
@@ -39,6 +42,29 @@ public final class ClientStations {
         this.shared = shared;
         this.playlists = playlists;
         shared.forEach(this::put);
+    }
+
+    public void setPermissions(boolean ownerOnlySpeakers, boolean anyoneCanAddTracks, boolean anyoneCanControlStations) {
+        this.ownerOnlySpeakers = ownerOnlySpeakers;
+        this.anyoneCanAddTracks = anyoneCanAddTracks;
+        this.anyoneCanControlStations = anyoneCanControlStations;
+    }
+
+    public boolean ownerOnlySpeakers() {
+        return ownerOnlySpeakers;
+    }
+
+    public boolean anyoneCanAddTracks() {
+        return anyoneCanAddTracks;
+    }
+
+    public boolean anyoneCanControlStations() {
+        return anyoneCanControlStations;
+    }
+
+    /** Shows a playlist's new order right away, before the server confirms it. */
+    public void moveInPlaylist(UUID playlist, UUID track, int index) {
+        playlists = playlists.stream().map(each -> each.id().equals(playlist) ? each.withTrackAt(track, index) : each).toList();
     }
 
     public void setJobs(List<LibraryJob> jobs) {

@@ -120,8 +120,9 @@ public final class StationManager {
         return id == null ? null : playlists.get(id);
     }
 
-    public Station createShared(String name, UUID ownerId, String ownerName) {
-        Station station = new Station(UUID.randomUUID(), name, ownerId, ownerName, true);
+    /** Starts a station from what's playing, so the music carries on and is now shared. */
+    public Station shareAsStation(Station from, String name, UUID ownerId, String ownerName) {
+        Station station = Station.sharedCopyOf(from, UUID.randomUUID(), name, ownerId, ownerName);
         stations.put(station.id(), station);
         sharedChanged();
         return station;

@@ -4,7 +4,7 @@ import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.platform.PlatformHelper;
-import com.metrovoc.phonon.server.ServerSpeakerManager;
+import com.metrovoc.phonon.server.SpeakerControl;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -46,34 +46,7 @@ public record SpeakerSeekPacket(
             SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
             if (speaker == null) return;
 
-            PlaybackState current = speaker.getPlayback();
-            if (current.resourceId() == null) return;
-
-            long serverTime = PlaybackState.nowMs();
-            long durationMs = ServerSpeakerManager.getDurationMs(current.resourceId());
-            long seekPositionMs = Math.max(0, packet.seekPositionMs);
-            if (durationMs > 0) {
-                seekPositionMs = Math.min(seekPositionMs, Math.max(0, durationMs - 1));
-            }
-
-            // 创建新状态: anchor=now, position=seekPosition, 保持原有 speed
-            PlaybackState newState = new PlaybackState(
-                current.resourceId(),
-                serverTime,
-                seekPositionMs,
-                current.speed()
-            );
-
-            speaker.setPlayback(newState);
-
-            ServerSpeakerManager.getInstance().registerSpeaker(
-                level.dimension(), packet.pos, newState, durationMs);
-
-            PlatformHelper.INSTANCE.sendToAllTracking(
-                level,
-                packet.pos,
-                SyncSpeakerStatePacket.snapshot(packet.pos, newState, speaker.getVolume(), serverTime)
-            );
+            SpeakerControl.seek(level, packet.pos, speaker, packet.seekPositionMs);
         });
     }
 }

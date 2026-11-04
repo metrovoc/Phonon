@@ -2,7 +2,10 @@ package com.metrovoc.phonon.block;
 
 import com.mojang.serialization.Codec;
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.server.ServerSpeakerManager;
+import com.metrovoc.phonon.server.SpeakerControl;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
@@ -12,6 +15,7 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
@@ -28,6 +32,9 @@ public class SpeakerBlockEntity extends BlockEntity {
     private static Supplier<BlockEntityType<SpeakerBlockEntity>> typeSupplier;
     private PlaybackState playback = PlaybackState.STOPPED;
     private float volume = DEFAULT_VOLUME;
+    private UUID lastTrack;
+    private int poweredSides;
+    private int lastSignal;
 
     public static void setTypeSupplier(Supplier<BlockEntityType<SpeakerBlockEntity>> supplier) {
         typeSupplier = supplier;
@@ -42,15 +49,91 @@ public class SpeakerBlockEntity extends BlockEntity {
     }
 
     public void setPlayback(PlaybackState playback) {
+        boolean wasPlaying = this.playback.isPlaying();
         this.playback = playback;
+        if (playback.resourceId() != null) {
+            lastTrack = playback.resourceId();
+        }
         setChanged();
 
-        // 同步 PLAYING blockstate 用于视觉效果 (灯光 + 粒子)
-        if (level != null) {
-            BlockState state = getBlockState();
-            boolean shouldPlay = playback.isPlaying();
-            if (state.getValue(SpeakerBlock.PLAYING) != shouldPlay) {
-                level.setBlock(worldPosition, state.setValue(SpeakerBlock.PLAYING, shouldPlay), 3);
+        if (level == null) {
+            return;
+        }
+        // 同步 PLAYING blockstate 用于视觉效果 (灯光 + 动画)
+        BlockState state = getBlockState();
+        boolean playing = playback.isPlaying();
+        if (state.getValue(SpeakerBlock.PLAYING) != playing) {
+            level.setBlock(worldPosition, state.setValue(SpeakerBlock.PLAYING, playing), 3);
+        }
+        if (level.isClientSide()) {
+            return;
+        }
+        if (playing != wasPlaying) {
+            level.gameEvent(playing ? GameEvent.JUKEBOX_PLAY : GameEvent.JUKEBOX_STOP_PLAY, worldPosition,
+                GameEvent.Context.of(getBlockState()));
+            // Sculk sensors don't listen for the jukebox events; this is what a jukebox fires for them
+            level.gameEvent(GameEvent.BLOCK_CHANGE, worldPosition, GameEvent.Context.of(getBlockState()));
+        }
+        updateComparators();
+    }
+
+    public UUID getLastTrack() {
+        return lastTrack;
+    }
+
+    /** 0 when stopped, otherwise 1 to 15 through the track, for building things that follow a song. */
+    public int comparatorSignal() {
+        if (playback.isStopped()) {
+            return 0;
+        }
+        long duration = ServerSpeakerManager.getDurationMs(playback.resourceId());
+        if (duration <= 0) {
+            return 1;
+        }
+        long position = Math.min(playback.getCurrentPositionMs(), duration - 1);
+        return 1 + (int) (position * 15 / duration);
+    }
+
+    public void updateComparators() {
+        int signal = comparatorSignal();
+        if (signal != lastSignal && level != null) {
+            lastSignal = signal;
+            level.updateNeighbourForOutputSignal(worldPosition, getBlockState().getBlock());
+        }
+    }
+
+    /**
+     * Acts on signals that just turned on, by side as seen facing the speaker:
+     * left is previous, right is next, the back stops, and the rest toggle play and pause.
+     */
+    public void onNeighborSignals() {
+        if (level == null || level.isClientSide()) {
+            return;
+        }
+        Direction facing = getBlockState().getValue(SpeakerBlock.FACING);
+        int powered = 0;
+        for (Direction side : Direction.values()) {
+            if (level.hasSignal(worldPosition.relative(side), side)) {
+                powered |= 1 << side.ordinal();
+            }
+        }
+        int rising = powered & ~poweredSides;
+        if (powered != poweredSides) {
+            poweredSides = powered;
+            setChanged();
+        }
+        for (Direction side : Direction.values()) {
+            if ((rising & 1 << side.ordinal()) == 0) {
+                continue;
+            }
+            if (side == facing.getClockWise()) {
+                SpeakerControl.step(level, worldPosition, this, -1);
+            } else if (side == facing.getCounterClockWise()) {
+                SpeakerControl.step(level, worldPosition, this, 1);
+            } else if (side == facing.getOpposite()) {
+                SpeakerControl.stop(level, worldPosition, this);
+            } else {
+                SpeakerControl.toggle(level, worldPosition, this);
             }
         }
     }
@@ -120,6 +203,10 @@ public class SpeakerBlockEntity extends BlockEntity {
         super.saveAdditional(output);
 
         output.putFloat("volume", volume);
+        output.putInt("poweredSides", poweredSides);
+        if (lastTrack != null) {
+            output.putIntArray("lastTrack", UUIDUtil.uuidToIntArray(lastTrack));
+        }
 
         // 保存时"坍缩": 计算当前位置，不保存 anchorTime
         if (playback.resourceId() != null) {
@@ -136,6 +223,8 @@ public class SpeakerBlockEntity extends BlockEntity {
         super.loadAdditional(input);
 
         volume = sanitizeVolume(input.getFloatOr("volume", DEFAULT_VOLUME));
+        poweredSides = input.getIntOr("poweredSides", 0);
+        lastTrack = readUuid(input, "lastTrack");
 
         try {
             // 兼容旧格式: playing + startTime

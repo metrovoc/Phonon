@@ -3,6 +3,8 @@ package com.metrovoc.phonon.client;
 import net.minecraft.client.Minecraft;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.sound.PlayStreamingSourceEvent;
 
 public final class PhononClient {
     private PhononClient() {}
@@ -24,7 +26,19 @@ public final class PhononClient {
         });
     }
 
+    public static void onClientTick(ClientTickEvent.Post event) {
+        com.metrovoc.phonon.audio.PlaybackState.setClockPaused(Minecraft.getInstance().isPaused());
+        com.metrovoc.phonon.client.audio.AudioPlayer.getInstance().tick();
+    }
+
+    public static void onStreamStart(PlayStreamingSourceEvent event) {
+        if (event.getSound() instanceof com.metrovoc.phonon.client.audio.SpeakerSoundInstance sound) {
+            sound.attachChannel(event.getChannel());
+        }
+    }
+
     public static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
+        com.metrovoc.phonon.audio.PlaybackState.setClockPaused(false);
         com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().clear();
         com.metrovoc.phonon.client.ClientAudioManager.getInstance().setResources(java.util.List.of());
     }

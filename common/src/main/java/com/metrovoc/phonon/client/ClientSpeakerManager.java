@@ -164,6 +164,16 @@ public final class ClientSpeakerManager {
         PlatformHelper.INSTANCE.playStreamingAudio(pos, stream, volume);
     }
 
+    /** Restarts a speaker at the shared clock's position, after its audio fell out of step. */
+    public void resync(BlockPos pos) {
+        PlaybackState state = speakers.get(pos);
+        if (state != null && state.isPlaying()) {
+            Phonon.LOGGER.debug("Resyncing speaker at {}", pos);
+            stopAndRelease(pos);
+            startPlayback(pos, state, speakerVolumes.getOrDefault(pos, 0.5f));
+        }
+    }
+
     public void updateVolume(BlockPos pos, float volume) {
         volume = sanitizeVolume(volume);
         speakerVolumes.put(pos, volume);

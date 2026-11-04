@@ -1,7 +1,10 @@
 package com.metrovoc.phonon.client.audio;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.client.ClientAudioManager;
+import com.metrovoc.phonon.client.ClientSpeakerManager;
 import com.metrovoc.phonon.client.AudioCache;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -23,6 +26,8 @@ import java.util.UUID;
  */
 public class AudioPlayer {
     private static AudioPlayer instance;
+    private static final float MUSIC_DUCK_VOLUME = 0.03f;
+
     private final Map<BlockPos, SpeakerSoundInstance> playingSounds = new HashMap<>();
 
     private AudioPlayer() {}
@@ -78,8 +83,40 @@ public class AudioPlayer {
     public void stop(BlockPos pos) {
         SpeakerSoundInstance sound = playingSounds.remove(pos);
         if (sound != null) {
-            Minecraft.getInstance().getSoundManager().stop(sound);
+            sound.fadeOut();
             Phonon.LOGGER.debug("Stopped audio at {}", pos);
+        }
+    }
+
+    /** Runs each client tick: keeps audio in step with the clock, and quiets game music near a playing speaker. */
+    public void tick() {
+        Minecraft minecraft = Minecraft.getInstance();
+        boolean audible = false;
+        for (Map.Entry<BlockPos, SpeakerSoundInstance> entry : Map.copyOf(playingSounds).entrySet()) {
+            SpeakerSoundInstance sound = entry.getValue();
+            audible |= sound.audibleVolume() > MUSIC_DUCK_VOLUME;
+            StreamTap tap = sound.tap();
+            var state = ClientSpeakerManager.getInstance().getSpeakerState(entry.getKey());
+            if (tap != null && state.isPresent() && state.get().isPlaying()) {
+                long durationMs = ClientAudioManager.getInstance().getResource(state.get().resourceId())
+                    .map(AudioResource::durationMs).orElse(-1L);
+                if (DriftCheck.needsResync(tap.writtenMs(), state.get().getCurrentPositionMs(), durationMs, sound.age())) {
+                    ClientSpeakerManager.getInstance().resync(entry.getKey());
+                }
+            }
+        }
+        if (audible) {
+            minecraft.getMusicManager().stopPlaying();
+        }
+    }
+
+    public void readLevels(BlockPos pos, long positionMs, float[] bars, int msPerBar) {
+        SpeakerSoundInstance sound = playingSounds.get(pos);
+        StreamTap tap = sound == null ? null : sound.tap();
+        if (tap == null) {
+            java.util.Arrays.fill(bars, 0);
+        } else {
+            tap.history(positionMs, bars, msPerBar);
         }
     }
 
@@ -92,6 +129,7 @@ public class AudioPlayer {
 
     public void stopAll() {
         for (SpeakerSoundInstance sound : playingSounds.values()) {
+            sound.stopNow();
             Minecraft.getInstance().getSoundManager().stop(sound);
         }
         playingSounds.clear();

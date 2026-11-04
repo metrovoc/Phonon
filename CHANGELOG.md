@@ -19,6 +19,22 @@
 
 - Show a playing state: the cone pulses and a green light stays bright in the dark.
 
+### Sound
+
+- Walls and water now muffle speakers instead of only making them quieter, unless
+  Sound Physics Remastered is installed. The strength is untested by ear.
+- Fade in and out on play, pause, stop and seek.
+- Stop game music while a speaker is audible.
+- Fix pausing a singleplayer game leaving audio permanently behind and cutting
+  tracks off early: the playback clock now stops with the game.
+- Restart a speaker that falls out of step with the clock, as after a network stall.
+
+### World
+
+- Redstone controls the speaker by side, and comparators read track progress.
+- Parrots and allays dance to speakers, and sculk sensors hear them start and stop.
+- Note particles and a new level meter in the screen follow the music's loudness.
+
 ### Also
 
 - Show "Now Playing" when the Speaker screen closes if a track started behind it,

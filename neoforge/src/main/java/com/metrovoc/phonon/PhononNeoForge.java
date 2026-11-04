@@ -58,6 +58,8 @@ public class PhononNeoForge {
         if (FMLEnvironment.getDist() == Dist.CLIENT) {
             modBus.addListener(PhononClient::onClientSetup);
             NeoForge.EVENT_BUS.addListener(PhononClient::onClientLogout);
+            NeoForge.EVENT_BUS.addListener(PhononClient::onClientTick);
+            NeoForge.EVENT_BUS.addListener(PhononClient::onStreamStart);
             ConfigScreenFactory.create().ifPresent(factory ->
                 modContainer.registerExtensionPoint(IConfigScreenFactory.class, factory));
             modBus.addListener(this::onRegisterClientReloadListeners);

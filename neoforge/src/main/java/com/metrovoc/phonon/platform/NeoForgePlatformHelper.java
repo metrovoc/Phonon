@@ -15,7 +15,12 @@ import com.metrovoc.phonon.network.packets.SpeakerActionPacket;
 import com.metrovoc.phonon.network.packets.SyncLibraryJobsPacket;
 import com.metrovoc.phonon.network.packets.SyncStationPacket;
 import com.metrovoc.phonon.network.packets.SyncStationsPacket;
+import com.metrovoc.phonon.network.packets.AddFailedPacket;
+import com.metrovoc.phonon.network.packets.SearchPacket;
 import com.metrovoc.phonon.network.packets.SearchResultsPacket;
+import com.metrovoc.phonon.network.packets.SyncPermissionsPacket;
+import com.metrovoc.phonon.server.AudioFailure;
+import com.metrovoc.phonon.server.SearchSource;
 import com.metrovoc.phonon.network.packets.SearchThumbnailPacket;
 import com.metrovoc.phonon.server.LibraryJob;
 import com.metrovoc.phonon.server.SearchResult;
@@ -116,8 +121,23 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     }
 
     @Override
-    public void sendSearchResults(ServerPlayer player, int searchId, List<SearchResult> results, String failureKey) {
-        sendToPlayer(player, new SearchResultsPacket(searchId, results, failureKey));
+    public void sendSearchResults(ServerPlayer player, int searchId, List<SearchResult> results, AudioFailure failure) {
+        sendToPlayer(player, new SearchResultsPacket(searchId, results, failure == null ? "" : failure.name()));
+    }
+
+    @Override
+    public void sendAddFailed(ServerPlayer player, String url, AudioFailure failure) {
+        sendToPlayer(player, new AddFailedPacket(url, failure.name()));
+    }
+
+    @Override
+    public void sendPermissions(ServerPlayer player) {
+        sendToPlayer(player, SyncPermissionsPacket.current());
+    }
+
+    @Override
+    public void sendSearch(int searchId, SearchSource source, String text, boolean updateFirst) {
+        sendToServer(new SearchPacket(searchId, source.ordinal(), text, updateFirst));
     }
 
     @Override

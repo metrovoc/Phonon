@@ -26,6 +26,21 @@ public record Playlist(UUID id, String name, UUID ownerId, String ownerName, Lis
         return new Playlist(id, name, ownerId, ownerName, List.copyOf(updated));
     }
 
+    public Playlist renamed(String newName) {
+        return new Playlist(id, newName, ownerId, ownerName, tracks);
+    }
+
+    /** Moves a track to a new place in the list. */
+    public Playlist withTrackAt(UUID track, int index) {
+        if (!tracks.contains(track)) {
+            return this;
+        }
+        List<UUID> updated = new ArrayList<>(tracks);
+        updated.remove(track);
+        updated.add(Math.max(0, Math.min(index, updated.size())), track);
+        return new Playlist(id, name, ownerId, ownerName, List.copyOf(updated));
+    }
+
     public JsonObject toJson() {
         JsonObject json = new JsonObject();
         json.addProperty("id", id.toString());

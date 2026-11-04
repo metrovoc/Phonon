@@ -10,6 +10,8 @@ import com.metrovoc.phonon.station.StationManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -58,9 +60,14 @@ public final class AudioLibrary {
 
     /** Server thread only. Registers stored audio, saves the list and tells every player. */
     public static AudioResource register(MinecraftServer server, UUID id, String name, String url) {
+        return register(server, id, name, url, null, "");
+    }
+
+    /** As above, crediting whoever added it. */
+    public static AudioResource register(MinecraftServer server, UUID id, String name, String url, @Nullable UUID addedBy, String addedByName) {
         ServerAudioStorage storage = ServerAudioStorage.getInstance();
         AudioResource resource = new AudioResource(
-            id, name, url, storage.getDurationMs(id), storage.getAudioSize(id));
+            id, name, url, storage.getDurationMs(id), storage.getAudioSize(id), addedBy, addedByName);
         if (!AudioManager.getInstance().addResource(resource)) {
             storage.deleteAudio(id);
             return null;

@@ -2,37 +2,39 @@ package com.metrovoc.phonon.client.gui;
 
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.audio.Receiver;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.client.ClientAudioManager;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
+import com.metrovoc.phonon.client.ClientStations;
 import com.metrovoc.phonon.item.BoomboxItem;
 import com.metrovoc.phonon.menu.SpeakerMenu;
-import com.metrovoc.phonon.client.ClientStations;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import com.metrovoc.phonon.server.AddRequest;
+import com.metrovoc.phonon.server.AudioFailure;
 import com.metrovoc.phonon.server.LibraryJob;
 import com.metrovoc.phonon.server.SearchResult;
+import com.metrovoc.phonon.server.SearchSource;
 import com.metrovoc.phonon.server.SpeakerAction;
 import com.metrovoc.phonon.station.Playlist;
 import com.metrovoc.phonon.station.Station;
 import com.metrovoc.phonon.station.StationView;
 import net.minecraft.client.gui.components.EditBox;
-import com.metrovoc.phonon.audio.Receiver;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Speaker 控制 GUI。
- * 左栏: 搜索 + 曲目列表
- * 右栏: 当前播放 + 进度条 + 音量 + 控制按钮 + 选中曲目信息
+ * The screen of a speaker or boombox. The left column browses: tracks, queue, playlists and stations.
+ * The right column is what's playing and, when it's not simply yours, who a button affects.
  */
 public class SpeakerScreen extends GuiPort.PanelScreen {
     private static final int WIDTH = 360;
@@ -48,11 +50,9 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     private static final int TAB_GAP = 8;
     private static final int FIELD_Y = 22;
     private static final int FIELD_HEIGHT = 20;
-    private static final int FIELD_BUTTON_WIDTH = 20;
-    private static final int FIELD_GAP = 2;
     private static final int LIST_Y = 46;
     private static final int LIST_HEIGHT = 186;
-    private static final int TITLE_Y = 22;
+    private static final int TITLE_Y = 21;
     private static final int STATUS_Y = 33;
     private static final int PROGRESS_Y = 46;
     private static final int PROGRESS_HEIGHT = 24;
@@ -66,12 +66,17 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     private static final int METER_BARS = 38;
     private static final int METER_BAR_WIDTH = 3;
     private static final int METER_BAR_MS = 100;
+    private static final int METER_QUIET = 0x3840FF40;
     private static final int SELECTED_Y = 151;
     private static final int MAX_SELECTED_LINES = 4;
     private static final int RESULT_PICTURE_WIDTH = 64;
     private static final int RESULT_PICTURE_HEIGHT = 36;
     private static final int MAX_RESULT_TITLE_LINES = 3;
     private static final double MAX_USE_DISTANCE_SQUARED = 64.0;
+    /** Now Playing's long names run one way and wrap around, resting at the start of each loop. */
+    private static final float MARQUEE_PIXELS_PER_SECOND = 24;
+    private static final int MARQUEE_GAP = 24;
+    private static final long MARQUEE_REST_MS = 2000;
 
     private static final String[] ICON_PLAY = {
         "##.......", "####.....", "######...", "########.", "#########",
@@ -125,9 +130,38 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         ".....##..", "....##...", "...##....", "..##.....", ".##......",
         "..##.....", "...##....", "....##...", ".....##.."
     };
+    private static final String[] ICON_LIST = {
+        "###......", ".........", "#####.#..", "......#..", "###.#####",
+        "......#..", "#####.#..", ".........", "........."
+    };
+    private static final String[] ICON_UP_NEXT = {
+        "##.....#.", "####...#.", "######.#.", "########.", "######.#.",
+        "####...#.", "##.....#.", ".........", "#########"
+    };
+    private static final String[] ICON_SEARCH = {
+        "..####...", ".#....#..", "#......#.", "#......#.", "#......#.",
+        ".#....#..", "..####.#.", ".......##", "........#"
+    };
+    private static final String[] ICON_GRIP = {
+        ".........", "#########", ".........", ".........", "#########",
+        ".........", ".........", "#########", "........."
+    };
+    private static final String[] ICON_CHECK = {
+        ".........", "........#", ".......##", "#.....##.", "##...##..",
+        ".##.##...", "..###....", "...#.....", "........."
+    };
+    private static final String[] ICON_PENCIL = {
+        ".......##", "......###", ".....###.", "....###..", "...###...",
+        "..###....", ".###.....", ".##......", "#........"
+    };
+    private static final String[] ICON_DOWN = {
+        ".........", ".........", "#########", ".#######.", "..#####..",
+        "...###...", "....#....", ".........", "........."
+    };
 
     private static final Component PLAY = Component.translatable("gui.phonon.speaker.play");
     private static final Component PAUSE = Component.translatable("gui.phonon.speaker.pause");
+    private static final Component RESUME = Component.translatable("gui.phonon.speaker.resume");
     private static final Component STOP = Component.translatable("gui.phonon.speaker.stop");
     private static final Component PREVIOUS = Component.translatable("gui.phonon.speaker.previous");
     private static final Component NEXT = Component.translatable("gui.phonon.speaker.next");
@@ -137,7 +171,6 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
 
     private final List<TabButton> tabs = new ArrayList<>();
     private EditBox field;
-    private SteelButton fieldButton;
     private RowList list;
     private VolumeSlider volumeSlider;
     private ProgressSlider progressSlider;
@@ -147,18 +180,27 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     private SteelButton nextButton;
     private SteelButton repeatButton;
     private SteelButton stopButton;
+    private TextLink leaveLink;
 
     private Tab tab = Tab.TRACKS;
     @Nullable private UUID selectedTrack;
+    @Nullable private SearchResult selectedResult;
     @Nullable private UUID openPlaylist;
     @Nullable private UUID confirmDelete;
-    private boolean linkMode;
-    @Nullable private SearchResult selectedResult;
+    @Nullable private UUID trackForNewPlaylist;
+    @Nullable private String playlistToOpen;
+    @Nullable private PopupMenu popup;
+    private boolean renaming;
+    private int mouseX;
+    private int mouseY;
     /** A click finishes by focusing what was clicked, so the field takes focus after it. */
     private boolean focusFieldNextTick;
     private String search = "";
     private int listScroll = -1;
     private final float[] meter = new float[METER_BARS];
+    private String marqueeName = "";
+    private long marqueeMs;
+    private long marqueeLastNanos;
 
     public SpeakerScreen(SpeakerMenu menu, Inventory playerInv, Component title) {
         super(menu, playerInv, title, WIDTH, HEIGHT);
@@ -178,6 +220,57 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         };
     }
 
+    // What this player may do. The server has the final say; this only keeps the screen honest.
+
+    @Nullable
+    private UUID me() {
+        return minecraft.player == null ? null : minecraft.player.getUUID();
+    }
+
+    private String ownerName() {
+        String name = pos() instanceof Receiver.Block block && minecraft.level.getBlockEntity(block.pos()) instanceof SpeakerBlockEntity speaker
+            ? speaker.getOwnerName() : "";
+        return name.isEmpty() ? Component.translatable("gui.phonon.speaker.someone").getString() : name;
+    }
+
+    private boolean canTune() {
+        if (!ClientStations.getInstance().ownerOnlySpeakers() || GuiPort.isOperator() || !(pos() instanceof Receiver.Block block)) {
+            return true;
+        }
+        UUID owner = minecraft.level.getBlockEntity(block.pos()) instanceof SpeakerBlockEntity speaker ? speaker.getOwnerId() : null;
+        return owner == null || owner.equals(me());
+    }
+
+    private boolean canControl() {
+        StationView view = station();
+        return view != null && view.shared() && !ClientStations.getInstance().anyoneCanControlStations()
+            ? mayManage(view.ownerId())
+            : canTune();
+    }
+
+    private boolean canAddTracks() {
+        return ClientStations.getInstance().anyoneCanAddTracks() || GuiPort.isOperator();
+    }
+
+    private boolean canDelete(AudioResource resource) {
+        return GuiPort.isOperator() || (resource.addedBy() != null && resource.addedBy().equals(me()));
+    }
+
+    private boolean mayManage(@Nullable UUID owner) {
+        return GuiPort.isOperator() || (owner != null && owner.equals(me()));
+    }
+
+    /** What the transport buttons do to other people, or why they're locked. Empty on your own music. */
+    private String scopeText() {
+        StationView view = station();
+        if (view != null && view.shared()) {
+            return canControl()
+                ? label("gui.phonon.speaker.changes_everyone").getString()
+                : Component.translatable("gui.phonon.speaker.picks_music", view.ownerName()).getString();
+        }
+        return canTune() ? "" : Component.translatable("gui.phonon.speaker.only_owner", ownerName()).getString();
+    }
+
     @Override
     protected void init() {
         super.init();
@@ -186,14 +279,14 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         tabs.clear();
         int tabX = leftPos + PADDING;
         for (Tab each : Tab.values()) {
-            Component label = Component.translatable(switch (each) {
+            Component tabLabel = Component.translatable(switch (each) {
                 case TRACKS -> "gui.phonon.speaker.tracks";
                 case QUEUE -> "gui.phonon.speaker.queue";
                 case PLAYLISTS -> "gui.phonon.speaker.playlists";
                 case STATIONS -> "gui.phonon.speaker.stations";
             });
-            int width = font.width(label);
-            TabButton button = new TabButton(tabX, topPos + TAB_Y, width, TAB_HEIGHT, label, () -> openTab(each));
+            int width = font.width(tabLabel);
+            TabButton button = new TabButton(tabX, topPos + TAB_Y, width, TAB_HEIGHT, tabLabel, () -> openTab(each));
             tabs.add(button);
             addRenderableWidget(button);
             tabX += width + TAB_GAP;
@@ -201,16 +294,13 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
 
         field = new EditBox(font, leftPos + PADDING, topPos + FIELD_Y, LEFT_WIDTH, FIELD_HEIGHT,
             Component.translatable("gui.phonon.speaker.search"));
-        field.setMaxLength(8192);
+        field.setMaxLength(2048);
         field.setValue(search);
         field.setResponder(this::onFieldChanged);
         addRenderableWidget(field);
 
-        fieldButton = new SteelButton(leftPos + PADDING + LEFT_WIDTH - FIELD_BUTTON_WIDTH, topPos + FIELD_Y,
-            FIELD_BUTTON_WIDTH, FIELD_HEIGHT, Component.empty(), ICON_PLUS, this::toggleLinkMode);
-        addRenderableWidget(fieldButton);
-
-        list = new RowList(leftPos + PADDING, topPos + LIST_Y, LEFT_WIDTH, LIST_HEIGHT);
+        list = new RowList(leftPos + PADDING, topPos + LIST_Y, LEFT_WIDTH, LIST_HEIGHT, ICON_GRIP, ICON_NOTE);
+        list.setOnMoved(this::onTrackMoved);
         addRenderableWidget(list);
 
         int x = leftPos + RIGHT_X;
@@ -231,6 +321,11 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         repeatButton = addTransport(x + step * 4, y, width, PLAY, ICON_REPEAT, () -> send(SpeakerAction.CYCLE_REPEAT));
         stopButton = addTransport(x + step * 5, y, width, STOP, ICON_STOP, () -> send(SpeakerAction.STOP));
 
+        Component leave = label("gui.phonon.speaker.leave");
+        int leaveWidth = font.width(leave);
+        leaveLink = new TextLink(x + RIGHT_WIDTH - leaveWidth, topPos + STATUS_Y, leaveWidth, 11, leave, () -> send(SpeakerAction.TUNE, null));
+        addRenderableWidget(leaveLink);
+
         if (selectedTrack == null) {
             selectedTrack = currentState().resourceId();
         }
@@ -244,8 +339,8 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         updateControls();
     }
 
-    private SteelButton addTransport(int x, int y, int width, Component label, String[] icon, Runnable action) {
-        SteelButton button = new SteelButton(x, y, width, TRANSPORT_HEIGHT, label, icon, action);
+    private SteelButton addTransport(int x, int y, int width, Component tip, String[] icon, Runnable action) {
+        SteelButton button = new SteelButton(x, y, width, TRANSPORT_HEIGHT, tip, icon, action);
         addRenderableWidget(button);
         return button;
     }
@@ -263,23 +358,19 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     }
 
     private void send(SpeakerAction action) {
-        PlatformHelper.INSTANCE.sendSpeakerAction(pos(), action, null, null, 0, "");
+        send(action, null, null, 0, "");
     }
 
     private void send(SpeakerAction action, @Nullable UUID target) {
-        PlatformHelper.INSTANCE.sendSpeakerAction(pos(), action, target, null, 0, "");
+        send(action, target, null, 0, "");
     }
 
     private void send(SpeakerAction action, @Nullable UUID target, @Nullable UUID second) {
-        PlatformHelper.INSTANCE.sendSpeakerAction(pos(), action, target, second, 0, "");
+        send(action, target, second, 0, "");
     }
 
-    private void sendNumber(SpeakerAction action, int number) {
-        PlatformHelper.INSTANCE.sendSpeakerAction(pos(), action, null, null, number, "");
-    }
-
-    private void sendText(SpeakerAction action, String text) {
-        PlatformHelper.INSTANCE.sendSpeakerAction(pos(), action, null, null, 0, text);
+    private void send(SpeakerAction action, @Nullable UUID target, @Nullable UUID second, int number, String text) {
+        PlatformHelper.INSTANCE.sendSpeakerAction(pos(), action, target, second, number, text);
     }
 
     private PlaybackState currentState() {
@@ -295,36 +386,13 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         return id == null ? Optional.empty() : ClientAudioManager.getInstance().getResource(id);
     }
 
-    private void openTab(Tab next) {
-        tab = next;
-        linkMode = false;
-        endSearch();
-        openPlaylist = null;
-        confirmDelete = null;
-        search = "";
-        field.setValue("");
-        list.setScroll(0);
-        applyTab();
-        refreshRows();
+    private static Component label(String key) {
+        return Component.translatable(key);
     }
 
-    /** Shows the text field and its button the way the open tab uses them. */
-    private void applyTab() {
-        for (int i = 0; i < tabs.size(); i++) {
-            tabs.get(i).setOpen(tab.ordinal() == i);
-        }
-        boolean canAddTracks = tab == Tab.TRACKS && GuiPort.isOperator();
-        field.visible = tab == Tab.TRACKS || tab == Tab.STATIONS || (tab == Tab.PLAYLISTS && openPlaylist == null);
-        fieldButton.visible = canAddTracks;
-        fieldButton.show(Component.translatable(linkMode ? "gui.phonon.speaker.back_to_search" : "gui.phonon.speaker.add_link"),
-            linkMode ? ICON_BACK : ICON_PLUS);
-        field.setWidth(canAddTracks ? LEFT_WIDTH - FIELD_BUTTON_WIDTH - FIELD_GAP : LEFT_WIDTH);
-        field.setHint(Component.translatable(switch (tab) {
-            case TRACKS -> linkMode ? "gui.phonon.speaker.hint_link" : "gui.phonon.speaker.search_hint";
-            case PLAYLISTS -> "gui.phonon.speaker.hint_playlist";
-            case STATIONS -> "gui.phonon.speaker.hint_station";
-            case QUEUE -> "gui.phonon.speaker.search_hint";
-        }));
+    private void clearField() {
+        search = "";
+        field.setValue("");
     }
 
     private void endSearch() {
@@ -332,19 +400,60 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         ClientSearch.getInstance().clear();
     }
 
-    private void toggleLinkMode() {
-        linkMode = !linkMode;
+    private void openTab(Tab next) {
+        tab = next;
+        openPlaylist = null;
+        confirmDelete = null;
+        renaming = false;
+        trackForNewPlaylist = null;
         endSearch();
-        search = "";
-        field.setValue("");
+        clearField();
+        list.setScroll(0);
         applyTab();
         refreshRows();
-        focusFieldNextTick = true;
+    }
+
+    /** Shows the text field the way the open tab uses it. */
+    private void applyTab() {
+        for (int i = 0; i < tabs.size(); i++) {
+            tabs.get(i).setOpen(tab.ordinal() == i);
+        }
+        Playlist open = playlist(openPlaylist);
+        field.visible = tab != Tab.QUEUE && (open == null || mayManage(open.ownerId()));
+        field.setHint(label(renaming ? "gui.phonon.speaker.rename_hint" : switch (tab) {
+            case TRACKS -> canAddTracks() ? "gui.phonon.speaker.add_hint" : "gui.phonon.speaker.search_hint";
+            case PLAYLISTS -> open != null ? "gui.phonon.speaker.add_songs_hint" : "gui.phonon.speaker.playlist_hint";
+            case STATIONS -> canTune() ? "gui.phonon.speaker.station_hint" : "gui.phonon.speaker.station_hint_locked";
+            case QUEUE -> "gui.phonon.speaker.search_hint";
+        }));
     }
 
     private void onFieldChanged(String value) {
         search = value;
+        confirmDelete = null;
+        ClientSearch results = ClientSearch.getInstance();
+        if (tab == Tab.TRACKS && results.active() && !value.strip().equals(results.query())) {
+            endSearch();
+        }
         refreshRows();
+    }
+
+    private static boolean isLink(String text) {
+        return AddRequest.parse(text) != null;
+    }
+
+    private void startSearch(String text, boolean updateFirst) {
+        selectedResult = null;
+        list.setScroll(0);
+        ClientSearch results = ClientSearch.getInstance();
+        int id = results.start(text, isLink(text), updateFirst);
+        PlatformHelper.INSTANCE.sendSearch(id, results.source(), text, updateFirst);
+        refreshRows();
+    }
+
+    private void searchOn(SearchSource source, String text) {
+        ClientSearch.getInstance().chooseSource(source);
+        startSearch(text, false);
     }
 
     @Override
@@ -353,26 +462,54 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         if (text.isEmpty()) {
             return;
         }
-        if (tab == Tab.TRACKS && linkMode && AddRequest.parse(text) == null) {
-            // The words stay in the field, to refine them
-            selectedResult = null;
-            list.setScroll(0);
-            PlatformHelper.INSTANCE.sendSpeakerAction(pos(), SpeakerAction.SEARCH, null, null,
-                ClientSearch.getInstance().start(text), text);
-            refreshRows();
+        if (renaming) {
+            send(SpeakerAction.RENAME_PLAYLIST, openPlaylist, null, 0, text);
+            renaming = false;
+            applyTab();
+            clearField();
             return;
         }
-        if (tab == Tab.TRACKS && linkMode) {
-            sendText(SpeakerAction.ADD_LINK, text);
-        } else if (tab == Tab.PLAYLISTS) {
-            sendText(SpeakerAction.CREATE_PLAYLIST, text);
-        } else if (tab == Tab.STATIONS) {
-            sendText(SpeakerAction.CREATE_STATION, text);
-        } else {
-            return;
+        switch (tab) {
+            case TRACKS -> {
+                if (!canAddTracks()) {
+                    return;
+                }
+                if (isLink(text)) {
+                    send(SpeakerAction.ADD_LINK, null, null, 0, text);
+                    clearField();
+                } else {
+                    startSearch(text, false);
+                }
+            }
+            case PLAYLISTS -> {
+                Playlist open = playlist(openPlaylist);
+                if (open != null) {
+                    libraryMatches(text).stream().filter(each -> !open.tracks().contains(each.id())).findFirst()
+                        .ifPresent(each -> send(SpeakerAction.ADD_TO_PLAYLIST, open.id(), each.id()));
+                } else {
+                    createPlaylist(text);
+                }
+                clearField();
+            }
+            case STATIONS -> {
+                if (canTune()) {
+                    send(SpeakerAction.CREATE_STATION, null, null, 0, text);
+                    clearField();
+                }
+            }
+            case QUEUE -> {
+            }
         }
-        search = "";
-        field.setValue("");
+    }
+
+    private void createPlaylist(String name) {
+        send(SpeakerAction.CREATE_PLAYLIST, null, trackForNewPlaylist, 0, name);
+        trackForNewPlaylist = null;
+        playlistToOpen = name;
+    }
+
+    private static List<AudioResource> libraryMatches(String text) {
+        return text.isBlank() ? ClientAudioManager.getInstance().getAllResources() : ClientAudioManager.getInstance().searchResources(text.strip());
     }
 
     private List<FormattedCharSequence> wrapped(String key) {
@@ -380,15 +517,26 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     }
 
     private void refreshRows() {
+        if (playlistToOpen != null) {
+            for (Playlist each : ClientStations.getInstance().playlists()) {
+                if (each.name().equals(playlistToOpen) && each.ownerId().equals(me())) {
+                    openPlaylist = each.id();
+                    playlistToOpen = null;
+                    clearField();
+                    list.setScroll(0);
+                    applyTab();
+                    break;
+                }
+            }
+        }
         switch (tab) {
-            case TRACKS -> list.setRows(trackRows(), wrapped(!search.isEmpty() && !linkMode
-                ? "gui.phonon.speaker.no_match"
-                : GuiPort.isOperator() ? "gui.phonon.speaker.empty_operator" : "gui.phonon.speaker.empty_player"));
+            case TRACKS -> list.setRows(trackRows(), wrapped(canAddTracks() ? "gui.phonon.speaker.empty_operator"
+                : search.isBlank() ? "gui.phonon.speaker.empty_player" : "gui.phonon.speaker.no_match"));
             case QUEUE -> list.setRows(queueRows(), wrapped("gui.phonon.speaker.queue_empty"));
             case PLAYLISTS -> {
                 Playlist open = playlist(openPlaylist);
                 if (open != null) {
-                    list.setRows(playlistTrackRows(open), wrapped("gui.phonon.speaker.playlist_empty"));
+                    list.setRows(playlistTrackRows(open), List.of());
                 } else {
                     openPlaylist = null;
                     list.setRows(playlistRows(), wrapped("gui.phonon.speaker.playlists_empty"));
@@ -403,92 +551,234 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         return ClientStations.getInstance().playlists().stream().filter(each -> each.id().equals(id)).findFirst().orElse(null);
     }
 
-    private boolean mayManage(@Nullable UUID owner) {
-        return GuiPort.isOperator() || (minecraft.player != null && minecraft.player.getUUID().equals(owner));
-    }
-
-    private static RowList.Row plainRow(
-        @Nullable UUID key, String text, String detail, int color, boolean selected,
-        @Nullable String[] marker, int markerColor, @Nullable UUID head,
-        List<RowList.Action> actions, @Nullable Runnable click, @Nullable Runnable doubleClick
-    ) {
-        return new RowList.Row(key, text, detail, color, selected, marker, markerColor, head, -1, false, null, actions, click, doubleClick);
-    }
-
-    private static Component label(String key) {
-        return Component.translatable(key);
-    }
+    // Tracks
 
     private List<RowList.Row> trackRows() {
         List<RowList.Row> rows = new ArrayList<>();
+        ClientSearch results = ClientSearch.getInstance();
         for (LibraryJob job : ClientStations.getInstance().jobs()) {
-            rows.add(new RowList.Row(null, job.label(),
-                job.percent() >= 0 ? job.percent() + "%" : label("gui.phonon.speaker.adding").getString(),
-                SteelStyle.TEXT_MUTED, false, null, 0, null, Math.max(0, job.percent()), false, null, List.of(), null, null));
+            boolean ownRow = results.results().stream().anyMatch(each -> each.title().equals(job.label()));
+            if (!ownRow) {
+                rows.add(new RowList.Row(job.label()).color(SteelStyle.TEXT_MUTED)
+                    .detail(job.percent() >= 0 ? job.percent() + "%" : "...").progress(Math.max(0, job.percent())));
+            }
         }
-        if (linkMode && ClientSearch.getInstance().active()) {
-            addSearchRows(rows);
+        if (results.active()) {
+            addSearchRows(rows, results);
             return rows;
         }
-        List<AudioResource> resources = search.isEmpty() || linkMode
-            ? ClientAudioManager.getInstance().getAllResources()
-            : ClientAudioManager.getInstance().searchResources(search);
-        PlaybackState state = currentState();
-        for (AudioResource resource : resources) {
-            boolean loaded = resource.id().equals(state.resourceId());
-            int color = !loaded ? SteelStyle.TEXT_DIM : state.isPaused() ? SteelStyle.PAUSED : SteelStyle.PLAYING;
-            List<RowList.Action> actions = new ArrayList<>();
-            if (GuiPort.isOperator()) {
-                boolean confirming = resource.id().equals(confirmDelete);
-                actions.add(new RowList.Action(ICON_TRASH,
-                    label(confirming ? "gui.phonon.speaker.action_confirm" : "gui.phonon.speaker.action_delete"),
-                    () -> {
-                        if (resource.id().equals(confirmDelete)) {
-                            confirmDelete = null;
-                            send(SpeakerAction.DELETE_TRACK, resource.id());
-                        } else {
-                            confirmDelete = resource.id();
-                        }
-                    }));
+        String text = search.strip();
+        if (isLink(text)) {
+            if (canAddTracks()) {
+                rows.add(new RowList.Row(label("gui.phonon.speaker.add_this_link").getString()).call().marker(ICON_PLUS, SteelStyle.PLAYING)
+                    .detail(label("gui.phonon.speaker.enter").getString()).click(this::submitField));
             }
-            actions.add(new RowList.Action(ICON_PLUS, label("gui.phonon.speaker.action_play_next"),
-                () -> send(SpeakerAction.PLAY_NEXT, resource.id())));
-            rows.add(plainRow(resource.id(), resource.name(), SteelStyle.time(resource.durationMs()),
-                loaded ? color : resource.id().equals(selectedTrack) ? SteelStyle.TEXT : SteelStyle.TEXT_DIM,
-                resource.id().equals(selectedTrack), loaded ? ICON_NOTE : null, color, null, actions,
-                () -> selectTrack(resource.id()),
-                () -> send(SpeakerAction.PLAY_TRACK, resource.id())));
+            return rows;
+        }
+        PlaybackState state = currentState();
+        for (AudioResource resource : libraryMatches(text)) {
+            rows.add(trackRow(resource, state));
+        }
+        if (!text.isEmpty() && canAddTracks()) {
+            rows.add(new RowList.Row(Component.translatable("gui.phonon.speaker.find_on", text, results.source().label()).getString())
+                .call().marker(ICON_SEARCH, SteelStyle.PLAYING).detail(label("gui.phonon.speaker.enter").getString()).click(this::submitField));
         }
         return rows;
     }
 
-    /** What a title search has come back with so far. */
-    private void addSearchRows(List<RowList.Row> rows) {
-        ClientSearch search = ClientSearch.getInstance();
-        String status = search.searching() ? Component.translatable("gui.phonon.speaker.searching", search.query()).getString()
-            : !search.failureKey().isEmpty() ? Component.translatable(search.failureKey()).getString()
-            : search.results().isEmpty() ? Component.translatable("gui.phonon.speaker.no_results", search.query()).getString()
-            : null;
-        if (status != null) {
-            rows.add(plainRow(null, status, "", SteelStyle.TEXT_MUTED, false, null, 0, null, List.of(), null, null));
+    private RowList.Row trackRow(AudioResource resource, PlaybackState state) {
+        boolean loaded = resource.id().equals(state.resourceId());
+        int color = !loaded ? SteelStyle.TEXT_DIM : state.isPaused() ? SteelStyle.PAUSED : SteelStyle.PLAYING;
+        boolean selected = resource.id().equals(selectedTrack);
+        List<RowList.Action> actions = new ArrayList<>();
+        if (canControl()) {
+            actions.add(new RowList.Action(ICON_PLAY, label("gui.phonon.speaker.action_play_now"), () -> send(SpeakerAction.PLAY_TRACK, resource.id())));
+            actions.add(new RowList.Action(ICON_UP_NEXT, label("gui.phonon.speaker.action_play_next"), () -> send(SpeakerAction.PLAY_NEXT, resource.id())));
         }
-        for (SearchResult result : search.results()) {
-            boolean added = search.wasAdded(result.videoId());
-            boolean selected = selectedResult != null && result.videoId().equals(selectedResult.videoId());
-            Runnable add = () -> addResult(result);
-            rows.add(new RowList.Row(null, result.title(),
-                added ? label("gui.phonon.speaker.added").getString() : SteelStyle.time(result.durationMs()),
-                added ? SteelStyle.TEXT_OFF : selected ? SteelStyle.TEXT : SteelStyle.TEXT_DIM, selected,
-                null, 0, null, -1, true, search.picture(result.videoId()),
-                added ? List.of() : List.of(new RowList.Action(ICON_PLUS, label("gui.phonon.speaker.action_add"), add)),
-                () -> selectedResult = result, added ? null : add));
+        actions.add(new RowList.Action(ICON_LIST, label("gui.phonon.speaker.action_add_to_playlist"), () -> openPlaylistMenu(resource.id())));
+        if (canDelete(resource)) {
+            boolean confirming = resource.id().equals(confirmDelete);
+            actions.add(new RowList.Action(ICON_TRASH,
+                label(confirming ? "gui.phonon.speaker.action_confirm_track" : "gui.phonon.speaker.action_delete_track"),
+                () -> {
+                    if (resource.id().equals(confirmDelete)) {
+                        confirmDelete = null;
+                        send(SpeakerAction.DELETE_TRACK, resource.id());
+                    } else {
+                        confirmDelete = resource.id();
+                    }
+                }));
+        }
+        return new RowList.Row(resource.name()).key(resource.id()).detail(SteelStyle.time(resource.durationMs()))
+            .color(loaded ? color : selected ? SteelStyle.TEXT : SteelStyle.TEXT_DIM).selected(selected)
+            .marker(loaded ? ICON_NOTE : null, color).actions(actions)
+            .click(() -> selectTrack(resource.id()))
+            .doubleClick(canControl() ? () -> send(SpeakerAction.PLAY_TRACK, resource.id()) : null);
+    }
+
+    private void addSearchRows(List<RowList.Row> rows, ClientSearch results) {
+        rows.add(new RowList.Row(results.query()).header(() -> {
+            endSearch();
+            clearField();
+            focusFieldNextTick = true;
+            refreshRows();
+        }).marker(ICON_BACK, SteelStyle.TEXT).tooltip(label("gui.phonon.speaker.back_to_library")));
+        if (!results.isLink()) {
+            rows.add(new RowList.Row(label("gui.phonon.speaker.results_from").getString()).color(SteelStyle.TEXT_MUTED)
+                .detail(results.source().label()).detailClick(this::openSourceMenu, ICON_DOWN));
+        }
+        if (results.updating()) {
+            rows.add(new RowList.Row(label("gui.phonon.search.updating").getString()).line(SteelStyle.TEXT_DIM));
+            return;
+        }
+        if (results.searching()) {
+            addLines(rows, Component.translatable("gui.phonon.speaker.searching", results.query()).getString(), SteelStyle.TEXT_DIM);
+            return;
+        }
+        if (results.failure() != null) {
+            addFailureRows(rows, results);
+            return;
+        }
+        if (results.results().isEmpty()) {
+            addLines(rows, Component.translatable("gui.phonon.speaker.no_results", results.query()).getString(), SteelStyle.TEXT_DIM);
+            return;
+        }
+        for (SearchResult result : results.results()) {
+            rows.add(resultRow(result, results));
         }
     }
 
-    private void addResult(SearchResult result) {
-        ClientSearch.getInstance().markAdded(result.videoId());
-        sendText(SpeakerAction.ADD_LINK, result.title() + " " + result.url());
+    private void addLines(List<RowList.Row> rows, String text, int color) {
+        font.getSplitter().splitLines(text, LEFT_WIDTH - 16, Style.EMPTY)
+            .forEach(line -> rows.add(new RowList.Row(line.getString()).line(color)));
     }
+
+    /** Says what happened, and offers whatever could actually help. */
+    private void addFailureRows(List<RowList.Row> rows, ClientSearch results) {
+        AudioFailure failure = results.failure();
+        String query = results.query();
+        addLines(rows, label(failure == AudioFailure.UNKNOWN ? "gui.phonon.search.failed" : failure.translationKey()).getString(), SteelStyle.TEXT);
+        switch (failure) {
+            case BOT_CHECK -> {
+                if (!results.isLink() && results.source() != SearchSource.SOUNDCLOUD) {
+                    rows.add(tryElsewhere(SearchSource.SOUNDCLOUD, query));
+                }
+                if (GuiPort.isOperator()) {
+                    addLines(rows, label("gui.phonon.search.cloud_note").getString(), SteelStyle.PAUSED);
+                }
+            }
+            case REFUSED, RATE_LIMITED, NETWORK, TIMEOUT -> {
+                rows.add(new RowList.Row(label("gui.phonon.search.try_again").getString()).button(() -> startSearch(query, false)));
+                if (failure == AudioFailure.REFUSED && results.source() != SearchSource.YOUTUBE) {
+                    rows.add(tryElsewhere(SearchSource.YOUTUBE, query));
+                }
+            }
+            case UNKNOWN, UNSUPPORTED -> {
+                addLines(rows, label("gui.phonon.search.outdated").getString(), SteelStyle.TEXT_DIM);
+                if (GuiPort.isOperator()) {
+                    rows.add(new RowList.Row(label("gui.phonon.search.update_retry").getString()).button(() -> startSearch(query, true)));
+                } else {
+                    addLines(rows, label("gui.phonon.search.ask_operator").getString(), SteelStyle.TEXT_DIM);
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    private RowList.Row tryElsewhere(SearchSource source, String query) {
+        return new RowList.Row(Component.translatable("gui.phonon.search.try_source", source.label()).getString())
+            .button(() -> searchOn(source, query));
+    }
+
+    private static boolean inLibrary(SearchResult result) {
+        return ClientAudioManager.getInstance().getAllResources().stream().anyMatch(each -> each.name().equals(result.title()));
+    }
+
+    private RowList.Row resultRow(SearchResult result, ClientSearch results) {
+        LibraryJob job = ClientStations.getInstance().jobs().stream().filter(each -> each.label().equals(result.title())).findFirst().orElse(null);
+        boolean done = job == null && inLibrary(result);
+        boolean adding = job != null || (!done && results.wasAdded(result.key()));
+        boolean selected = selectedResult != null && selectedResult.key().equals(result.key());
+        int percent = job == null ? 0 : Math.max(0, job.percent());
+        String status = done ? label("gui.phonon.speaker.in_library").getString()
+            : adding ? Component.translatable("gui.phonon.speaker.adding_percent", percent).getString()
+            : result.uploader() + " · " + SteelStyle.time(result.durationMs());
+        RowList.Row row = new RowList.Row(result.title()).picture(results.picture(result.key()))
+            .color(done ? SteelStyle.PLAYING : selected ? SteelStyle.TEXT : SteelStyle.TEXT_DIM).selected(selected)
+            .subtext(status, adding ? SteelStyle.TEXT_DIM : SteelStyle.TEXT_MUTED)
+            .click(() -> {
+                selectedResult = result;
+                selectedTrack = null;
+                refreshRows();
+            });
+        if (adding) {
+            row.progress(percent);
+        } else if (!done) {
+            row.actions(List.of(new RowList.Action(ICON_PLUS, label("gui.phonon.speaker.action_add"), () -> addResult(result))));
+            row.doubleClick(() -> addResult(result));
+        }
+        return row;
+    }
+
+    private void addResult(SearchResult result) {
+        ClientSearch.getInstance().markAdded(result.key());
+        send(SpeakerAction.ADD_LINK, null, null, 0, result.title() + " " + result.url());
+    }
+
+    // Menus
+
+    private void openSourceMenu(int atX, int atY) {
+        ClientSearch results = ClientSearch.getInstance();
+        List<PopupMenu.Item> items = new ArrayList<>();
+        for (SearchSource source : SearchSource.values()) {
+            items.add(new PopupMenu.Item(source.label(), source == results.source(),
+                source == SearchSource.BILIBILI ? label("gui.phonon.speaker.source_refuses") : null,
+                () -> {
+                    if (source != results.source() || results.failure() != null) {
+                        searchOn(source, results.query());
+                    }
+                }));
+        }
+        showMenu(new PopupMenu(label("gui.phonon.speaker.search_on"), items, ICON_CHECK, leftPos + PADDING + LEFT_WIDTH, atY + 6, topPos + HEIGHT));
+    }
+
+    private void openPlaylistMenu(UUID trackId) {
+        List<PopupMenu.Item> items = new ArrayList<>();
+        for (Playlist each : ClientStations.getInstance().playlists()) {
+            if (mayManage(each.ownerId())) {
+                boolean in = each.tracks().contains(trackId);
+                items.add(new PopupMenu.Item(each.name(), in, null,
+                    () -> send(in ? SpeakerAction.REMOVE_FROM_PLAYLIST : SpeakerAction.ADD_TO_PLAYLIST, each.id(), trackId)));
+            }
+        }
+        items.add(new PopupMenu.Item(label("gui.phonon.speaker.new_playlist").getString(), false, null, () -> {
+            openTab(Tab.PLAYLISTS);
+            trackForNewPlaylist = trackId;
+            focusFieldNextTick = true;
+        }));
+        int right = Math.min(mouseX + 40, leftPos + WIDTH - PADDING);
+        showMenu(new PopupMenu(label("gui.phonon.speaker.add_to_playlist_title"), items, ICON_CHECK, right, mouseY + 6, topPos + HEIGHT));
+    }
+
+    private void showMenu(PopupMenu next) {
+        popup = next;
+        list.setBlocked(true);
+    }
+
+    @Override
+    boolean overlayPressed(double x, double y) {
+        if (popup == null) {
+            return false;
+        }
+        PopupMenu closing = popup;
+        popup = null;
+        list.setBlocked(false);
+        closing.press(x, y);
+        return true;
+    }
+
+    // Queue
 
     private List<RowList.Row> queueRows() {
         List<RowList.Row> rows = new ArrayList<>();
@@ -497,95 +787,204 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             return rows;
         }
         PlaybackState state = currentState();
+        boolean control = canControl();
         for (int i = 0; i < view.queue().size(); i++) {
             int index = i;
             UUID id = view.queue().get(i);
             boolean current = i == view.cursor() && !state.isStopped();
             int color = !current ? SteelStyle.TEXT_DIM : state.isPaused() ? SteelStyle.PAUSED : SteelStyle.PLAYING;
             Optional<AudioResource> resource = track(id);
-            rows.add(plainRow(id, resource.map(AudioResource::name).orElse("?"),
-                SteelStyle.time(resource.map(AudioResource::durationMs).orElse(-1L)), color, id.equals(selectedTrack),
-                current ? ICON_NOTE : null, color, null,
-                List.of(new RowList.Action(ICON_REMOVE, label("gui.phonon.speaker.action_remove"),
-                    () -> sendNumber(SpeakerAction.REMOVE_FROM_QUEUE, index))),
-                () -> selectTrack(id),
-                () -> sendNumber(SpeakerAction.JUMP_TO, index)));
+            rows.add(new RowList.Row(resource.map(AudioResource::name).orElse("?")).key(id)
+                .detail(SteelStyle.time(resource.map(AudioResource::durationMs).orElse(-1L))).color(color).selected(id.equals(selectedTrack))
+                .marker(current ? ICON_NOTE : null, color)
+                .actions(control ? List.of(new RowList.Action(ICON_REMOVE, label("gui.phonon.speaker.action_remove"),
+                    () -> send(SpeakerAction.REMOVE_FROM_QUEUE, null, null, index, ""))) : List.of())
+                .click(() -> selectTrack(id))
+                .doubleClick(control ? () -> send(SpeakerAction.JUMP_TO, null, null, index, "") : null));
         }
         return rows;
     }
+
+    // Playlists
 
     private List<RowList.Row> playlistRows() {
         List<RowList.Row> rows = new ArrayList<>();
-        for (Playlist playlist : ClientStations.getInstance().playlists()) {
-            List<RowList.Action> actions = new ArrayList<>();
-            if (mayManage(playlist.ownerId())) {
-                actions.add(new RowList.Action(ICON_TRASH, label("gui.phonon.speaker.action_delete_playlist"),
-                    () -> send(SpeakerAction.DELETE_PLAYLIST, playlist.id())));
-                actions.add(new RowList.Action(ICON_PLUS, label("gui.phonon.speaker.action_add_selected"),
-                    () -> send(SpeakerAction.ADD_TO_PLAYLIST, playlist.id(), selectedTrack)));
+        String text = search.strip();
+        String lower = text.toLowerCase(Locale.ROOT);
+        boolean exact = false;
+        for (Playlist each : ClientStations.getInstance().playlists()) {
+            exact |= each.name().equalsIgnoreCase(text);
+            if (!each.name().toLowerCase(Locale.ROOT).contains(lower)) {
+                continue;
             }
-            actions.add(new RowList.Action(ICON_PLAY, label("gui.phonon.speaker.action_play"),
-                () -> send(SpeakerAction.PLAY_PLAYLIST, playlist.id())));
-            rows.add(plainRow(playlist.id(), playlist.name(), Component.translatable("gui.phonon.speaker.track_count", playlist.tracks().size()).getString(),
-                SteelStyle.TEXT_DIM, false, null, 0, playlist.ownerId(), actions,
-                () -> {
-                    openPlaylist = playlist.id();
-                    list.setScroll(0);
-                    applyTab();
-                    refreshRows();
-                }, null));
+            rows.add(new RowList.Row(each.name()).head(each.ownerId()).color(SteelStyle.TEXT).detail(songCount(each.tracks().size()))
+                .actions(canControl() && !each.tracks().isEmpty()
+                    ? List.of(new RowList.Action(ICON_PLAY, label("gui.phonon.speaker.action_play"), () -> send(SpeakerAction.PLAY_PLAYLIST, each.id())))
+                    : List.of())
+                .click(() -> openPlaylistView(each.id())));
+        }
+        if (!text.isEmpty() && !exact) {
+            rows.add(new RowList.Row(Component.translatable("gui.phonon.speaker.create_named", text).getString()).call().marker(ICON_PLUS, SteelStyle.PLAYING)
+                .detail(label("gui.phonon.speaker.enter").getString()).click(this::submitField));
         }
         return rows;
     }
 
-    private List<RowList.Row> playlistTrackRows(Playlist playlist) {
+    private static String songCount(int count) {
+        return count == 1 ? label("gui.phonon.speaker.one_song").getString() : Component.translatable("gui.phonon.speaker.songs", count).getString();
+    }
+
+    private void openPlaylistView(UUID id) {
+        openPlaylist = id;
+        confirmDelete = null;
+        renaming = false;
+        clearField();
+        list.setScroll(0);
+        applyTab();
+        refreshRows();
+    }
+
+    private void closePlaylistView() {
+        openPlaylist = null;
+        renaming = false;
+        clearField();
+        list.setScroll(0);
+        applyTab();
+        refreshRows();
+    }
+
+    private List<RowList.Row> playlistTrackRows(Playlist open) {
         List<RowList.Row> rows = new ArrayList<>();
-        rows.add(plainRow(null, label("gui.phonon.speaker.back").getString(),
-            Component.translatable("gui.phonon.speaker.by", playlist.ownerName()).getString(),
-            SteelStyle.TEXT, false, ICON_BACK, SteelStyle.TEXT, null,
-            List.of(new RowList.Action(ICON_PLAY, label("gui.phonon.speaker.action_play"),
-                () -> send(SpeakerAction.PLAY_PLAYLIST, playlist.id()))),
-            () -> {
-                openPlaylist = null;
-                list.setScroll(0);
+        boolean edit = mayManage(open.ownerId());
+        boolean control = canControl();
+        List<RowList.Action> actions = new ArrayList<>();
+        if (control && !open.tracks().isEmpty()) {
+            actions.add(new RowList.Action(ICON_PLAY, label("gui.phonon.speaker.action_play_start"), () -> send(SpeakerAction.PLAY_PLAYLIST, open.id())));
+        }
+        if (edit) {
+            actions.add(new RowList.Action(ICON_PENCIL, label("gui.phonon.speaker.action_rename"), () -> {
+                renaming = true;
+                search = open.name();
+                field.setValue(open.name());
                 applyTab();
-                refreshRows();
-            }, null));
-        boolean manage = mayManage(playlist.ownerId());
-        for (UUID id : playlist.tracks()) {
+                focusFieldNextTick = true;
+            }));
+            boolean confirming = open.id().equals(confirmDelete);
+            actions.add(new RowList.Action(ICON_TRASH,
+                label(confirming ? "gui.phonon.speaker.action_confirm_playlist" : "gui.phonon.speaker.action_delete_playlist"),
+                () -> {
+                    if (open.id().equals(confirmDelete)) {
+                        confirmDelete = null;
+                        send(SpeakerAction.DELETE_PLAYLIST, open.id());
+                        closePlaylistView();
+                    } else {
+                        confirmDelete = open.id();
+                    }
+                }));
+        }
+        rows.add(new RowList.Row(open.name()).header(this::closePlaylistView).marker(ICON_BACK, SteelStyle.TEXT).head(open.ownerId()).actions(actions)
+            .tooltip(label("gui.phonon.speaker.back")));
+
+        String text = search.strip();
+        if (!text.isEmpty() && !renaming) {
+            List<AudioResource> matches = libraryMatches(text);
+            for (AudioResource resource : matches) {
+                boolean in = open.tracks().contains(resource.id());
+                rows.add(new RowList.Row(resource.name()).color(in ? SteelStyle.PLAYING : SteelStyle.TEXT)
+                    .marker(in ? ICON_CHECK : ICON_PLUS, in ? SteelStyle.PLAYING : SteelStyle.TEXT_DIM)
+                    .detail(in ? label("gui.phonon.speaker.in_playlist").getString() : SteelStyle.time(resource.durationMs()))
+                    .click(() -> send(in ? SpeakerAction.REMOVE_FROM_PLAYLIST : SpeakerAction.ADD_TO_PLAYLIST, open.id(), resource.id())));
+            }
+            if (matches.isEmpty()) {
+                addLines(rows, Component.translatable("gui.phonon.speaker.no_songs_match", text).getString(), SteelStyle.TEXT_DIM);
+            }
+            return rows;
+        }
+        if (open.tracks().isEmpty()) {
+            addLines(rows, label(edit ? "gui.phonon.speaker.playlist_empty_edit" : "gui.phonon.speaker.playlist_empty_view").getString(), SteelStyle.TEXT_DIM);
+            return rows;
+        }
+        PlaybackState state = currentState();
+        for (int i = 0; i < open.tracks().size(); i++) {
+            int index = i;
+            UUID id = open.tracks().get(i);
             Optional<AudioResource> resource = track(id);
-            rows.add(plainRow(id, resource.map(AudioResource::name).orElse("?"),
-                SteelStyle.time(resource.map(AudioResource::durationMs).orElse(-1L)), SteelStyle.TEXT_DIM,
-                id.equals(selectedTrack), null, 0, null,
-                manage ? List.of(new RowList.Action(ICON_REMOVE, label("gui.phonon.speaker.action_remove"),
-                    () -> send(SpeakerAction.REMOVE_FROM_PLAYLIST, playlist.id(), id))) : List.of(),
-                () -> selectTrack(id), null));
+            boolean loaded = id.equals(state.resourceId());
+            RowList.Row row = new RowList.Row(resource.map(AudioResource::name).orElse("?")).key(id)
+                .detail(SteelStyle.time(resource.map(AudioResource::durationMs).orElse(-1L)))
+                .color(loaded ? SteelStyle.PLAYING : SteelStyle.TEXT_DIM).selected(id.equals(selectedTrack))
+                .actions(edit ? List.of(new RowList.Action(ICON_REMOVE, label("gui.phonon.speaker.action_take_out"),
+                    () -> send(SpeakerAction.REMOVE_FROM_PLAYLIST, open.id(), id))) : List.of())
+                .click(() -> selectTrack(id))
+                .doubleClick(control ? () -> send(SpeakerAction.PLAY_PLAYLIST, open.id(), null, index, "") : null);
+            if (edit) {
+                row.grip();
+            }
+            rows.add(row);
         }
         return rows;
     }
+
+    private void onTrackMoved(RowList.Row row, int place) {
+        UUID moved = list.keyOf(row);
+        if (moved != null && openPlaylist != null) {
+            ClientStations.getInstance().moveInPlaylist(openPlaylist, moved, place);
+            send(SpeakerAction.MOVE_IN_PLAYLIST, openPlaylist, moved, place, "");
+        }
+    }
+
+    // Stations
 
     private List<RowList.Row> stationRows() {
         List<RowList.Row> rows = new ArrayList<>();
         StationView tuned = station();
         boolean onOwn = tuned == null || !tuned.shared();
-        rows.add(plainRow(null, label("gui.phonon.speaker.this_speaker").getString(), "",
-            onOwn ? SteelStyle.PLAYING : SteelStyle.TEXT_DIM, onOwn, onOwn ? ICON_NOTE : null, SteelStyle.PLAYING, null,
-            List.of(), () -> send(SpeakerAction.TUNE, null), null));
+        boolean tune = canTune();
+        Component locked = Component.translatable("gui.phonon.speaker.only_owner", ownerName());
+        String own = label(pos() instanceof Receiver.Boombox ? "gui.phonon.speaker.this_boombox" : "gui.phonon.speaker.this_speaker").getString();
+        rows.add(new RowList.Row(own).color(onOwn ? SteelStyle.PLAYING : SteelStyle.TEXT_DIM).marker(onOwn ? ICON_NOTE : null, SteelStyle.PLAYING)
+            .detail(label("gui.phonon.speaker.own_music").getString())
+            .tooltip(tune ? (onOwn ? null : label("gui.phonon.speaker.own_music_tip")) : locked)
+            .click(tune && !onOwn ? () -> send(SpeakerAction.TUNE, null) : null));
+        String text = search.strip();
+        String lower = text.toLowerCase(Locale.ROOT);
+        boolean exact = false;
         for (StationView view : ClientStations.getInstance().shared()) {
+            exact |= view.name().equalsIgnoreCase(text);
+            if (!view.name().toLowerCase(Locale.ROOT).contains(lower)) {
+                continue;
+            }
             boolean on = tuned != null && view.id().equals(tuned.id());
-            List<RowList.Action> actions = mayManage(view.ownerId())
-                ? List.of(new RowList.Action(ICON_TRASH, label("gui.phonon.speaker.action_delete_station"),
-                    () -> send(SpeakerAction.DELETE_STATION, view.id())))
-                : List.of();
-            rows.add(plainRow(view.id(), view.name(), view.ownerName(),
-                on ? SteelStyle.PLAYING : SteelStyle.TEXT_DIM, on, null, 0, view.ownerId(), actions,
-                () -> send(SpeakerAction.TUNE, view.id()), null));
+            boolean confirming = view.id().equals(confirmDelete);
+            UUID current = view.cursor() >= 0 && view.cursor() < view.queue().size() ? view.queue().get(view.cursor()) : null;
+            String who = view.ownerId() != null && view.ownerId().equals(me())
+                ? label("gui.phonon.speaker.you_run_it").getString()
+                : Component.translatable("gui.phonon.speaker.run_by", view.ownerName()).getString();
+            String sub = track(current).map(each -> who + " · " + each.name()).orElse(who);
+            rows.add(new RowList.Row(view.name()).head(view.ownerId()).color(on ? SteelStyle.PLAYING : SteelStyle.TEXT).subtext(sub, SteelStyle.TEXT_MUTED)
+                .actions(mayManage(view.ownerId()) ? List.of(new RowList.Action(ICON_TRASH,
+                    label(confirming ? "gui.phonon.speaker.action_confirm_station" : "gui.phonon.speaker.action_delete_station"),
+                    () -> {
+                        if (view.id().equals(confirmDelete)) {
+                            confirmDelete = null;
+                            send(SpeakerAction.DELETE_STATION, view.id());
+                        } else {
+                            confirmDelete = view.id();
+                        }
+                    })) : List.of())
+                .tooltip(!tune ? locked : label(on ? "gui.phonon.speaker.listening" : "gui.phonon.speaker.click_to_listen"))
+                .click(tune && !on ? () -> send(SpeakerAction.TUNE, view.id()) : null));
+        }
+        if (!text.isEmpty() && !exact && tune) {
+            rows.add(new RowList.Row(Component.translatable("gui.phonon.speaker.start_named", text).getString()).call().marker(ICON_PLUS, SteelStyle.PLAYING)
+                .detail(label("gui.phonon.speaker.enter").getString()).tooltip(label("gui.phonon.speaker.start_tip")).click(this::submitField));
         }
         return rows;
     }
 
     private void selectTrack(UUID id) {
         selectedTrack = id;
+        selectedResult = null;
         confirmDelete = null;
         refreshRows();
         updateControls();
@@ -607,16 +1006,13 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         }
     }
 
-    /** Plays the selected track, or pauses and resumes when it's the one already loaded. */
+    /** One button, one meaning: it pauses and resumes. Songs start from their row. */
     private void pressMain() {
         PlaybackState state = currentState();
-        boolean selectedIsLoaded = selectedTrack == null || selectedTrack.equals(state.resourceId());
-        if (state.isPlaying() && selectedIsLoaded) {
+        if (state.isPlaying()) {
             send(SpeakerAction.PAUSE);
-        } else if (state.isPaused() && selectedIsLoaded) {
+        } else if (state.isPaused()) {
             send(SpeakerAction.RESUME);
-        } else if (selectedTrack != null) {
-            send(SpeakerAction.PLAY_TRACK, selectedTrack);
         }
     }
 
@@ -632,6 +1028,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             setFocused(field);
         }
         listScroll = list.scroll();
+        applyTab();
         refreshRows();
         updateControls();
     }
@@ -640,19 +1037,22 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         PlaybackState state = currentState();
         boolean loaded = !state.isStopped();
         StationView view = station();
+        boolean control = canControl();
 
         progressSlider.update(loaded ? state.getCurrentPositionMs() : 0,
             loaded ? track(state.resourceId()).map(AudioResource::durationMs).orElse(-1L) : -1);
+        progressSlider.active = control;
         volumeSlider.follow(ClientSpeakerManager.getInstance().getSpeakerVolume(pos()));
+        volumeSlider.active = canTune();
 
-        boolean selectedIsLoaded = selectedTrack == null || selectedTrack.equals(state.resourceId());
-        boolean pausable = state.isPlaying() && selectedIsLoaded;
-        mainButton.show(pausable ? PAUSE : PLAY, pausable ? ICON_PAUSE : ICON_PLAY);
-        mainButton.active = pausable || (state.isPaused() && selectedIsLoaded) || selectedTrack != null;
-        stopButton.active = loaded;
-        boolean anything = !ClientAudioManager.getInstance().getAllResources().isEmpty();
+        mainButton.show(state.isPlaying() ? PAUSE : state.isPaused() ? RESUME : PLAY, state.isPlaying() ? ICON_PAUSE : ICON_PLAY);
+        mainButton.active = control && loaded;
+        stopButton.active = control && loaded;
+        boolean anything = control && !ClientAudioManager.getInstance().getAllResources().isEmpty();
         previousButton.active = anything;
         nextButton.active = anything;
+        shuffleButton.active = control;
+        repeatButton.active = control;
 
         Station.Repeat repeat = view == null ? Station.Repeat.OFF : view.repeat();
         repeatButton.show(Component.translatable(switch (repeat) {
@@ -662,6 +1062,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         }), repeat == Station.Repeat.ONE ? ICON_REPEAT_ONE : ICON_REPEAT);
         repeatButton.setLit(repeat != Station.Repeat.OFF);
         shuffleButton.setLit(view != null && view.shuffle());
+        leaveLink.visible = view != null && view.shared() && canTune();
     }
 
     @Override
@@ -679,71 +1080,101 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
 
     @Override
     void drawOverlay(GuiPort.Canvas canvas, int mouseX, int mouseY) {
+        this.mouseX = mouseX;
+        this.mouseY = mouseY;
         int leftX = leftPos + PADDING;
         int rightX = leftPos + RIGHT_X;
 
-        if (tab == Tab.QUEUE || (tab == Tab.PLAYLISTS && openPlaylist != null)) {
-            drawListHeading(canvas, leftX);
+        if (tab == Tab.QUEUE) {
+            drawQueueHeading(canvas, leftX);
         }
         canvas.text(Component.translatable("gui.phonon.speaker.now_playing"), rightX, topPos + LABEL_Y, SteelStyle.TEXT);
-        StationView view = station();
-        if (view != null && view.shared()) {
-            String name = view.name();
-            int room = RIGHT_WIDTH - canvas.font.width(Component.translatable("gui.phonon.speaker.now_playing")) - 6;
-            if (canvas.font.width(name) > room) {
-                name = canvas.font.plainSubstrByWidth(name, Math.max(0, room - canvas.font.width("..."))) + "...";
-            }
-            canvas.text(name, rightX + RIGHT_WIDTH - canvas.font.width(name), topPos + LABEL_Y, SteelStyle.PLAYING);
-        }
         drawNowPlaying(canvas, rightX, mouseX, mouseY);
         drawMeter(canvas, rightX);
         drawSelected(canvas, rightX);
-        drawButtonTooltip(canvas, mouseX, mouseY);
+        if (popup != null) {
+            popup.draw(canvas, mouseX, mouseY);
+        } else {
+            drawControlTooltip(canvas, mouseX, mouseY);
+        }
     }
 
-    private void drawListHeading(GuiPort.Canvas canvas, int x) {
-        int y = topPos + FIELD_Y + 6;
-        if (tab == Tab.QUEUE) {
-            StationView view = station();
-            canvas.text(Component.translatable("gui.phonon.speaker.track_count", view == null ? 0 : view.queue().size()), x, y, SteelStyle.TEXT_MUTED);
-        } else {
-            Playlist open = playlist(openPlaylist);
-            if (open != null) {
-                canvas.head(open.ownerId(), x, y - 1, 8);
-                canvas.text(open.name(), x + 12, y, SteelStyle.TEXT);
-            }
-        }
+    private void drawQueueHeading(GuiPort.Canvas canvas, int x) {
+        StationView view = station();
+        Component heading = view != null && view.shared()
+            ? Component.translatable("gui.phonon.speaker.up_next_on", view.name())
+            : label("gui.phonon.speaker.up_next_here");
+        canvas.text(heading, x, topPos + FIELD_Y + 6, SteelStyle.TEXT_MUTED);
     }
 
     private void drawNowPlaying(GuiPort.Canvas canvas, int x, int mouseX, int mouseY) {
         PlaybackState state = currentState();
         int y = topPos + TITLE_Y;
+        drawStatus(canvas, x, state, track(state.resourceId()).isPresent());
         if (state.isStopped()) {
             canvas.text(Component.translatable("gui.phonon.speaker.nothing_playing"), x, y, SteelStyle.TEXT_OFF);
             return;
         }
-
-        Optional<AudioResource> loaded = track(state.resourceId());
-        String title = loaded.map(AudioResource::name)
+        String title = track(state.resourceId()).map(AudioResource::name)
             .orElseGet(() -> Component.translatable("gui.phonon.speaker.unknown").getString());
-        String shown = title;
-        boolean cut = canvas.font.width(shown) > RIGHT_WIDTH;
-        if (cut) {
-            shown = canvas.font.plainSubstrByWidth(shown, RIGHT_WIDTH - canvas.font.width("...")) + "...";
+        int color = state.isPaused() ? SteelStyle.PAUSED : SteelStyle.PLAYING;
+        int width = canvas.font.width(title);
+        if (width <= RIGHT_WIDTH) {
+            canvas.text(title, x, y, color);
+            return;
         }
-        canvas.text(shown, x, y, state.isPaused() ? SteelStyle.PAUSED : SteelStyle.PLAYING);
-
-        Component status = status(state, loaded.isPresent());
-        if (status != null) {
-            canvas.text(status, x, topPos + STATUS_Y, SteelStyle.TEXT_MUTED);
-        }
-        if (cut && mouseX >= x && mouseX < x + RIGHT_WIDTH && mouseY >= y && mouseY < y + canvas.font.lineHeight) {
+        int loop = width + MARQUEE_GAP;
+        int offset = marqueeOffset(title, loop, state.isPlaying());
+        canvas.clip(x, y - 1, x + RIGHT_WIDTH, y + canvas.font.lineHeight + 1);
+        canvas.text(title, x - offset, y, color);
+        canvas.text(title, x - offset + loop, y, color);
+        canvas.unclip();
+        if (mouseX >= x && mouseX < x + RIGHT_WIDTH && mouseY >= y && mouseY < y + canvas.font.lineHeight) {
             canvas.tooltip(Component.literal(title), mouseX, mouseY);
         }
     }
 
+    /** Runs only while the music does, like a car stereo's display. */
+    private int marqueeOffset(String title, int loop, boolean running) {
+        long now = System.nanoTime();
+        long elapsedMs = Math.min(100, (now - marqueeLastNanos) / 1_000_000L);
+        marqueeLastNanos = now;
+        if (!title.equals(marqueeName)) {
+            marqueeName = title;
+            marqueeMs = 0;
+        } else if (running) {
+            marqueeMs += elapsedMs;
+        }
+        long travelMs = (long) (loop / MARQUEE_PIXELS_PER_SECOND * 1000);
+        long at = marqueeMs % (MARQUEE_REST_MS + travelMs);
+        return at < MARQUEE_REST_MS ? 0 : (int) ((at - MARQUEE_REST_MS) * loop / travelMs);
+    }
+
+    /** The station you're on, or how your own music is doing, under the title. */
+    private void drawStatus(GuiPort.Canvas canvas, int x, PlaybackState state, boolean available) {
+        int y = topPos + STATUS_Y;
+        Component status = status(state, available);
+        StationView view = station();
+        if (view == null || !view.shared()) {
+            if (status != null) {
+                canvas.text(status, x, y, SteelStyle.TEXT_MUTED);
+            }
+            return;
+        }
+        canvas.head(view.ownerId(), x, y, 8);
+        String name = status == null ? view.name() : view.name() + " · " + status.getString();
+        int room = RIGHT_WIDTH - 11 - (leaveLink.visible ? leaveLink.getWidth() + 4 : 0);
+        if (canvas.font.width(name) > room) {
+            name = canvas.font.plainSubstrByWidth(name, Math.max(0, room - canvas.font.width("..."))) + "...";
+        }
+        canvas.text(name, x + 11, y, SteelStyle.TEXT_DIM);
+    }
+
     @Nullable
     private Component status(PlaybackState state, boolean available) {
+        if (state.isStopped()) {
+            return null;
+        }
         if (!available || ClientSpeakerManager.getInstance().hasFailed(pos())) {
             return Component.translatable("gui.phonon.speaker.unavailable");
         }
@@ -755,7 +1186,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             : null;
     }
 
-    /** Recent loudness of what this speaker is playing, newest on the right. */
+    /** Recent loudness of what this speaker is playing, newest on the right, and what the buttons above it affect. */
     private void drawMeter(GuiPort.Canvas canvas, int x) {
         PlaybackState state = currentState();
         int bottom = topPos + METER_Y + METER_HEIGHT;
@@ -765,10 +1196,15 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         } else {
             java.util.Arrays.fill(meter, 0);
         }
+        String scope = scopeText();
+        int barColor = scope.isEmpty() ? SteelStyle.PLAYING : METER_QUIET;
         for (int i = 0; i < METER_BARS; i++) {
             int height = Math.round(meter[i] * (METER_HEIGHT - 2));
             int left = x + 1 + i * (METER_BAR_WIDTH + 1);
-            canvas.fill(left, bottom - 1 - height, left + METER_BAR_WIDTH, bottom - 1, SteelStyle.PLAYING);
+            canvas.fill(left, bottom - 1 - height, left + METER_BAR_WIDTH, bottom - 1, barColor);
+        }
+        if (!scope.isEmpty()) {
+            canvas.text(scope, x + (RIGHT_WIDTH - canvas.font.width(scope)) / 2, topPos + METER_Y + 3, SteelStyle.TEXT);
         }
     }
 
@@ -783,7 +1219,6 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             drawSelectedResult(canvas, selectedResult, x, y);
             return;
         }
-
         Optional<AudioResource> selected = track(selectedTrack);
         if (selected.isEmpty()) {
             for (FormattedCharSequence line : canvas.font.split(Component.translatable("gui.phonon.speaker.select_hint"), RIGHT_WIDTH)) {
@@ -801,11 +1236,15 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         y += 3;
         canvas.text(Component.translatable("gui.phonon.speaker.selected_details",
             SteelStyle.time(selected.get().durationMs()), size(selected.get().sizeBytes())), x, y, SteelStyle.TEXT_DIM);
+        if (selected.get().addedBy() != null) {
+            y += canvas.font.lineHeight + 1;
+            canvas.text(Component.translatable("gui.phonon.speaker.added_by", selected.get().addedByName()), x, y, SteelStyle.TEXT_MUTED);
+        }
     }
 
     /** A search result's picture with its title beside it, and who made it underneath. */
     private void drawSelectedResult(GuiPort.Canvas canvas, SearchResult result, int x, int y) {
-        GuiPort.Picture picture = ClientSearch.getInstance().picture(result.videoId());
+        GuiPort.Picture picture = ClientSearch.getInstance().picture(result.key());
         if (picture != null) {
             canvas.picture(picture, x, y, RESULT_PICTURE_WIDTH, RESULT_PICTURE_HEIGHT);
         } else {
@@ -833,12 +1272,26 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         return String.format("%.1f MB", bytes / (1024.0 * 1024.0));
     }
 
-    private void drawButtonTooltip(GuiPort.Canvas canvas, int mouseX, int mouseY) {
-        List<SteelButton> buttons = List.of(shuffleButton, previousButton, mainButton, nextButton, repeatButton, stopButton, fieldButton);
-        for (SteelButton button : buttons) {
-            if (button.visible && button.isMouseOver(mouseX, mouseY)) {
-                canvas.tooltip(button.getMessage(), mouseX, mouseY);
+    private static boolean within(GuiPort.Control control, int x, int y) {
+        return control.visible && x >= control.getX() && x < control.getX() + control.getWidth()
+            && y >= control.getY() && y < control.getY() + control.getHeight();
+    }
+
+    /** Disabled controls explain themselves rather than showing their name. */
+    private void drawControlTooltip(GuiPort.Canvas canvas, int mouseX, int mouseY) {
+        String scope = scopeText();
+        for (SteelButton button : List.of(shuffleButton, previousButton, mainButton, nextButton, repeatButton, stopButton)) {
+            if (within(button, mouseX, mouseY)) {
+                canvas.tooltip(!canControl() ? Component.literal(scope) : button.getMessage(), mouseX, mouseY);
+                return;
             }
+        }
+        if (within(progressSlider, mouseX, mouseY) && !canControl()) {
+            canvas.tooltip(Component.literal(scope), mouseX, mouseY);
+        } else if (within(volumeSlider, mouseX, mouseY)) {
+            canvas.tooltip(canTune() ? label("gui.phonon.speaker.volume_here") : Component.translatable("gui.phonon.speaker.only_owner", ownerName()), mouseX, mouseY);
+        } else if (within(leaveLink, mouseX, mouseY)) {
+            canvas.tooltip(label("gui.phonon.speaker.own_music_tip"), mouseX, mouseY);
         }
     }
 }

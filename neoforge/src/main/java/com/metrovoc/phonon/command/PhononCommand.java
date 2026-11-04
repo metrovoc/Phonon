@@ -13,6 +13,7 @@ import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import com.metrovoc.phonon.server.AddFlow;
+import com.metrovoc.phonon.server.ToolsFlow;
 import com.metrovoc.phonon.server.AudioFailure;
 import com.metrovoc.phonon.server.AudioLibrary;
 import com.metrovoc.phonon.server.AudioTools;
@@ -57,6 +58,9 @@ public class PhononCommand {
             )
             .then(Commands.literal("tools")
                 .executes(PhononCommand::showTools)
+                .then(Commands.literal("help")
+                    .executes(PhononCommand::toolsHelp)
+                )
                 .then(Commands.literal("install")
                     .executes(PhononCommand::installTools)
                 )
@@ -87,16 +91,12 @@ public class PhononCommand {
     }
 
     private static int showTools(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack source = ctx.getSource();
-        boolean missing = false;
-        for (AudioTools.Status status : AudioTools.status()) {
-            missing |= status.source() == AudioTools.Source.MISSING;
-            tell(source, Component.translatable("phonon.tools.status." + status.source().name().toLowerCase(java.util.Locale.ROOT),
-                status.tool()));
-        }
-        if (missing) {
-            AddFlow.offerInstall(source);
-        }
+        ToolsFlow.describe(ctx.getSource());
+        return 1;
+    }
+
+    private static int toolsHelp(CommandContext<CommandSourceStack> ctx) {
+        ToolsFlow.help(ctx.getSource());
         return 1;
     }
 
@@ -144,30 +144,7 @@ public class PhononCommand {
     }
 
     private static int updateTools(CommandContext<CommandSourceStack> ctx) {
-        CommandSourceStack source = ctx.getSource();
-        if (AudioTools.installed("yt-dlp").isEmpty()) {
-            source.sendFailure(Component.translatable("phonon.tools.update_system"));
-            return 0;
-        }
-        MinecraftServer server = source.getServer();
-        tell(source, Component.translatable("phonon.tools.updating").withStyle(ChatFormatting.YELLOW));
-        ServerAudioStorage.getInstance().runAsync(() -> {
-            boolean updated;
-            try {
-                updated = AudioTools.updateYtDlp();
-            } catch (Exception e) {
-                Phonon.LOGGER.error("Failed to update yt-dlp", e);
-                updated = false;
-            }
-            boolean success = updated;
-            server.execute(() -> {
-                if (success) {
-                    tell(source, Component.translatable("phonon.tools.updated").withStyle(ChatFormatting.GREEN));
-                } else {
-                    source.sendFailure(Component.translatable("phonon.tools.update_failed"));
-                }
-            });
-        });
+        ToolsFlow.update(ctx.getSource(), success -> {});
         return 1;
     }
 

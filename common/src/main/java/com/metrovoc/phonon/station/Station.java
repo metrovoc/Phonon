@@ -260,6 +260,20 @@ public final class Station {
         return station;
     }
 
+    /** A new shared station that carries on from where another one is. */
+    public static Station sharedCopyOf(Station from, UUID id, String name, UUID ownerId, String ownerName) {
+        Station station = new Station(id, name, ownerId, ownerName, true);
+        station.queue.addAll(from.queue);
+        station.cursor = from.cursor;
+        station.repeat = from.repeat;
+        station.shuffle = from.shuffle;
+        PlaybackState source = from.playback;
+        if (source.resourceId() != null) {
+            station.playback = new PlaybackState(source.resourceId(), PlaybackState.nowMs(), source.getCurrentPositionMs(), source.speed());
+        }
+        return station;
+    }
+
     /** A speaker saved before stations existed: one track at a known position. */
     public static Station migrated(UUID track, long positionMs, float speed) {
         Station station = ownedBySpeaker();

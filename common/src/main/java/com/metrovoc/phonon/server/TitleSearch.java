@@ -22,17 +22,17 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Finds videos by title with yt-dlp, and fetches their thumbnails, on the server so players never contact the site.
+ * Finds tracks by title with yt-dlp, and fetches their pictures, on the server so players never contact the site.
  * Only a player's newest search keeps running.
  */
 public final class TitleSearch {
     public static final int MAX_QUERY_CHARS = 200;
     public static final int MAX_RESULTS = 8;
     public static final int MAX_THUMBNAIL_BYTES = 64 * 1024;
-    private static final long SEARCH_TIMEOUT_SECONDS = 20;
     private static final long THUMBNAIL_TIMEOUT_SECONDS = 8;
+    /** Fills 64 by 36 whatever the picture's shape, in few enough colours to sit among the game's own pixels. */
     private static final String THUMBNAIL_FILTER =
-        "scale=64:36:flags=area,split[a][b];[a]palettegen=max_colors=32[p];[b][p]paletteuse=dither=none";
+        "scale=64:36:force_original_aspect_ratio=increase:flags=area,crop=64:36,split[a][b];[a]palettegen=max_colors=32[p];[b][p]paletteuse=dither=none";
 
     private static final ExecutorService WORKERS = Executors.newFixedThreadPool(2, task -> {
         Thread thread = new Thread(task, "Phonon title search");
@@ -45,8 +45,36 @@ public final class TitleSearch {
 
     private TitleSearch() {}
 
-    /** Sends a player the results, then each thumbnail as it arrives. */
-    public static void search(ServerPlayer player, int searchId, String text) {
+    /** A request from a player's screen, for a title or link. Updating yt-dlp first is for operators. */
+    public static void request(ServerPlayer player, int searchId, SearchSource source, String text, boolean updateFirst) {
+        if (!SpeakerControl.canAddTracks(player)) {
+            return;
+        }
+        if (!updateFirst || !PlayerPermissions.isOperator(player)) {
+            run(player, searchId, source, text);
+            return;
+        }
+        ToolsFlow.update(player.createCommandSourceStack(), success -> {
+            if (success) {
+                run(player, searchId, source, text);
+            } else {
+                PlatformHelper.INSTANCE.sendSearchResults(player, searchId, List.of(), AudioFailure.UNKNOWN);
+            }
+        });
+    }
+
+    private static void run(ServerPlayer player, int searchId, SearchSource source, String text) {
+        if (AddRequest.parse(text) != null) {
+            /* A retried link: the screen already shows it as searching, so clear that when it starts. */
+            PlatformHelper.INSTANCE.sendSearchResults(player, searchId, List.of(), null);
+            AddFlow.addFromText(player.createCommandSourceStack(), text);
+        } else {
+            search(player, searchId, source, text);
+        }
+    }
+
+    /** Sends a player the results, then each picture as it arrives. */
+    private static void search(ServerPlayer player, int searchId, SearchSource source, String text) {
         String query = text.strip();
         if (query.isEmpty() || query.length() > MAX_QUERY_CHARS) {
             return;
@@ -58,8 +86,8 @@ public final class TitleSearch {
             if (!isNewest(uuid, searchId)) {
                 return;
             }
-            Outcome outcome = run(query);
-            server.execute(() -> deliver(server, uuid, searchId, outcome));
+            Outcome outcome = run(source, query);
+            server.execute(() -> deliver(server, uuid, searchId, source, outcome));
             if (outcome.failure() != null) {
                 return;
             }
@@ -67,12 +95,12 @@ public final class TitleSearch {
                 if (!isNewest(uuid, searchId)) {
                     return;
                 }
-                byte[] png = thumbnail(result.videoId());
+                byte[] png = result.picture().isEmpty() ? null : thumbnailOf(result.picture());
                 if (png != null) {
                     server.execute(() -> {
                         ServerPlayer online = server.getPlayerList().getPlayer(uuid);
                         if (online != null) {
-                            PlatformHelper.INSTANCE.sendSearchThumbnail(online, searchId, result.videoId(), png);
+                            PlatformHelper.INSTANCE.sendSearchThumbnail(online, searchId, result.key(), png);
                         }
                     });
                 }
@@ -85,13 +113,17 @@ public final class TitleSearch {
         return current != null && current == searchId;
     }
 
-    private static void deliver(MinecraftServer server, UUID uuid, int searchId, Outcome outcome) {
+    private static void deliver(MinecraftServer server, UUID uuid, int searchId, SearchSource source, Outcome outcome) {
+        if (outcome.failure() == null) {
+            ToolsFlow.worked(source.label());
+        } else {
+            ToolsFlow.failed(source.label(), outcome.failure());
+        }
         ServerPlayer player = server.getPlayerList().getPlayer(uuid);
         if (player == null) {
             return;
         }
-        String failure = outcome.failure() == null ? "" : outcome.failure().translationKey();
-        PlatformHelper.INSTANCE.sendSearchResults(player, searchId, outcome.results(), failure);
+        PlatformHelper.INSTANCE.sendSearchResults(player, searchId, outcome.results(), outcome.failure());
         if (outcome.failure() == AudioFailure.TOOLS_MISSING) {
             AddFlow.offerInstall(player.createCommandSourceStack());
         }
@@ -107,9 +139,10 @@ public final class TitleSearch {
         MinecraftServer server = source.getServer();
         source.sendSystemMessage(Component.translatable("phonon.add.searching", query).withStyle(ChatFormatting.YELLOW));
         WORKERS.execute(() -> {
-            Outcome outcome = run(query);
+            Outcome outcome = run(SearchSource.YOUTUBE, query);
             server.execute(() -> {
                 if (outcome.failure() != null) {
+                    ToolsFlow.failed(SearchSource.YOUTUBE.label(), outcome.failure());
                     source.sendFailure(Component.translatable(outcome.failure().translationKey()));
                     if (outcome.failure() == AudioFailure.TOOLS_MISSING) {
                         AddFlow.offerInstall(source);
@@ -124,15 +157,21 @@ public final class TitleSearch {
         });
     }
 
-    private static Outcome run(String query) {
+    private static Outcome run(SearchSource source, String query) {
         Path output = null;
         Process process = null;
         try {
             output = Files.createTempFile("phonon_search_", ".txt");
             List<String> arguments = new ArrayList<>(List.of(
-                AudioTools.command("yt-dlp"), "--flat-playlist", "--dump-json", "--no-warnings", "--encoding", "utf-8"));
+                AudioTools.command("yt-dlp"), "--dump-json", "--no-warnings", "--encoding", "utf-8", "--skip-download", "--ignore-errors"));
+            if (source.flat()) {
+                arguments.add("--flat-playlist");
+            } else {
+                arguments.add("--no-playlist");
+            }
             AudioTools.installed("deno").ifPresent(deno -> arguments.addAll(List.of("--js-runtimes", "deno:" + deno)));
-            arguments.addAll(List.of("--", "ytsearch" + MAX_RESULTS + ":" + query));
+            arguments.addAll(AudioTools.networkArguments());
+            arguments.addAll(List.of("--", source.query(query)));
             try {
                 process = new ProcessBuilder(arguments)
                     .redirectErrorStream(true)
@@ -141,15 +180,16 @@ public final class TitleSearch {
             } catch (IOException e) {
                 return new Outcome(List.of(), AudioFailure.TOOLS_MISSING);
             }
-            if (!process.waitFor(SEARCH_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            if (!process.waitFor(source.timeoutSeconds(), TimeUnit.SECONDS)) {
                 return new Outcome(List.of(), AudioFailure.TIMEOUT);
             }
             String log = Files.readString(output, StandardCharsets.UTF_8);
-            if (process.exitValue() != 0) {
-                Phonon.LOGGER.warn("Title search failed:\n{}", log);
+            List<SearchResult> results = SearchResult.parseLines(source, log);
+            if (process.exitValue() != 0 && results.isEmpty()) {
+                Phonon.LOGGER.warn("Title search on {} failed:\n{}", source.label(), log);
                 return new Outcome(List.of(), AudioFailure.classify(log));
             }
-            return new Outcome(SearchResult.parseLines(log, MAX_RESULTS), null);
+            return new Outcome(results, null);
         } catch (IOException | InterruptedException e) {
             Phonon.LOGGER.warn("Title search failed", e);
             return new Outcome(List.of(), AudioFailure.UNKNOWN);
@@ -161,8 +201,15 @@ public final class TitleSearch {
         }
     }
 
-    /** A tiny PNG in a few colours, so it sits among the game's own pixels. Null when there isn't one. */
-    private static byte[] thumbnail(String videoId) {
+    /** SoundCloud's originals can be huge, so try its smaller size first. Not every picture has one. */
+    private static byte[] thumbnailOf(String url) {
+        String smaller = url.replace("-original.", "-t300x300.");
+        byte[] png = thumbnail(smaller);
+        return png != null || smaller.equals(url) ? png : thumbnail(url);
+    }
+
+    /** A tiny PNG, or null when there isn't one. The address has already been limited to the source's own sites. */
+    private static byte[] thumbnail(String url) {
         Path png = null;
         Process process = null;
         try {
@@ -170,7 +217,7 @@ public final class TitleSearch {
             process = new ProcessBuilder(
                 AudioTools.command("ffmpeg"), "-v", "error", "-y",
                 "-protocol_whitelist", "https,tls,tcp,crypto",
-                "-i", "https://i.ytimg.com/vi/" + videoId + "/mqdefault.jpg",
+                "-i", url,
                 "-filter_complex", THUMBNAIL_FILTER,
                 "-frames:v", "1", "-c:v", "png", "-f", "image2", png.toString())
                 .redirectErrorStream(true)
@@ -182,7 +229,7 @@ public final class TitleSearch {
             byte[] bytes = Files.readAllBytes(png);
             return bytes.length > 0 && bytes.length <= MAX_THUMBNAIL_BYTES ? bytes : null;
         } catch (IOException | InterruptedException e) {
-            Phonon.LOGGER.debug("No thumbnail for {}", videoId, e);
+            Phonon.LOGGER.debug("No thumbnail at {}", url, e);
             return null;
         } finally {
             if (process != null && process.isAlive()) {

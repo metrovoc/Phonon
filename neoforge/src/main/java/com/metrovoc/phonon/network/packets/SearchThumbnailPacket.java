@@ -13,13 +13,13 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 /**
  * Server -> Client: one search result's picture, as a small PNG.
  */
-public record SearchThumbnailPacket(int searchId, String videoId, byte[] png) implements CustomPacketPayload {
+public record SearchThumbnailPacket(int searchId, String key, byte[] png) implements CustomPacketPayload {
     public static final Type<SearchThumbnailPacket> TYPE =
         new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "search_thumbnail"));
 
     public static final StreamCodec<ByteBuf, SearchThumbnailPacket> CODEC = StreamCodec.composite(
         ByteBufCodecs.VAR_INT, SearchThumbnailPacket::searchId,
-        ByteBufCodecs.stringUtf8(64), SearchThumbnailPacket::videoId,
+        ByteBufCodecs.stringUtf8(1024), SearchThumbnailPacket::key,
         ByteBufCodecs.byteArray(TitleSearch.MAX_THUMBNAIL_BYTES), SearchThumbnailPacket::png,
         SearchThumbnailPacket::new
     );
@@ -30,6 +30,6 @@ public record SearchThumbnailPacket(int searchId, String videoId, byte[] png) im
     }
 
     public static void handle(SearchThumbnailPacket packet, IPayloadContext ctx) {
-        ctx.enqueueWork(() -> ClientSearch.getInstance().setThumbnail(packet.searchId, packet.videoId, packet.png));
+        ctx.enqueueWork(() -> ClientSearch.getInstance().setThumbnail(packet.searchId, packet.key, packet.png));
     }
 }

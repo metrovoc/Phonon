@@ -104,6 +104,7 @@ public class PhononNeoForge {
         repairMissingDurations(manager, storage);
 
         serverTickCount = 0;
+        com.metrovoc.phonon.server.ToolsFlow.autoUpdate();
 
         Phonon.LOGGER.info("Loaded {} audio resources", manager.getAllResources().size());
         AudioLibrary.importMusicFolder(event.getServer(), (file, failure) -> {
@@ -119,9 +120,7 @@ public class PhononNeoForge {
             if (resource.durationMs() <= 0 && storage.hasAudio(resource.id())) {
                 long duration = storage.getDurationMs(resource.id());
                 if (duration > 0) {
-                    manager.updateResource(new AudioResource(
-                        resource.id(), resource.name(), resource.url(), duration, resource.sizeBytes()
-                    ));
+                    manager.updateResource(resource.withDurationMs(duration));
                     repaired++;
                 }
             }
@@ -155,6 +154,8 @@ public class PhononNeoForge {
             var packet = new SyncAudioResourcesPacket(resources);
             PacketDistributor.sendToPlayer(player, packet);
             PacketDistributor.sendToPlayer(player, SyncStationsPacket.current());
+            PacketDistributor.sendToPlayer(player, com.metrovoc.phonon.network.packets.SyncPermissionsPacket.current());
+            com.metrovoc.phonon.server.ToolsFlow.noticeIfStale(player);
             Phonon.LOGGER.info("Synced {} audio resources to {}", resources.size(), player.getName().getString());
         }
     }
@@ -182,6 +183,9 @@ public class PhononNeoForge {
     private void onConfigLoad(ModConfigEvent event) {
         if (event.getConfig().getSpec() == NeoForgeServerConfig.SPEC) {
             NeoForgeServerConfig.bind();
+            if (net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer() != null) {
+                PacketDistributor.sendToAllPlayers(com.metrovoc.phonon.network.packets.SyncPermissionsPacket.current());
+            }
             Phonon.LOGGER.info("Server config loaded/reloaded");
         } else if (event.getConfig().getSpec() == NeoForgeClientConfig.SPEC) {
             NeoForgeClientConfig.bind();

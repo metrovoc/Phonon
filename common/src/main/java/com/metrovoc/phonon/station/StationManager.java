@@ -127,6 +127,14 @@ public final class StationManager {
         return station;
     }
 
+    /** Starts a station from what's playing, so the music carries on and is now shared. */
+    public Station shareAsStation(Station from, String name, UUID ownerId, String ownerName) {
+        Station station = Station.sharedCopyOf(from, UUID.randomUUID(), name, ownerId, ownerName);
+        stations.put(station.id(), station);
+        sharedChanged();
+        return station;
+    }
+
     /** Listening speakers fall back to their own private stations. */
     public void deleteShared(Station station) {
         if (!station.shared()) {

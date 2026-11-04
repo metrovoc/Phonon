@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.server;
 
 import com.metrovoc.phonon.Phonon;
+import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.server.AudioToolManifest.Asset;
 
 import java.io.File;
@@ -19,6 +20,8 @@ import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -198,9 +201,83 @@ public final class AudioTools {
         }
     }
 
+    /** The server's proxy and cookies settings, as yt-dlp arguments. */
+    public static List<String> networkArguments() {
+        List<String> arguments = new ArrayList<>();
+        String proxy = PhononServerConfig.getDownloadProxy().strip();
+        if (!proxy.isEmpty()) {
+            arguments.addAll(List.of("--proxy", proxy));
+        }
+        String cookies = PhononServerConfig.getCookiesFile().strip();
+        if (!cookies.isEmpty()) {
+            arguments.addAll(List.of("--cookies", cookies));
+        }
+        return arguments;
+    }
+
+    /** Blocking. What a tool reports as its version, or null if it can't be run. */
+    public static String version(String tool) {
+        String flag = tool.equals("ffmpeg") || tool.equals("ffprobe") ? "-version" : "--version";
+        try {
+            Process process = new ProcessBuilder(command(tool), flag).redirectErrorStream(true).start();
+            String firstLine;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                firstLine = reader.readLine();
+                while (reader.readLine() != null) {
+                    // Drain the rest so the tool can exit
+                }
+            }
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                return null;
+            }
+            return process.exitValue() == 0 && firstLine != null ? shortVersion(tool, firstLine) : null;
+        } catch (IOException | InterruptedException e) {
+            return null;
+        }
+    }
+
+    /** "ffmpeg version 6.1.1 Copyright..." and "deno 2.9.8 (...)" down to the number. */
+    static String shortVersion(String tool, String line) {
+        String[] words = line.strip().split("\\s+");
+        return switch (tool) {
+            case "ffmpeg", "ffprobe" -> words.length > 2 ? words[2] : line.strip();
+            case "deno" -> words.length > 1 ? words[1] : line.strip();
+            default -> words[0];
+        };
+    }
+
+    /** yt-dlp versions are release dates. Days since this one, or -1 if it isn't one. */
+    public static long ageInDays(String ytDlpVersion, LocalDate today) {
+        String[] parts = ytDlpVersion == null ? new String[0] : ytDlpVersion.split("\\.");
+        if (parts.length < 3) {
+            return -1;
+        }
+        try {
+            return ChronoUnit.DAYS.between(LocalDate.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2])), today);
+        } catch (RuntimeException notADate) {
+            return -1;
+        }
+    }
+
+    /** Blocking. Installs Phonon's own yt-dlp, which then takes over from any copy on the system. */
+    public static void installYtDlp() throws IOException {
+        List<Asset> assets = assets().orElseThrow(() -> new IOException("No tool builds for this platform"));
+        Files.createDirectories(toolsDir);
+        HttpClient client = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+        for (Asset asset : assets) {
+            if (asset.tool().equals("yt-dlp")) {
+                installAsset(client, asset);
+            }
+        }
+    }
+
     /** Blocking. Lets the installed yt-dlp update itself, since video sites change faster than mod releases. */
     public static boolean updateYtDlp() throws IOException, InterruptedException {
-        Path ytDlp = installed("yt-dlp").orElseThrow(() -> new IOException("yt-dlp was not installed by Phonon"));
+        if (installed("yt-dlp").isEmpty()) {
+            installYtDlp();
+        }
+        Path ytDlp = installed("yt-dlp").orElseThrow(() -> new IOException("yt-dlp couldn't be installed"));
         Process process = new ProcessBuilder(ytDlp.toString(), "--update-to", "stable")
             .redirectErrorStream(true)
             .start();

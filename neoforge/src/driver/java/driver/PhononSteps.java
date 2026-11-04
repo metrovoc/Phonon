@@ -139,7 +139,7 @@ public final class PhononSteps {
             try {
                 var results = (java.util.List<?>) field(search, "results");
                 var pictures = (java.util.Map<?, ?>) field(search, "pictures");
-                LOG.info("[check] {} searching={} failure={} results={} pictures={} query={} first={}", arg.trim(), field(search, "searching"), field(search, "failureKey"),
+                LOG.info("[check] {} searching={} failure={} results={} pictures={} query={} first={}", arg.trim(), field(search, "searching"), field(search, "failure"),
                     results.size(), pictures.size(), field(search, "query"), results.isEmpty() ? "-" : results.get(0));
             } catch (ReflectiveOperationException e) {
                 throw new IllegalStateException(e);

@@ -3,7 +3,9 @@ package com.metrovoc.phonon.platform;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.server.LibraryJob;
+import com.metrovoc.phonon.server.AudioFailure;
 import com.metrovoc.phonon.server.SearchResult;
+import com.metrovoc.phonon.server.SearchSource;
 import com.metrovoc.phonon.server.SpeakerAction;
 import com.metrovoc.phonon.station.StationView;
 import com.metrovoc.phonon.audio.Receiver;
@@ -58,7 +60,14 @@ public interface PlatformHelper {
 
     void broadcastLibraryJobs(MinecraftServer server, List<LibraryJob> jobs);
 
-    void sendSearchResults(ServerPlayer player, int searchId, List<SearchResult> results, String failureKey);
+    void sendSearchResults(ServerPlayer player, int searchId, List<SearchResult> results, AudioFailure failure);
+
+    void sendAddFailed(ServerPlayer player, String url, AudioFailure failure);
+
+    /** Tells a player the server's rules, so their screen can show what they may do. */
+    void sendPermissions(ServerPlayer player);
+
+    void sendSearch(int searchId, SearchSource source, String text, boolean updateFirst);
 
     void sendSearchThumbnail(ServerPlayer player, int searchId, String videoId, byte[] png);
 

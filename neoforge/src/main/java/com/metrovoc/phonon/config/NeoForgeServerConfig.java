@@ -31,6 +31,10 @@ public class NeoForgeServerConfig {
 
     // Tool settings
     public final ModConfigSpec.BooleanValue allowToolInstall;
+    public final ModConfigSpec.BooleanValue autoUpdateYtDlp;
+    public final ModConfigSpec.ConfigValue<String> downloadProxy;
+    public final ModConfigSpec.ConfigValue<String> cookiesFile;
+    public final ModConfigSpec.BooleanValue anyoneCanControlStations;
 
     // Permission settings
     public final ModConfigSpec.BooleanValue ownerOnlySpeakers;
@@ -102,6 +106,18 @@ public class NeoForgeServerConfig {
             .comment("Let operators install yt-dlp, FFmpeg and Deno into the game folder from an in-game prompt.")
             .define("allowToolInstall", true);
 
+        autoUpdateYtDlp = builder
+            .comment("Update the yt-dlp Phonon installed when the server starts, if it's over 30 days old. This runs newly downloaded code.")
+            .define("autoUpdateYtDlp", false);
+
+        downloadProxy = builder
+            .comment("Send yt-dlp's traffic through this proxy, such as socks5://host:1080. Can help when a site blocks this server's address.")
+            .define("downloadProxy", "");
+
+        cookiesFile = builder
+            .comment("A Netscape-format cookies file for yt-dlp, relative to the server folder. Keep it private. yt-dlp warns the account can be banned, so use a spare one.")
+            .define("cookiesFile", "");
+
         builder.pop();
 
         builder.push("permissions");
@@ -111,8 +127,12 @@ public class NeoForgeServerConfig {
             .define("ownerOnlySpeakers", false);
 
         anyoneCanAddTracks = builder
-            .comment("Let every player add and delete library tracks from the speaker screen, not only operators.")
+            .comment("Let every player add library tracks from the speaker screen, not only operators. Players can delete only what they added.")
             .define("anyoneCanAddTracks", false);
+
+        anyoneCanControlStations = builder
+            .comment("Let anyone tuned to a station change what it plays. Otherwise only its creator and operators can.")
+            .define("anyoneCanControlStations", false);
 
         builder.pop();
     }
@@ -132,5 +152,9 @@ public class NeoForgeServerConfig {
         PhononServerConfig.setAllowToolInstall(INSTANCE.allowToolInstall::get);
         PhononServerConfig.setOwnerOnlySpeakers(INSTANCE.ownerOnlySpeakers::get);
         PhononServerConfig.setAnyoneCanAddTracks(INSTANCE.anyoneCanAddTracks::get);
+        PhononServerConfig.setAnyoneCanControlStations(INSTANCE.anyoneCanControlStations::get);
+        PhononServerConfig.setAutoUpdateYtDlp(INSTANCE.autoUpdateYtDlp::get);
+        PhononServerConfig.setDownloadProxy(INSTANCE.downloadProxy::get);
+        PhononServerConfig.setCookiesFile(INSTANCE.cookiesFile::get);
     }
 }

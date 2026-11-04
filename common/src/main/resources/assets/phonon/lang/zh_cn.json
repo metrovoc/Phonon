@@ -85,13 +85,11 @@
   "gui.phonon.speaker.repeat_all": "循环：全部",
   "gui.phonon.speaker.repeat_one": "循环：单曲",
   "gui.phonon.speaker.this_speaker": "这个扬声器",
-  "gui.phonon.speaker.by": "创建者 %s",
   "gui.phonon.speaker.queue_empty": "队列是空的。双击曲目即可播放，或点击曲目上的 + 设为下一首。",
   "gui.phonon.speaker.playlists_empty": "还没有歌单。在上方输入名称并按回车。",
   "gui.phonon.speaker.back": "返回歌单",
   "gui.phonon.speaker.searching": "正在搜索 %s……",
   "gui.phonon.speaker.no_results": "未找到 %s",
-  "gui.phonon.speaker.added": "已添加",
   "gui.phonon.speaker.action_add": "添加到曲库",
   "gui.phonon.speaker.action_play_next": "下一首播放",
   "gui.phonon.speaker.action_remove": "移除",
@@ -123,7 +121,6 @@
   "gui.phonon.speaker.in_library": "已在曲库中",
   "gui.phonon.speaker.adding_percent": "正在添加 %s%%",
   "gui.phonon.speaker.back_to_library": "返回曲库",
-  "gui.phonon.speaker.empty_can_add": "在上方输入歌名即可查找。",
   "gui.phonon.speaker.action_play_now": "立即播放",
   "gui.phonon.speaker.action_add_to_playlist": "添加到播放列表",
   "gui.phonon.speaker.action_delete_track": "从服务器删除",
@@ -176,5 +173,6 @@
   "gui.phonon.search.outdated": "yt-dlp 可能已过时。",
   "gui.phonon.search.ask_operator": "请管理员运行 /phonon tools update。",
   "gui.phonon.search.cloud_note": "云服务器上很常见。请查看 /phonon tools help",
-  "gui.phonon.search.failed": "操作失败。"
+  "gui.phonon.search.failed": "操作失败。",
+  "gui.phonon.search.add_failed": "无法添加"
 }

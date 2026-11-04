@@ -17,6 +17,7 @@ public final class ClientSearch {
 
     private final Map<String, GuiPort.Picture> pictures = new HashMap<>();
     private final Set<String> added = new HashSet<>();
+    private final Map<String, AudioFailure> failedAdds = new HashMap<>();
     private int id;
     private String query = "";
     private SearchSource source = SearchSource.YOUTUBE;
@@ -64,8 +65,16 @@ public final class ClientSearch {
         }
     }
 
-    /** A link couldn't be downloaded: show why, in place of the library. */
+    /** A link couldn't be downloaded. A result says so on its own row; a pasted link shows why in place of the library. */
     public void linkFailed(String url, String failureName) {
+        if (results.stream().anyMatch(each -> each.url().equals(url))) {
+            added.removeIf(key -> results.stream().anyMatch(each -> each.key().equals(key) && each.url().equals(url)));
+            failedAdds.put(url, parse(failureName));
+            return;
+        }
+        if (!GuiPort.speakerScreenOpen()) {
+            return;
+        }
         clear();
         query = url;
         link = true;
@@ -99,6 +108,7 @@ public final class ClientSearch {
         pictures.values().forEach(GuiPort.Picture::release);
         pictures.clear();
         added.clear();
+        failedAdds.clear();
         query = "";
         searching = false;
         updating = false;
@@ -141,8 +151,14 @@ public final class ClientSearch {
         return pictures.get(key);
     }
 
-    void markAdded(String key) {
-        added.add(key);
+    void markAdded(SearchResult result) {
+        added.add(result.key());
+        failedAdds.remove(result.url());
+    }
+
+    @Nullable
+    AudioFailure failedAdd(String url) {
+        return failedAdds.get(url);
     }
 
     boolean wasAdded(String key) {

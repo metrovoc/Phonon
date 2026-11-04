@@ -38,7 +38,13 @@ public final class ToolsFlow {
     static String siteOf(String url) {
         String host = url.replaceFirst("^https?://(www\\.)?", "");
         int slash = host.indexOf('/');
-        return slash < 0 ? host : host.substring(0, slash);
+        String site = slash < 0 ? host : host.substring(0, slash);
+        for (SearchSource source : SearchSource.values()) {
+            if (source.isLink(site)) {
+                return source.label();
+            }
+        }
+        return site;
     }
 
     private static long ytDlpAge() {

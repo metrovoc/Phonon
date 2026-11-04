@@ -274,6 +274,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     @Override
     protected void init() {
         super.init();
+        popup = null;
         ClientSpeakerManager.getInstance().holdNowPlaying();
 
         tabs.clear();
@@ -406,6 +407,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         confirmDelete = null;
         renaming = false;
         trackForNewPlaylist = null;
+        playlistToOpen = null;
         endSearch();
         clearField();
         list.setScroll(0);
@@ -486,10 +488,10 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
                 if (open != null) {
                     libraryMatches(text).stream().filter(each -> !open.tracks().contains(each.id())).findFirst()
                         .ifPresent(each -> send(SpeakerAction.ADD_TO_PLAYLIST, open.id(), each.id()));
+                    clearField();
                 } else {
-                    createPlaylist(text);
+                    createOrOpenPlaylist(text);
                 }
-                clearField();
             }
             case STATIONS -> {
                 if (canTune()) {
@@ -502,10 +504,22 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         }
     }
 
-    private void createPlaylist(String name) {
-        send(SpeakerAction.CREATE_PLAYLIST, null, trackForNewPlaylist, 0, name);
+    private void createOrOpenPlaylist(String text) {
+        Playlist existing = ClientStations.getInstance().playlists().stream()
+            .filter(each -> each.name().equalsIgnoreCase(text)).findFirst().orElse(null);
+        if (existing != null) {
+            if (trackForNewPlaylist != null && mayManage(existing.ownerId())) {
+                send(SpeakerAction.ADD_TO_PLAYLIST, existing.id(), trackForNewPlaylist);
+            }
+            trackForNewPlaylist = null;
+            openPlaylistView(existing.id());
+            return;
+        }
+        send(SpeakerAction.CREATE_PLAYLIST, null, trackForNewPlaylist, 0, text);
         trackForNewPlaylist = null;
-        playlistToOpen = name;
+        /* The server shortens names to this, and the new playlist opens once it arrives. */
+        playlistToOpen = text.substring(0, Math.min(text.length(), Station.MAX_NAME_CHARS)).strip();
+        clearField();
     }
 
     private static List<AudioResource> libraryMatches(String text) {
@@ -557,7 +571,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         List<RowList.Row> rows = new ArrayList<>();
         ClientSearch results = ClientSearch.getInstance();
         for (LibraryJob job : ClientStations.getInstance().jobs()) {
-            boolean ownRow = results.results().stream().anyMatch(each -> each.title().equals(job.label()));
+            boolean ownRow = results.results().stream().anyMatch(each -> each.url().equals(job.url()));
             if (!ownRow) {
                 rows.add(new RowList.Row(job.label()).color(SteelStyle.TEXT_MUTED)
                     .detail(job.percent() >= 0 ? job.percent() + "%" : "...").progress(Math.max(0, job.percent())));
@@ -625,7 +639,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         }).marker(ICON_BACK, SteelStyle.TEXT).tooltip(label("gui.phonon.speaker.back_to_library")));
         if (!results.isLink()) {
             rows.add(new RowList.Row(label("gui.phonon.speaker.results_from").getString()).color(SteelStyle.TEXT_MUTED)
-                .detail(results.source().label()).detailClick(this::openSourceMenu, ICON_DOWN));
+                .detail(results.source().label()).detailClick(this::openSourceMenu, ICON_DOWN, label("gui.phonon.speaker.choose_source")));
         }
         if (results.updating()) {
             rows.add(new RowList.Row(label("gui.phonon.search.updating").getString()).line(SteelStyle.TEXT_DIM));
@@ -692,21 +706,24 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     }
 
     private static boolean inLibrary(SearchResult result) {
-        return ClientAudioManager.getInstance().getAllResources().stream().anyMatch(each -> each.name().equals(result.title()));
+        return ClientAudioManager.getInstance().getAllResources().stream().anyMatch(each -> each.url().equals(result.url()));
     }
 
     private RowList.Row resultRow(SearchResult result, ClientSearch results) {
-        LibraryJob job = ClientStations.getInstance().jobs().stream().filter(each -> each.label().equals(result.title())).findFirst().orElse(null);
+        LibraryJob job = ClientStations.getInstance().jobs().stream().filter(each -> each.url().equals(result.url())).findFirst().orElse(null);
         boolean done = job == null && inLibrary(result);
         boolean adding = job != null || (!done && results.wasAdded(result.key()));
+        AudioFailure failed = adding || done ? null : results.failedAdd(result.url());
         boolean selected = selectedResult != null && selectedResult.key().equals(result.key());
         int percent = job == null ? 0 : Math.max(0, job.percent());
         String status = done ? label("gui.phonon.speaker.in_library").getString()
             : adding ? Component.translatable("gui.phonon.speaker.adding_percent", percent).getString()
+            : failed != null ? label("gui.phonon.search.add_failed").getString()
             : result.uploader() + " · " + SteelStyle.time(result.durationMs());
         RowList.Row row = new RowList.Row(result.title()).picture(results.picture(result.key()))
             .color(done ? SteelStyle.PLAYING : selected ? SteelStyle.TEXT : SteelStyle.TEXT_DIM).selected(selected)
-            .subtext(status, adding ? SteelStyle.TEXT_DIM : SteelStyle.TEXT_MUTED)
+            .subtext(status, failed != null ? SteelStyle.PAUSED : adding ? SteelStyle.TEXT_DIM : SteelStyle.TEXT_MUTED)
+            .tooltip(failed != null ? label(failed.translationKey()) : null)
             .click(() -> {
                 selectedResult = result;
                 selectedTrack = null;
@@ -722,8 +739,8 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     }
 
     private void addResult(SearchResult result) {
-        ClientSearch.getInstance().markAdded(result.key());
-        send(SpeakerAction.ADD_LINK, null, null, 0, result.title() + " " + result.url());
+        ClientSearch.getInstance().markAdded(result);
+        send(SpeakerAction.ADD_RESULT, null, null, 0, result.title() + "\n" + result.url());
     }
 
     // Menus
@@ -775,6 +792,15 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         popup = null;
         list.setBlocked(false);
         closing.press(x, y);
+        return true;
+    }
+
+    @Override
+    boolean overlayScrolled(double amount) {
+        if (popup == null) {
+            return false;
+        }
+        popup.scrolled(amount);
         return true;
     }
 
@@ -893,6 +919,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
                 rows.add(new RowList.Row(resource.name()).color(in ? SteelStyle.PLAYING : SteelStyle.TEXT)
                     .marker(in ? ICON_CHECK : ICON_PLUS, in ? SteelStyle.PLAYING : SteelStyle.TEXT_DIM)
                     .detail(in ? label("gui.phonon.speaker.in_playlist").getString() : SteelStyle.time(resource.durationMs()))
+                    .tooltip(label(in ? "gui.phonon.speaker.click_to_take_out" : "gui.phonon.speaker.click_to_add"))
                     .click(() -> send(in ? SpeakerAction.REMOVE_FROM_PLAYLIST : SpeakerAction.ADD_TO_PLAYLIST, open.id(), resource.id())));
             }
             if (matches.isEmpty()) {
@@ -918,7 +945,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
                 .click(() -> selectTrack(id))
                 .doubleClick(control ? () -> send(SpeakerAction.PLAY_PLAYLIST, open.id(), null, index, "") : null);
             if (edit) {
-                row.grip();
+                row.grip(label("gui.phonon.speaker.drag_to_reorder"));
             }
             rows.add(row);
         }
@@ -1104,7 +1131,17 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         Component heading = view != null && view.shared()
             ? Component.translatable("gui.phonon.speaker.up_next_on", view.name())
             : label("gui.phonon.speaker.up_next_here");
-        canvas.text(heading, x, topPos + FIELD_Y + 6, SteelStyle.TEXT_MUTED);
+        cropped(canvas, heading.getString(), x, topPos + FIELD_Y + 6, LEFT_WIDTH, SteelStyle.TEXT_MUTED);
+    }
+
+    /** Text that may not fit: cropped, with the whole of it as a tooltip. */
+    private void cropped(GuiPort.Canvas canvas, String text, int x, int y, int room, int color) {
+        boolean cut = canvas.font.width(text) > room;
+        String shown = cut ? canvas.font.plainSubstrByWidth(text, Math.max(0, room - canvas.font.width("..."))) + "..." : text;
+        canvas.text(shown, x, y, color);
+        if (cut && popup == null && mouseX >= x && mouseX < x + room && mouseY >= y && mouseY < y + canvas.font.lineHeight) {
+            canvas.tooltip(Component.literal(text), mouseX, mouseY);
+        }
     }
 
     private void drawNowPlaying(GuiPort.Canvas canvas, int x, int mouseX, int mouseY) {
@@ -1164,10 +1201,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         canvas.head(view.ownerId(), x, y, 8);
         String name = status == null ? view.name() : view.name() + " · " + status.getString();
         int room = RIGHT_WIDTH - 11 - (leaveLink.visible ? leaveLink.getWidth() + 4 : 0);
-        if (canvas.font.width(name) > room) {
-            name = canvas.font.plainSubstrByWidth(name, Math.max(0, room - canvas.font.width("..."))) + "...";
-        }
-        canvas.text(name, x + 11, y, SteelStyle.TEXT_DIM);
+        cropped(canvas, name, x + 11, y, room, SteelStyle.TEXT_DIM);
     }
 
     @Nullable
@@ -1204,7 +1238,8 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             canvas.fill(left, bottom - 1 - height, left + METER_BAR_WIDTH, bottom - 1, barColor);
         }
         if (!scope.isEmpty()) {
-            canvas.text(scope, x + (RIGHT_WIDTH - canvas.font.width(scope)) / 2, topPos + METER_Y + 3, SteelStyle.TEXT);
+            int room = RIGHT_WIDTH - 4;
+            cropped(canvas, scope, x + (RIGHT_WIDTH - Math.min(room, canvas.font.width(scope))) / 2, topPos + METER_Y + 3, room, SteelStyle.TEXT);
         }
     }
 
@@ -1257,12 +1292,8 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             canvas.line(lines.get(i), textX, lineY, SteelStyle.TEXT);
             lineY += canvas.font.lineHeight + 1;
         }
-        String uploader = result.uploader();
-        if (canvas.font.width(uploader) > RIGHT_WIDTH) {
-            uploader = canvas.font.plainSubstrByWidth(uploader, RIGHT_WIDTH - canvas.font.width("...")) + "...";
-        }
         int detailY = y + RESULT_PICTURE_HEIGHT + 3;
-        canvas.text(uploader, x, detailY, SteelStyle.TEXT_DIM);
+        cropped(canvas, result.uploader(), x, detailY, RIGHT_WIDTH, SteelStyle.TEXT_DIM);
         canvas.text(SteelStyle.time(result.durationMs()), x, detailY + canvas.font.lineHeight + 1, SteelStyle.TEXT_MUTED);
     }
 

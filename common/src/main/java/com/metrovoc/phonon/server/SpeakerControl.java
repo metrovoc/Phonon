@@ -52,6 +52,13 @@ public final class SpeakerControl {
             : canTune(player, speaker);
     }
 
+    /** A wire can't be asked who pulled the lever, so a station only listens to redstone on its creator's own speakers. */
+    public static boolean redstoneMayControl(StationListener speaker) {
+        Station station = speaker.station();
+        return !station.shared() || PhononServerConfig.getAnyoneCanControlStations()
+            || (station.ownerId() != null && station.ownerId().equals(speaker.getOwnerId()));
+    }
+
     private static boolean ownsOrOperates(ServerPlayer player, @Nullable UUID owner) {
         return PlayerPermissions.isOperator(player) || player.getUUID().equals(owner);
     }
@@ -88,6 +95,23 @@ public final class SpeakerControl {
                 }
                 return;
             }
+            case ADD_RESULT -> {
+                if (canAddTracks(player)) {
+                    AddFlow.addResult(player.createCommandSourceStack(), text);
+                } else {
+                    deny(player);
+                }
+                return;
+            }
+            case DELETE_STATION -> {
+                Station shared = stations().get(target);
+                if (shared == null || !shared.shared() || !ownsOrOperates(player, shared.ownerId())) {
+                    deny(player);
+                } else {
+                    stations().deleteShared(shared);
+                }
+                return;
+            }
             case DELETE_TRACK -> {
                 if (canDeleteTrack(player, target)) {
                     AudioManager.getInstance().getResource(target)
@@ -101,7 +125,7 @@ public final class SpeakerControl {
             }
         }
 
-        boolean tuning = action == SpeakerAction.CREATE_STATION || action == SpeakerAction.TUNE || action == SpeakerAction.DELETE_STATION;
+        boolean tuning = action == SpeakerAction.CREATE_STATION || action == SpeakerAction.TUNE;
         if (!(tuning ? canTune(player, speaker) : canControl(player, speaker))) {
             deny(player);
             return;
@@ -147,13 +171,6 @@ public final class SpeakerControl {
             }
             case TUNE -> {
                 speaker.tune(target);
-                return;
-            }
-            case DELETE_STATION -> {
-                Station shared = stations().get(target);
-                if (shared != null && shared.shared() && ownsOrOperates(player, shared.ownerId())) {
-                    stations().deleteShared(shared);
-                }
                 return;
             }
             default -> {

@@ -174,4 +174,16 @@ class StationTest {
         assertTrue(station.playback().isPaused());
         assertEquals(90_000, station.playback().getCurrentPositionMs(PlaybackState.nowMs()));
     }
+
+    @Test
+    void removingThePausedCurrentTrackStaysPaused() {
+        Station station = Station.ownedBySpeaker();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        station.playFrom(java.util.List.of(first, second), 0, new java.util.Random(1));
+        station.pause();
+        station.removeAt(0);
+        assertEquals(second, station.playback().resourceId());
+        assertTrue(station.playback().isPaused());
+    }
 }

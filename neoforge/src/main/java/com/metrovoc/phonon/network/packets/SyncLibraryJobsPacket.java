@@ -27,6 +27,7 @@ public record SyncLibraryJobsPacket(List<LibraryJob> jobs) implements CustomPack
         StreamCodec.composite(
             ByteBufCodecs.stringUtf8(8192), LibraryJob::label,
             ByteBufCodecs.VAR_INT, LibraryJob::percent,
+            ByteBufCodecs.stringUtf8(8192), LibraryJob::url,
             LibraryJob::new),
         MAX_JOBS
     ).map(SyncLibraryJobsPacket::new, SyncLibraryJobsPacket::jobs);

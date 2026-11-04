@@ -110,7 +110,11 @@ public final class Station {
                 cursor = Math.max(0, queue.size() - 1);
                 stop();
             } else if (!playback.isStopped()) {
+                boolean wasPaused = playback.isPaused();
                 startCurrent();
+                if (wasPaused) {
+                    pause();
+                }
             }
         }
     }

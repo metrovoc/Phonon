@@ -90,13 +90,17 @@ public final class Boombox implements StationListener {
     @Override
     public void tune(@Nullable UUID stationId) {
         boolean wasOnOwn = tunedTo == null;
-        tunedTo = stations.get(stationId) != null ? stationId : null;
+        Station wanted = stations.get(stationId);
+        tunedTo = wanted != null && wanted.shared() ? stationId : null;
         if (tunedTo != null && wasOnOwn) {
             resumeOwn = ownStation.playback().isPlaying();
             ownStation.pause();
         } else if (tunedTo == null && resumeOwn) {
             ownStation.resume();
             resumeOwn = false;
+            if (!present) {
+                stored = ownStation.toJson();
+            }
         }
         stations.changed(station());
         stations.save();

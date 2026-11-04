@@ -18,18 +18,18 @@ public final class PhononSteps {
         Driver.STEPS.put("pstate", (mc, arg) -> {
             String[] a = arg.trim().split("\\s+");
             BlockPos pos = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
-            PlaybackState s = ClientSpeakerManager.getInstance().getSpeakerState(pos).orElse(PlaybackState.STOPPED);
+            PlaybackState s = ClientSpeakerManager.getInstance().getSpeakerState(new com.metrovoc.phonon.audio.Receiver.Block(pos)).orElse(PlaybackState.STOPPED);
             Object sound = null;
             try {
                 var f = com.metrovoc.phonon.client.audio.AudioPlayer.class.getDeclaredField("playingSounds");
                 f.setAccessible(true);
-                sound = ((java.util.Map<?, ?>) f.get(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance())).get(pos);
+                sound = ((java.util.Map<?, ?>) f.get(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance())).get(new com.metrovoc.phonon.audio.Receiver.Block(pos));
             } catch (ReflectiveOperationException e) {
                 throw new IllegalStateException(e);
             }
             boolean active = sound != null && mc.getSoundManager().isActive((net.minecraft.client.resources.sounds.SoundInstance) sound);
             LOG.info("[check] {} playing={} paused={} stopped={} posMs={} vol={} soundActive={}", a[0], s.isPlaying(), s.isPaused(),
-                s.isStopped(), s.getCurrentPositionMs(), ClientSpeakerManager.getInstance().getSpeakerVolume(pos), active);
+                s.isStopped(), s.getCurrentPositionMs(), ClientSpeakerManager.getInstance().getSpeakerVolume(new com.metrovoc.phonon.audio.Receiver.Block(pos)), active);
         });
         Driver.STEPS.put("config", (mc, arg) -> mc.gui.setScreen(new com.metrovoc.phonon.config.PhononConfigScreen(null)));
         Driver.STEPS.put("pdrift", (mc, arg) -> {
@@ -37,8 +37,8 @@ public final class PhononSteps {
             BlockPos pos = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
             var f = com.metrovoc.phonon.client.audio.AudioPlayer.class.getDeclaredField("playingSounds");
             f.setAccessible(true);
-            var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) ((java.util.Map<?, ?>) f.get(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance())).get(pos);
-            long clock = ClientSpeakerManager.getInstance().getSpeakerState(pos).orElse(PlaybackState.STOPPED).getCurrentPositionMs();
+            var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) ((java.util.Map<?, ?>) f.get(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance())).get(new com.metrovoc.phonon.audio.Receiver.Block(pos));
+            long clock = ClientSpeakerManager.getInstance().getSpeakerState(new com.metrovoc.phonon.audio.Receiver.Block(pos)).orElse(PlaybackState.STOPPED).getCurrentPositionMs();
             long written = sound == null || sound.tap() == null ? -1 : sound.tap().writtenMs();
             LOG.info("[check] {} clockMs={} writtenMs={} leadMs={} paused={}", a[0], clock, written, written - clock, mc.isPaused());
         });
@@ -47,7 +47,7 @@ public final class PhononSteps {
             f.setAccessible(true);
             String[] a = arg.trim().split("\\s+");
             BlockPos pos = new BlockPos(Integer.parseInt(a[0]), Integer.parseInt(a[1]), Integer.parseInt(a[2]));
-            var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) ((java.util.Map<?, ?>) f.get(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance())).get(pos);
+            var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) ((java.util.Map<?, ?>) f.get(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance())).get(new com.metrovoc.phonon.audio.Receiver.Block(pos));
             var written = com.metrovoc.phonon.client.audio.StreamTap.class.getDeclaredField("samplesWritten");
             written.setAccessible(true);
             var tap = sound.tap();
@@ -59,7 +59,7 @@ public final class PhononSteps {
             f.setAccessible(true);
             String[] a = arg.trim().split("\\s+");
             BlockPos pos = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
-            var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) ((java.util.Map<?, ?>) f.get(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance())).get(pos);
+            var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) ((java.util.Map<?, ?>) f.get(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance())).get(new com.metrovoc.phonon.audio.Receiver.Block(pos));
             LOG.info("[check] {} gainHf={} audible={} alError={}", a[0], sound == null ? -1 : sound.muffleGainHf(), sound == null ? -1 : sound.audibleVolume(), org.lwjgl.openal.AL10.alGetError());
         });
         Driver.STEPS.put("pworld", (mc, arg) -> {
@@ -76,7 +76,7 @@ public final class PhononSteps {
         Driver.STEPS.put("ptrack", (mc, arg) -> {
             String[] a = arg.trim().split("\\s+");
             BlockPos pos = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
-            PlaybackState s = ClientSpeakerManager.getInstance().getSpeakerState(pos).orElse(PlaybackState.STOPPED);
+            PlaybackState s = ClientSpeakerManager.getInstance().getSpeakerState(new com.metrovoc.phonon.audio.Receiver.Block(pos)).orElse(PlaybackState.STOPPED);
             String name = s.resourceId() == null ? "-" : com.metrovoc.phonon.client.ClientAudioManager.getInstance().getResource(s.resourceId()).map(r -> r.name()).orElse("?");
             LOG.info("[check] {} track={} playing={} paused={} posMs={}", a[0], name, s.isPlaying(), s.isPaused(), s.getCurrentPositionMs());
         });
@@ -94,14 +94,48 @@ public final class PhononSteps {
         Driver.STEPS.put("pqueue", (mc, arg) -> {
             String[] a = arg.trim().split("\\s+");
             BlockPos pos = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
-            var view = com.metrovoc.phonon.client.ClientStations.getInstance().stationOf(pos);
-            PlaybackState s = ClientSpeakerManager.getInstance().getSpeakerState(pos).orElse(PlaybackState.STOPPED);
+            var view = com.metrovoc.phonon.client.ClientStations.getInstance().stationOf(new com.metrovoc.phonon.audio.Receiver.Block(pos));
+            PlaybackState s = ClientSpeakerManager.getInstance().getSpeakerState(new com.metrovoc.phonon.audio.Receiver.Block(pos)).orElse(PlaybackState.STOPPED);
             var names = com.metrovoc.phonon.client.ClientAudioManager.getInstance();
             String now = s.resourceId() == null ? "-" : names.getResource(s.resourceId()).map(r -> r.name()).orElse("?");
             LOG.info("[check] {} now={} playing={} posMs={} station={} shared={} queue={} cursor={} repeat={} shuffle={}", a[0], now, s.isPlaying(), s.getCurrentPositionMs(),
                 view == null ? "-" : view.name(), view != null && view.shared(), view == null ? 0 : view.queue().size(), view == null ? -1 : view.cursor(),
                 view == null ? "-" : view.repeat(), view != null && view.shuffle());
         });
+        Driver.STEPS.put("pboom", (mc, arg) -> {
+            var manager = ClientSpeakerManager.getInstance();
+            var player = com.metrovoc.phonon.client.audio.AudioPlayer.getInstance();
+            try {
+                var f = ClientSpeakerManager.class.getDeclaredField("boomboxes");
+                f.setAccessible(true);
+                var sounds = com.metrovoc.phonon.client.audio.AudioPlayer.class.getDeclaredField("playingSounds");
+                sounds.setAccessible(true);
+                var heard = ((java.util.Map<?, ?>) f.get(manager)).keySet();
+                if (heard.isEmpty()) {
+                    LOG.info("[check] {} none", arg.trim());
+                }
+                for (Object id : heard) {
+                    var r = new com.metrovoc.phonon.audio.Receiver.Boombox((java.util.UUID) id);
+                    PlaybackState s = manager.getSpeakerState(r).orElse(PlaybackState.STOPPED);
+                    var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) ((java.util.Map<?, ?>) sounds.get(player)).get(r);
+                    var at = manager.sourcePosition(r);
+                    var view = com.metrovoc.phonon.client.ClientStations.getInstance().stationOf(r);
+                    LOG.info("[check] {} wall={} posMs={} playing={} paused={} soundActive={} sound={} written={} src={},{},{} carriedHere={} dist={} vol={} station={} shared={} queue={}",
+                        arg.trim(), System.currentTimeMillis(), s.getCurrentPositionMs(), s.isPlaying(), s.isPaused(),
+                        sound != null && mc.getSoundManager().isActive(sound), sound == null ? 0 : System.identityHashCode(sound),
+                        sound == null || sound.tap() == null ? -1 : sound.tap().writtenMs(),
+                        String.format(java.util.Locale.ROOT, "%.1f", at.x), String.format(java.util.Locale.ROOT, "%.1f", at.y), String.format(java.util.Locale.ROOT, "%.1f", at.z),
+                        manager.carriedHere(r), String.format(java.util.Locale.ROOT, "%.1f", mc.player.getEyePosition().distanceTo(at)), manager.getSpeakerVolume(r),
+                        view == null ? "-" : view.name(), view != null && view.shared(), view == null ? 0 : view.queue().size());
+                }
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        Driver.STEPS.put("pdrop", (mc, arg) -> mc.player.drop(false));
+        Driver.STEPS.put("psneak", (mc, arg) -> mc.options.keyShift.setDown(arg.trim().equals("on")));
+        Driver.STEPS.put("pclick", (mc, arg) -> mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId, Integer.parseInt(arg.trim()), 0,
+            net.minecraft.world.inventory.ContainerInput.PICKUP, mc.player));
         Driver.STEPS.put("plists", (mc, arg) -> {
             var client = com.metrovoc.phonon.client.ClientStations.getInstance();
             LOG.info("[check] {} stations={} playlists={} jobs={}", arg.trim(),

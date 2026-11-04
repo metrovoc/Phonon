@@ -15,7 +15,7 @@ public class PhononNetwork {
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(Constants.MOD_ID)
-            .versioned("3.0.0")
+            .versioned("3.1.0")
             .optional();
 
         // Server -> Client packets
@@ -47,6 +47,12 @@ public class PhononNetwork {
             AudioStreamStartPacket.TYPE,
             AudioStreamStartPacket.CODEC,
             AudioStreamStartPacket::handle
+        );
+
+        registrar.playToClient(
+            SyncBoomboxPlacePacket.TYPE,
+            SyncBoomboxPlacePacket.CODEC,
+            SyncBoomboxPlacePacket::handle
         );
 
         registrar.playToClient(

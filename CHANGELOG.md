@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Boombox
+
+- Add the Boombox, a speaker you carry. It keeps playing in your inventory, on your
+  cursor and on the ground, and carries on where it was after a relog or server restart.
+- Its controls are the Speaker's. Sneak and use it to switch it on or off.
+- It tunes to stations, staying in step with every speaker on them.
+- With `ownerOnlySpeakers`, what plays on a station is up to its creator and operators,
+  whichever speaker or boombox is tuned to it.
+- Tuning a speaker to a station no longer restarts the sound for everyone listening.
+- Sound comes back right after changing dimension.
+
 ### Speaker screen
 
 - Replace the grey vanilla buttons and slider with steel ones, keeping the panel.

@@ -2,11 +2,11 @@ package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.audio.PlaybackState;
-import com.metrovoc.phonon.block.SpeakerBlockEntity;
+import com.metrovoc.phonon.station.StationListener;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import com.metrovoc.phonon.server.SpeakerControl;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.core.BlockPos;
+import com.metrovoc.phonon.audio.Receiver;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -18,7 +18,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * Client -> Server: Seek 到指定位置。
  */
 public record SpeakerSeekPacket(
-    BlockPos pos,
+    Receiver pos,
     long seekPositionMs
 ) implements CustomPacketPayload {
 
@@ -26,7 +26,7 @@ public record SpeakerSeekPacket(
         new Type<>(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "speaker_seek"));
 
     public static final StreamCodec<ByteBuf, SpeakerSeekPacket> CODEC = StreamCodec.composite(
-        BlockPos.STREAM_CODEC,
+        ReceiverCodec.STREAM_CODEC,
         SpeakerSeekPacket::pos,
         ByteBufCodecs.VAR_LONG,
         SpeakerSeekPacket::seekPositionMs,
@@ -42,7 +42,7 @@ public record SpeakerSeekPacket(
         ctx.enqueueWork(() -> {
             if (!(ctx.player() instanceof ServerPlayer player)) return;
 
-            SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
+            StationListener speaker = SpeakerPacketValidator.getAccessible(player, packet.pos);
             if (speaker == null) return;
 
             if (SpeakerControl.canControl(player, speaker)) {

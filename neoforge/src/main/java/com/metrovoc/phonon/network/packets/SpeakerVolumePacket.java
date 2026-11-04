@@ -1,10 +1,9 @@
 package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
-import com.metrovoc.phonon.block.SpeakerBlockEntity;
-import com.metrovoc.phonon.platform.PlatformHelper;
+import com.metrovoc.phonon.station.StationListener;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.core.BlockPos;
+import com.metrovoc.phonon.audio.Receiver;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -18,7 +17,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
  * Volume is a per-speaker property, independent of playback state.
  */
 public record SpeakerVolumePacket(
-    BlockPos pos,
+    Receiver pos,
     float volume
 ) implements CustomPacketPayload {
 
@@ -26,7 +25,7 @@ public record SpeakerVolumePacket(
         new Type<>(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "speaker_volume"));
 
     public static final StreamCodec<ByteBuf, SpeakerVolumePacket> CODEC = StreamCodec.composite(
-        BlockPos.STREAM_CODEC,
+        ReceiverCodec.STREAM_CODEC,
         SpeakerVolumePacket::pos,
         ByteBufCodecs.FLOAT,
         SpeakerVolumePacket::volume,
@@ -42,19 +41,14 @@ public record SpeakerVolumePacket(
         ctx.enqueueWork(() -> {
             if (!(ctx.player() instanceof ServerPlayer player)) return;
 
-            var level = player.level();
-            SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
-            if (speaker == null || !SpeakerControl.canControl(player, speaker)) return;
+            StationListener speaker = SpeakerPacketValidator.getAccessible(player, packet.pos);
+            if (speaker == null || !SpeakerControl.canTune(player, speaker)) return;
 
             speaker.setVolume(packet.volume);
             float volume = speaker.getVolume();
 
             // Broadcast to all tracking players
-            PlatformHelper.INSTANCE.sendToAllTracking(
-                level,
-                packet.pos,
-                new SyncSpeakerVolumePacket(packet.pos, volume)
-            );
+            speaker.broadcast(new SyncSpeakerVolumePacket(packet.pos, volume));
         });
     }
 }

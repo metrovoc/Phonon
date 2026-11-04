@@ -5,6 +5,7 @@ import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.client.ClientAudioManager;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
+import com.metrovoc.phonon.item.BoomboxItem;
 import com.metrovoc.phonon.menu.SpeakerMenu;
 import com.metrovoc.phonon.client.ClientStations;
 import com.metrovoc.phonon.platform.PlatformHelper;
@@ -14,6 +15,7 @@ import com.metrovoc.phonon.station.Playlist;
 import com.metrovoc.phonon.station.Station;
 import com.metrovoc.phonon.station.StationView;
 import net.minecraft.client.gui.components.EditBox;
+import com.metrovoc.phonon.audio.Receiver;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
@@ -156,8 +158,18 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         super(menu, playerInv, title, WIDTH, HEIGHT);
     }
 
-    private BlockPos pos() {
-        return menu.getSpeakerPos();
+    private Receiver pos() {
+        return menu.receiver();
+    }
+
+    /** A speaker within reach, or a boombox still in the player's inventory. */
+    private boolean stillAvailable() {
+        return switch (pos()) {
+            case Receiver.Block block -> minecraft.level.getBlockEntity(block.pos()) instanceof SpeakerBlockEntity
+                && minecraft.player.distanceToSqr(block.pos().getX() + 0.5, block.pos().getY() + 0.5, block.pos().getZ() + 0.5)
+                    <= MAX_USE_DISTANCE_SQUARED;
+            case Receiver.Boombox boombox -> BoomboxItem.carries(minecraft.player, boombox.id());
+        };
     }
 
     @Override
@@ -556,10 +568,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     @Override
     protected void containerTick() {
         super.containerTick();
-        if (minecraft.player == null || minecraft.level == null
-            || !(minecraft.level.getBlockEntity(pos()) instanceof SpeakerBlockEntity)
-            || minecraft.player.distanceToSqr(pos().getX() + 0.5, pos().getY() + 0.5, pos().getZ() + 0.5)
-                > MAX_USE_DISTANCE_SQUARED) {
+        if (minecraft.player == null || minecraft.level == null || !stillAvailable()) {
             onClose();
             return;
         }

@@ -1,6 +1,9 @@
 {
   "block.phonon.speaker": "Speaker",
   "item.phonon.speaker": "Speaker",
+  "item.phonon.boombox": "Boombox",
+  "item.phonon.boombox.off": "Off",
+  "item.phonon.boombox.hint": "Sneak and use to switch on or off",
   "gui.phonon.speaker.tracks": "Tracks",
   "gui.phonon.speaker.total": "%s total",
   "gui.phonon.speaker.search": "Search",

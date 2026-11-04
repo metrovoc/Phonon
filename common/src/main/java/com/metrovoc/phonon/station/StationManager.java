@@ -52,6 +52,7 @@ public final class StationManager {
     private final Map<UUID, Station> stations = new HashMap<>();
     private final Map<UUID, Set<SpeakerRef>> listeners = new HashMap<>();
     private final Map<UUID, Playlist> playlists = new HashMap<>();
+    private final Boomboxes boomboxes = new Boomboxes(this);
     private final Random random = new Random();
     @Nullable private MinecraftServer server;
     private long ticks;
@@ -67,6 +68,10 @@ public final class StationManager {
 
     public static void reset() {
         instance = null;
+    }
+
+    public Boomboxes boomboxes() {
+        return boomboxes;
     }
 
     public Random random() {
@@ -133,6 +138,7 @@ public final class StationManager {
                 speaker.tune(null);
             }
         }
+        boomboxes.stationDeleted(station.id());
         stations.remove(station.id());
         listeners.remove(station.id());
         sharedChanged();
@@ -161,6 +167,7 @@ public final class StationManager {
                 playlists.put(playlist.id(), playlist.withoutTrack(track));
             }
         }
+        boomboxes.forgetTrack(track);
         sharedChanged();
     }
 
@@ -170,15 +177,17 @@ public final class StationManager {
             SpeakerBlockEntity speaker = speakerAt(ref);
             if (speaker != null) {
                 speaker.setPlayback(station.playback());
-                ServerLevel level = server.getLevel(ref.dimension());
-                PlatformHelper.INSTANCE.broadcastSpeakerState(level, ref.pos(), speaker);
+                PlatformHelper.INSTANCE.broadcastSpeakerState(speaker);
                 if (!station.shared()) {
-                    PlatformHelper.INSTANCE.broadcastStationView(level, ref.pos(), station.view());
+                    PlatformHelper.INSTANCE.broadcastStationView(speaker, station.view());
                 }
             }
         }
+        boolean heldByBoombox = boomboxes.stationChanged(station);
         if (station.shared()) {
             sharedChanged();
+        } else if (heldByBoombox) {
+            save();
         }
     }
 
@@ -192,6 +201,7 @@ public final class StationManager {
     public void tick(MinecraftServer server) {
         this.server = server;
         ticks++;
+        boomboxes.tick(server);
         for (Station station : List.copyOf(stations.values())) {
             if (!station.playback().isPlaying()) {
                 continue;
@@ -250,6 +260,9 @@ public final class StationManager {
                     Phonon.LOGGER.warn("Skipping malformed playlist in {}", file);
                 }
             }
+            if (root.has("boomboxes")) {
+                boomboxes.load(root.getAsJsonArray("boomboxes"));
+            }
             Phonon.LOGGER.info("Loaded {} stations and {} playlists", sharedStations().size(), playlists.size());
         } catch (Exception e) {
             Phonon.LOGGER.error("Failed to load stations from {}", file, e);
@@ -267,6 +280,7 @@ public final class StationManager {
         JsonObject root = new JsonObject();
         root.add("stations", stationsJson);
         root.add("playlists", playlistsJson);
+        root.add("boomboxes", boomboxes.toJson());
         Path file = file();
         Path temporary = file.resolveSibling(FILE + ".tmp");
         try {

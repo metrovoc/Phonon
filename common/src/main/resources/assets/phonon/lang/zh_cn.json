@@ -1,6 +1,9 @@
 {
   "block.phonon.speaker": "扬声器",
   "item.phonon.speaker": "扬声器",
+  "item.phonon.boombox": "手提音响",
+  "item.phonon.boombox.off": "已关闭",
+  "item.phonon.boombox.hint": "潜行并使用以开关",
   "gui.phonon.speaker.tracks": "曲目",
   "gui.phonon.speaker.total": "共 %s 首",
   "gui.phonon.speaker.search": "搜索",

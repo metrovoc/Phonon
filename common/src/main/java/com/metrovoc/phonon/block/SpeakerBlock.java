@@ -58,7 +58,7 @@ public class SpeakerBlock extends Block implements EntityBlock {
     @Override
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         if (!level.isClientSide() && placer != null && level.getBlockEntity(pos) instanceof SpeakerBlockEntity speaker) {
-            speaker.setOwner(placer.getUUID());
+            speaker.setOwner(placer.getUUID(), placer.getName().getString());
         }
     }
 

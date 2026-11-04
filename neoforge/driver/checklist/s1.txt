@@ -9,9 +9,8 @@ cmd phonon add long http://127.0.0.1:51990/long.wav
 wait 240
 use -2 120 2
 wait 30
-click 100 54
+dclick 100 54
 wait 6
-press Play
 wait 60
 pstate s1_playing -2 120 2
 wait 20
@@ -224,7 +223,7 @@ cmd tp Dev2 0 120 1 0 0
 press Pause
 wait 100
 pstate s1_pause -2 120 2
-press Play
+press Resume
 wait 40
 pstate s1_after -2 120 2
 press Stop

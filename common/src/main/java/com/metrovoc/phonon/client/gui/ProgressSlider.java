@@ -38,10 +38,10 @@ final class ProgressSlider extends GuiPort.Control {
 
         if (durationMs > 0) {
             int filled = (int) (getWidth() * progress);
-            canvas.fill(getX(), barY, getX() + filled, barY + BAR_HEIGHT, SteelStyle.PLAYING);
+            canvas.fill(getX(), barY, getX() + filled, barY + BAR_HEIGHT, active ? SteelStyle.PLAYING : SteelStyle.TEXT_OFF);
             int knobX = Math.max(getX(), Math.min(getX() + filled - KNOB_SIZE / 2, getX() + getWidth() - KNOB_SIZE));
-            int face = dragging || isMouseOver(mouseX, mouseY) ? SteelStyle.STEEL_HOVER : SteelStyle.STEEL;
-            SteelStyle.plate(canvas, knobX, barY + BAR_HEIGHT / 2 - KNOB_SIZE / 2, KNOB_SIZE, KNOB_SIZE, face, true);
+            int face = !active ? SteelStyle.STEEL_DISABLED : dragging || isMouseOver(mouseX, mouseY) ? SteelStyle.STEEL_HOVER : SteelStyle.STEEL;
+            SteelStyle.plate(canvas, knobX, barY + BAR_HEIGHT / 2 - KNOB_SIZE / 2, KNOB_SIZE, KNOB_SIZE, face, active);
         }
 
         String time = SteelStyle.time(positionMs) + " / " + SteelStyle.time(durationMs);

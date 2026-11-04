@@ -30,6 +30,7 @@ public final class Boombox implements StationListener {
     /** The own station as it stood when the boombox was last had, and playback resumes from. */
     private JsonObject stored;
     @Nullable private UUID tunedTo;
+    private boolean resumeOwn;
     private float volume = DEFAULT_VOLUME;
     @Nullable private Entity holder;
     private boolean present;
@@ -88,9 +89,14 @@ public final class Boombox implements StationListener {
 
     @Override
     public void tune(@Nullable UUID stationId) {
+        boolean wasOnOwn = tunedTo == null;
         tunedTo = stations.get(stationId) != null ? stationId : null;
-        if (tunedTo != null) {
-            ownStation.stop();
+        if (tunedTo != null && wasOnOwn) {
+            resumeOwn = ownStation.playback().isPlaying();
+            ownStation.pause();
+        } else if (tunedTo == null && resumeOwn) {
+            ownStation.resume();
+            resumeOwn = false;
         }
         stations.changed(station());
         stations.save();
@@ -203,6 +209,7 @@ public final class Boombox implements StationListener {
         JsonObject json = new JsonObject();
         json.addProperty("id", id.toString());
         json.addProperty("volume", volume);
+        json.addProperty("resumeOwn", resumeOwn);
         if (tunedTo != null) {
             json.addProperty("tunedTo", tunedTo.toString());
         }
@@ -215,6 +222,7 @@ public final class Boombox implements StationListener {
             Station.fromJson(json.getAsJsonObject("station")));
         boombox.volume = json.has("volume") ? json.get("volume").getAsFloat() : DEFAULT_VOLUME;
         boombox.tunedTo = json.has("tunedTo") ? UUID.fromString(json.get("tunedTo").getAsString()) : null;
+        boombox.resumeOwn = json.has("resumeOwn") && json.get("resumeOwn").getAsBoolean();
         return boombox;
     }
 }

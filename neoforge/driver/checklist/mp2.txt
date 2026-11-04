@@ -13,7 +13,7 @@ wait 30
 click 100 54
 wait 6
 shot r_ui
-press Play
+press Resume
 wait 60
 pstate r_b_play -2 120 2
 press Stop

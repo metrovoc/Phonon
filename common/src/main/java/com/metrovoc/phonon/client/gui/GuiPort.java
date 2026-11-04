@@ -203,6 +203,14 @@ final class GuiPort {
         /** Enter was pressed in the text field. */
         abstract void submitField();
 
+        /** A menu drawn over everything gets the click first. Returns whether it was used. */
+        abstract boolean overlayPressed(double mouseX, double mouseY);
+
+        @Override
+        public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+            return event.button() == 0 && overlayPressed(event.x(), event.y()) || super.mouseClicked(event, doubleClick);
+        }
+
         @Override
         public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
             super.extractBackground(graphics, mouseX, mouseY, partialTick);

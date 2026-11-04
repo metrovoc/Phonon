@@ -61,16 +61,23 @@ originals stay in the folder.
 
 The Speaker screen has four tabs:
 
-- **Tracks**: the library. Double-click to play, or press **+** on a row to play it
-  next. Operators can also delete tracks here, and add new ones with the **+** by the
-  search box: paste a link, or type a title to pick from YouTube results with thumbnails.
-- **Queue**: what plays next. Double-click to jump, or remove a row.
-- **Playlists**: saved lists anyone can make, credited to their creator.
-- **Stations**: tune speakers to a shared station to play the same thing in step.
+- **Tracks**: the library. Double-click to play, or hover a song for play now, play next and
+  add to a playlist. Type in the box to filter. If you may add songs, the green row below finds
+  what you typed on YouTube, SoundCloud or Bilibili, with pictures, or adds a pasted link.
+- **Queue**: what's up next. Double-click to jump, or remove a row.
+- **Playlists**: saved lists anyone can make, credited to their creator. Open one to add songs
+  by typing, drag to reorder, and rename it.
+- **Stations**: music one person runs, for everyone who listens in. Typing a new name shares what's
+  playing as a station. Leave brings your own music back where it was.
 
-The server config's `ownerOnlySpeakers` limits a speaker to whoever placed it and
-operators, and what plays on a station to whoever created it and operators.
-`anyoneCanAddTracks` lets every player manage the library.
+The screen says who a button affects, and greys out what you can't change.
+
+Server config settings:
+
+- `ownerOnlySpeakers` limits a speaker to whoever placed it and operators.
+- `anyoneCanAddTracks` lets every player add songs. Players can delete only what they added.
+- `anyoneCanControlStations` lets anyone tuned to a station change what it plays. Otherwise only
+  its creator and operators can.
 
 ## Boombox
 
@@ -79,6 +86,14 @@ creative menu. Use it to open its controls, or sneak and use it to switch it on 
 It plays from wherever it is, in your inventory, on your cursor or on the ground, and
 tunes to stations like a speaker does. Put away in a chest, or with its holder offline,
 its own music waits and carries on from the same point; a station keeps going without it.
+
+## When a site blocks the server
+
+Sites often distrust addresses from cloud hosts. The server does the downloading, so links fail as
+well as searches. Run `/phonon tools update` first, since an old yt-dlp fails in similar ways. After
+that, the server config has `downloadProxy` and `cookiesFile`. yt-dlp warns that an account used this
+way can be banned, so use a spare one and keep the file private. These settings are untested on real
+cloud hosts.
 
 ## Redstone
 
@@ -106,9 +121,10 @@ All commands need operator permission.
 | `/phonon list` | View registered audio |
 | `/phonon remove <name>` | Remove audio |
 | `/phonon reload` | Reload configuration and import new files from the music folder |
-| `/phonon tools` | Show which audio tools were found |
+| `/phonon tools` | Show audio tool versions, and which sites last worked or were blocked |
 | `/phonon tools install` | Install yt-dlp, FFmpeg and Deno into the game folder |
-| `/phonon tools update` | Update the yt-dlp that Phonon installed |
+| `/phonon tools update` | Update Phonon's yt-dlp, installing it first if it's only on the system |
+| `/phonon tools help` | What to do when a site blocks the server |
 
 The server config's `audioQuality` sets the Vorbis quality of newly added audio,
 from 0 (smallest) to 10 (best).

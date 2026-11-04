@@ -41,6 +41,8 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
     private Station ownStation = Station.ownedBySpeaker();
     private UUID tunedTo;
     private UUID ownerId;
+    private String ownerName = "";
+    private boolean resumeOwn;
     private int poweredSides;
     private int lastSignal;
 
@@ -99,9 +101,14 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
         return tuned != null ? tuned : ownStation;
     }
 
-    public void setOwner(UUID ownerId) {
+    public void setOwner(UUID ownerId, String ownerName) {
         this.ownerId = ownerId;
+        this.ownerName = ownerName;
         setChanged();
+    }
+
+    public String getOwnerName() {
+        return ownerName;
     }
 
     @Override
@@ -115,9 +122,14 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
         Station before = station();
         StationManager manager = StationManager.getInstance();
         manager.detach(before.id(), level.dimension(), worldPosition);
+        boolean wasOnOwn = tunedTo == null;
         tunedTo = manager.get(stationId) != null ? stationId : null;
-        if (tunedTo != null) {
-            ownStation.stop();
+        if (tunedTo != null && wasOnOwn) {
+            resumeOwn = ownStation.playback().isPlaying();
+            ownStation.pause();
+        } else if (tunedTo == null && resumeOwn) {
+            ownStation.resume();
+            resumeOwn = false;
         }
         setChanged();
         Station after = station();
@@ -249,6 +261,8 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
         output.putFloat("volume", volume);
         output.putInt("poweredSides", poweredSides);
         output.putString("ownStation", ownStation.toJson().toString());
+        output.putBoolean("resumeOwn", resumeOwn);
+        output.putString("ownerName", ownerName);
         if (tunedTo != null) {
             output.putIntArray("tunedTo", UUIDUtil.uuidToIntArray(tunedTo));
         }
@@ -274,6 +288,8 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
         poweredSides = input.getIntOr("poweredSides", 0);
         tunedTo = readUuid(input, "tunedTo");
         ownerId = readUuid(input, "ownerId");
+        ownerName = input.getStringOr("ownerName", "");
+        resumeOwn = input.getBooleanOr("resumeOwn", false);
         Station before = ownStation;
         boolean hasStation = false;
         try {

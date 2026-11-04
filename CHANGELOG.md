@@ -5,7 +5,32 @@
 - Find tracks by title: press **+** on the Tracks tab, type a title and press Enter, then
   add a result with its **+** or a double click. Results show thumbnails, uploader and length.
 - `/phonon add <title>` adds the first result.
-- The server does the searching and fetches the thumbnails, so players never contact YouTube.
+- The server does the searching and fetches the thumbnails, so players never contact the sites.
+- Search SoundCloud and Bilibili too, from a list beside the results. Bilibili often refuses, so it says so and offers another try.
+
+### Speaker screen
+
+- One search box. Typing filters your library, and a green row offers to find it online or add a pasted link.
+- Playlists: add songs by typing, without leaving the playlist. Drag to reorder, and rename in place.
+- Add a song to playlists from the Tracks tab, with ticks showing where it already is.
+- Once tuned in, the screen says who a button affects. Locked controls go grey and say why, instead of a chat error.
+- Tuning in pauses your own music, and leaving brings it back where it was.
+- Starting a station shares what's playing, so the music carries on.
+- The main button only pauses and resumes. Songs play from their row: double-click or the play icon.
+- Long names run under Now Playing, one way and wrapping around. Lists stay still and keep their tooltips.
+
+### Permissions
+
+- Stations answer to whoever created them and operators. `anyoneCanControlStations` opens them up.
+- Deleting a track is for operators and whoever added it, even with `anyoneCanAddTracks` on.
+- `anyoneCanAddTracks` now also shows the search to the players it allows.
+
+### Download tools
+
+- Failures say what happened and offer what could help, including "Update yt-dlp and try again" for operators.
+- `/phonon tools` shows versions and age, and which sites last worked or were blocked. `/phonon tools help` covers blocked servers.
+- Operators are told on joining if yt-dlp is over 30 days old. Updating installs Phonon's own copy if it's only on the system.
+- New server settings: `downloadProxy`, `cookiesFile` and `autoUpdateYtDlp`, all off by default.
 
 ## 0.3.0-beta.3
 

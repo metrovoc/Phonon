@@ -85,7 +85,11 @@ public final class AddFlow {
 
     private static void finish(CommandSourceStack source, AddRequest request, UUID id, DownloadResult result) {
         if (!result.success()) {
+            ToolsFlow.failed(ToolsFlow.siteOf(request.url()), result.failure());
             source.sendFailure(Component.translatable(result.failure().translationKey()));
+            if (source.getPlayer() != null) {
+                PlatformHelper.INSTANCE.sendAddFailed(source.getPlayer(), request.url(), result.failure());
+            }
             if (result.failure() == AudioFailure.TOOLS_MISSING) {
                 retryAfterInstall = () -> start(source, request);
                 offerInstall(source);
@@ -93,8 +97,11 @@ public final class AddFlow {
             return;
         }
 
+        ToolsFlow.worked(ToolsFlow.siteOf(request.url()));
         String name = AudioLibrary.uniqueName(request.hasName() ? request.name() : result.title());
-        AudioResource resource = AudioLibrary.register(source.getServer(), id, name, request.url());
+        var adder = source.getPlayer();
+        AudioResource resource = AudioLibrary.register(source.getServer(), id, name, request.url(),
+            adder == null ? null : adder.getUUID(), adder == null ? "" : adder.getName().getString());
         if (resource == null) {
             source.sendFailure(Component.translatable("phonon.add.error.unknown"));
             return;
@@ -127,7 +134,7 @@ public final class AddFlow {
     }
 
     /** Bracketed, clickable chat text that runs a command, like vanilla's chat actions. */
-    private static MutableComponent action(String command, Component label) {
+    static MutableComponent action(String command, Component label) {
         return ComponentUtils.wrapInSquareBrackets(label).withStyle(style -> style
             .withColor(ChatFormatting.GREEN)
             .withClickEvent(new ClickEvent.RunCommand(command))

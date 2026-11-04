@@ -8,6 +8,7 @@ Minecraft 1.21.1 remains on 0.3.0-beta.4; other targets retain their existing re
 
 ### Fixes and performance
 
+- Fix native memory growth during extended playback on Minecraft 26.2.
 - Hovering a stopped boombox no longer crashes the client.
 - Private speakers save their current playback position when their chunk unloads.
 - Selecting a track beyond the first 2,000 library entries plays the selected track.

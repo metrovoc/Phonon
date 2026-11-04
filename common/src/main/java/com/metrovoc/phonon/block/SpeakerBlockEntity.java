@@ -123,7 +123,8 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
         StationManager manager = StationManager.getInstance();
         manager.detach(before.id(), level.dimension(), worldPosition);
         boolean wasOnOwn = tunedTo == null;
-        tunedTo = manager.get(stationId) != null ? stationId : null;
+        Station wanted = manager.get(stationId);
+        tunedTo = wanted != null && wanted.shared() ? stationId : null;
         if (tunedTo != null && wasOnOwn) {
             resumeOwn = ownStation.playback().isPlaying();
             ownStation.pause();
@@ -178,6 +179,9 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
             poweredSides = powered;
             setChanged();
         }
+        if (!SpeakerControl.redstoneMayControl(this)) {
+            return;
+        }
         for (Direction side : Direction.values()) {
             if ((rising & 1 << side.ordinal()) == 0) {
                 continue;
@@ -218,6 +222,15 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
             if (!level.isClientSide()) {
                 StationManager manager = StationManager.getInstance();
                 manager.addPrivate(ownStation);
+                if (tunedTo != null && manager.get(tunedTo) == null) {
+                    // Its station was deleted while this speaker wasn't loaded
+                    tunedTo = null;
+                    if (resumeOwn) {
+                        ownStation.resume();
+                        resumeOwn = false;
+                    }
+                    setChanged();
+                }
                 Station station = station();
                 manager.attach(station.id(), level.dimension(), worldPosition);
                 playback = station.playback();

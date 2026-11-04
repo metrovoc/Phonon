@@ -60,10 +60,9 @@ key escape
 wait 10
 use 4 120 2
 wait 30
-click 100 70
+dclick 100 70
 wait 6
 shot c_pick
-press Resume
 wait 30
 pstate c_diff 4 120 2
 pstate a_during_c 1 120 2

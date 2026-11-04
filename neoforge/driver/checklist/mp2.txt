@@ -10,10 +10,9 @@ pstate r_a_after_restart 1 120 2
 shot r_list
 use -2 120 2
 wait 30
-click 100 54
+dclick 100 54
 wait 6
 shot r_ui
-press Resume
 wait 60
 pstate r_b_play -2 120 2
 press Stop

@@ -57,6 +57,8 @@ final class RowList extends GuiPort.Control {
         @Nullable private Runnable doubleClick;
         @Nullable private Runnable leadClick;
         @Nullable private Component tooltip;
+        @Nullable private Component detailTooltip;
+        @Nullable private Component gripTooltip;
         @Nullable private AtMouse detailClick;
         @Nullable private String[] detailIcon;
         private boolean call;
@@ -87,13 +89,13 @@ final class RowList extends GuiPort.Control {
         /** A heading across the list, whose actions always show. */
         Row header(@Nullable Runnable back) { header = true; actionsAlways = true; leadClick = back; color = SteelStyle.TEXT; return this; }
         /** The detail is clickable, with an icon beside it. */
-        Row detailClick(AtMouse value, String[] icon) { detailClick = value; detailIcon = icon; return this; }
+        Row detailClick(AtMouse value, String[] icon, Component tip) { detailClick = value; detailIcon = icon; detailTooltip = tip; return this; }
         /** A line of plain wrapped text. */
         Row line(int lineColor) { line = true; color = lineColor; return this; }
         /** A steel button across the row. */
         Row button(Runnable run) { button = true; click = run; color = SteelStyle.TEXT; return this; }
         /** Can be dragged by its lead space to a new place among the other such rows. */
-        Row grip() { grip = true; return this; }
+        Row grip(Component tip) { grip = true; gripTooltip = tip; return this; }
 
         private int height() {
             return line ? LINE_HEIGHT : button ? BUTTON_HEIGHT + 2 : pictureSlot || !subtext.isEmpty() ? TALL_ROW_HEIGHT : ROW_HEIGHT;
@@ -324,6 +326,7 @@ final class RowList extends GuiPort.Control {
         int textWidth = rowWidth() - lead - detailWidth;
         String text = row.text;
         boolean cut = canvas.font.width(text) > textWidth;
+        boolean subCut = false;
         if (cut) {
             text = canvas.font.plainSubstrByWidth(text, Math.max(0, textWidth - canvas.font.width("..."))) + "...";
         }
@@ -334,12 +337,26 @@ final class RowList extends GuiPort.Control {
         if (two) {
             String sub = row.subtext;
             if (canvas.font.width(sub) > textWidth) {
+                subCut = true;
                 sub = canvas.font.plainSubstrByWidth(sub, Math.max(0, textWidth - canvas.font.width("..."))) + "...";
             }
             canvas.text(sub, x + lead, y + 15, row.subColor);
         }
 
-        Component tooltip = row.tooltip != null ? row.tooltip : cut ? Component.literal(row.text) : null;
+        /* A cropped name always keeps its tooltip, whatever else the row has to say. */
+        Component tooltip = cut ? Component.literal(row.text) : subCut ? Component.literal(row.subtext) : row.tooltip;
+        if (hovered && mouseX < x + LEAD_WIDTH) {
+            if (row.header && row.leadClick != null) {
+                tooltip = row.tooltip;
+            } else if (row.grip) {
+                tooltip = row.gripTooltip;
+            }
+        } else if (row.header) {
+            tooltip = cut ? Component.literal(row.text) : null;
+        }
+        if (hovered && row.detailTooltip != null && overDetail(row, mouseX)) {
+            tooltip = row.detailTooltip;
+        }
         if (showActions) {
             int over = hovered ? actionAt(row, mouseX) : -1;
             for (int i = 0; i < row.actions.size(); i++) {

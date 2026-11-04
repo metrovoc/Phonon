@@ -85,13 +85,11 @@
   "gui.phonon.speaker.repeat_all": "Repeat: all",
   "gui.phonon.speaker.repeat_one": "Repeat: one",
   "gui.phonon.speaker.this_speaker": "This speaker",
-  "gui.phonon.speaker.by": "by %s",
   "gui.phonon.speaker.queue_empty": "Nothing in the queue. Double-click a track to play it, or press + on a track to play it next.",
   "gui.phonon.speaker.playlists_empty": "No playlists yet. Type a name above and press Enter.",
   "gui.phonon.speaker.back": "Back to playlists",
   "gui.phonon.speaker.searching": "Searching for %s...",
   "gui.phonon.speaker.no_results": "Nothing found for %s",
-  "gui.phonon.speaker.added": "Added",
   "gui.phonon.speaker.action_add": "Add to the library",
   "gui.phonon.speaker.action_play_next": "Play next",
   "gui.phonon.speaker.action_remove": "Remove",
@@ -123,7 +121,6 @@
   "gui.phonon.speaker.in_library": "In your library",
   "gui.phonon.speaker.adding_percent": "Adding %s%%",
   "gui.phonon.speaker.back_to_library": "Back to your library",
-  "gui.phonon.speaker.empty_can_add": "Type a song name above to find it.",
   "gui.phonon.speaker.action_play_now": "Play now",
   "gui.phonon.speaker.action_add_to_playlist": "Add to a playlist",
   "gui.phonon.speaker.action_delete_track": "Delete from the server",
@@ -176,5 +173,6 @@
   "gui.phonon.search.outdated": "yt-dlp may be out of date.",
   "gui.phonon.search.ask_operator": "Ask an operator to run /phonon tools update.",
   "gui.phonon.search.cloud_note": "Common on cloud servers. See /phonon tools help",
-  "gui.phonon.search.failed": "That didn't work."
+  "gui.phonon.search.failed": "That didn't work.",
+  "gui.phonon.search.add_failed": "Couldn't add this"
 }

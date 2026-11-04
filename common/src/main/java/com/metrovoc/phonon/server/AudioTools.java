@@ -210,29 +210,48 @@ public final class AudioTools {
         }
         String cookies = PhononServerConfig.getCookiesFile().strip();
         if (!cookies.isEmpty()) {
-            arguments.addAll(List.of("--cookies", cookies));
+            // Downloads run in a temporary folder, so a relative path has to be pinned to the server's
+            arguments.addAll(List.of("--cookies", Path.of(cookies).toAbsolutePath().toString()));
         }
         return arguments;
+    }
+
+    /** Blocking. A command's output, or null if it failed or ran out of time. */
+    private static String run(int timeoutSeconds, String... command) throws InterruptedException {
+        Path output = null;
+        Process process = null;
+        try {
+            output = Files.createTempFile("phonon_tool_", ".txt");
+            process = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(output.toFile()).start();
+            if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+                return null;
+            }
+            String text = Files.readString(output, StandardCharsets.UTF_8);
+            return process.exitValue() == 0 ? text : null;
+        } catch (IOException e) {
+            return null;
+        } finally {
+            if (process != null && process.isAlive()) {
+                process.destroyForcibly();
+            }
+            if (output != null) {
+                try {
+                    Files.deleteIfExists(output);
+                } catch (IOException e) {
+                    Phonon.LOGGER.debug("Could not delete {}", output, e);
+                }
+            }
+        }
     }
 
     /** Blocking. What a tool reports as its version, or null if it can't be run. */
     public static String version(String tool) {
         String flag = tool.equals("ffmpeg") || tool.equals("ffprobe") ? "-version" : "--version";
         try {
-            Process process = new ProcessBuilder(command(tool), flag).redirectErrorStream(true).start();
-            String firstLine;
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                firstLine = reader.readLine();
-                while (reader.readLine() != null) {
-                    // Drain the rest so the tool can exit
-                }
-            }
-            if (!process.waitFor(10, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                return null;
-            }
-            return process.exitValue() == 0 && firstLine != null ? shortVersion(tool, firstLine) : null;
-        } catch (IOException | InterruptedException e) {
+            String output = run(10, command(tool), flag);
+            return output == null || output.isBlank() ? null : shortVersion(tool, output.lines().findFirst().orElse(""));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
             return null;
         }
     }
@@ -278,18 +297,8 @@ public final class AudioTools {
             installYtDlp();
         }
         Path ytDlp = installed("yt-dlp").orElseThrow(() -> new IOException("yt-dlp couldn't be installed"));
-        Process process = new ProcessBuilder(ytDlp.toString(), "--update-to", "stable")
-            .redirectErrorStream(true)
-            .start();
-        String output;
-        try (InputStream input = process.getInputStream()) {
-            output = new String(input.readAllBytes(), StandardCharsets.UTF_8);
-        }
-        boolean finished = process.waitFor(5, TimeUnit.MINUTES);
-        if (!finished) {
-            process.destroyForcibly();
-        }
+        String output = run(300, ytDlp.toString(), "--update-to", "stable");
         Phonon.LOGGER.info("yt-dlp update:\n{}", output);
-        return finished && process.exitValue() == 0;
+        return output != null;
     }
 }

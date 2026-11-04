@@ -9,9 +9,15 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -30,12 +36,21 @@ public final class TitleSearch {
     public static final int MAX_RESULTS = 8;
     public static final int MAX_THUMBNAIL_BYTES = 64 * 1024;
     private static final long THUMBNAIL_TIMEOUT_SECONDS = 8;
+    private static final int MAX_PICTURE_BYTES = 8 * 1024 * 1024;
+    private static final HttpClient PICTURE_CLIENT = HttpClient.newBuilder()
+        .followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(5)).build();
     /** Fills 64 by 36 whatever the picture's shape, in few enough colours to sit among the game's own pixels. */
     private static final String THUMBNAIL_FILTER =
         "scale=64:36:force_original_aspect_ratio=increase:flags=area,crop=64:36,split[a][b];[a]palettegen=max_colors=32[p];[b][p]paletteuse=dither=none";
 
     private static final ExecutorService WORKERS = Executors.newFixedThreadPool(2, task -> {
         Thread thread = new Thread(task, "Phonon title search");
+        thread.setDaemon(true);
+        return thread;
+    });
+    /** Separate, so slow pictures never make someone else's search wait. */
+    private static final ExecutorService PICTURES = Executors.newFixedThreadPool(2, task -> {
+        Thread thread = new Thread(task, "Phonon search pictures");
         thread.setDaemon(true);
         return thread;
     });
@@ -48,6 +63,7 @@ public final class TitleSearch {
     /** A request from a player's screen, for a title or link. Updating yt-dlp first is for operators. */
     public static void request(ServerPlayer player, int searchId, SearchSource source, String text, boolean updateFirst) {
         if (!SpeakerControl.canAddTracks(player)) {
+            PlatformHelper.INSTANCE.sendSearchResults(player, searchId, List.of(), null);
             return;
         }
         if (!updateFirst || !PlayerPermissions.isOperator(player)) {
@@ -77,6 +93,7 @@ public final class TitleSearch {
     private static void search(ServerPlayer player, int searchId, SearchSource source, String text) {
         String query = text.strip();
         if (query.isEmpty() || query.length() > MAX_QUERY_CHARS) {
+            PlatformHelper.INSTANCE.sendSearchResults(player, searchId, List.of(), null);
             return;
         }
         UUID uuid = player.getUUID();
@@ -88,24 +105,27 @@ public final class TitleSearch {
             }
             Outcome outcome = run(source, query);
             server.execute(() -> deliver(server, uuid, searchId, source, outcome));
-            if (outcome.failure() != null) {
-                return;
-            }
-            for (SearchResult result : outcome.results()) {
-                if (!isNewest(uuid, searchId)) {
-                    return;
-                }
-                byte[] png = result.picture().isEmpty() ? null : thumbnailOf(result.picture());
-                if (png != null) {
-                    server.execute(() -> {
-                        ServerPlayer online = server.getPlayerList().getPlayer(uuid);
-                        if (online != null) {
-                            PlatformHelper.INSTANCE.sendSearchThumbnail(online, searchId, result.key(), png);
-                        }
-                    });
-                }
+            if (outcome.failure() == null) {
+                PICTURES.execute(() -> sendPictures(server, uuid, searchId, outcome.results()));
             }
         });
+    }
+
+    private static void sendPictures(MinecraftServer server, UUID uuid, int searchId, List<SearchResult> results) {
+        for (SearchResult result : results) {
+            if (!isNewest(uuid, searchId)) {
+                return;
+            }
+            byte[] png = result.picture().isEmpty() ? null : thumbnailOf(result.picture());
+            if (png != null) {
+                server.execute(() -> {
+                    ServerPlayer online = server.getPlayerList().getPlayer(uuid);
+                    if (online != null) {
+                        PlatformHelper.INSTANCE.sendSearchThumbnail(online, searchId, result.key(), png);
+                    }
+                });
+            }
+        }
     }
 
     private static boolean isNewest(UUID player, int searchId) {
@@ -210,14 +230,19 @@ public final class TitleSearch {
 
     /** A tiny PNG, or null when there isn't one. The address has already been limited to the source's own sites. */
     private static byte[] thumbnail(String url) {
+        Path picture = null;
         Path png = null;
         Process process = null;
         try {
+            picture = Files.createTempFile("phonon_picture_", ".img");
+            if (!download(url, picture)) {
+                return null;
+            }
             png = Files.createTempFile("phonon_thumbnail_", ".png");
             process = new ProcessBuilder(
                 AudioTools.command("ffmpeg"), "-v", "error", "-y",
-                "-protocol_whitelist", "https,tls,tcp,crypto",
-                "-i", url,
+                "-protocol_whitelist", "file",
+                "-i", picture.toString(),
                 "-filter_complex", THUMBNAIL_FILTER,
                 "-frames:v", "1", "-c:v", "png", "-f", "image2", png.toString())
                 .redirectErrorStream(true)
@@ -235,7 +260,26 @@ public final class TitleSearch {
             if (process != null && process.isAlive()) {
                 process.destroyForcibly();
             }
+            deleteQuietly(picture);
             deleteQuietly(png);
+        }
+    }
+
+    /** Fetches at most a few megabytes, following no redirects, so only the checked address is ever contacted. */
+    private static boolean download(String url, Path target) throws IOException, InterruptedException {
+        HttpResponse<InputStream> response = PICTURE_CLIENT.send(
+            HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(THUMBNAIL_TIMEOUT_SECONDS)).build(),
+            HttpResponse.BodyHandlers.ofInputStream());
+        try (InputStream body = response.body()) {
+            if (response.statusCode() != 200) {
+                return false;
+            }
+            byte[] bytes = body.readNBytes(MAX_PICTURE_BYTES + 1);
+            if (bytes.length > MAX_PICTURE_BYTES) {
+                return false;
+            }
+            Files.write(target, bytes);
+            return true;
         }
     }
 

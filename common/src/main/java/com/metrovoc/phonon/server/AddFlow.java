@@ -25,10 +25,12 @@ public final class AddFlow {
 
     private static final class Job {
         final String label;
+        final String url;
         int percent = -1;
 
-        Job(String label) {
+        Job(String label, String url) {
             this.label = label;
+            this.url = url;
         }
     }
 
@@ -49,13 +51,21 @@ public final class AddFlow {
         return true;
     }
 
+    /** A search result, as "title, newline, link". Its title may repeat one already in the library: it gets a unique name. */
+    public static void addResult(CommandSourceStack source, String text) {
+        int split = text.lastIndexOf('\n');
+        if (split > 0 && text.startsWith("http", split + 1)) {
+            start(source, new AddRequest(text.substring(0, split), text.substring(split + 1)));
+        }
+    }
+
     static void start(CommandSourceStack source, AddRequest request) {
         String label = request.hasName() ? request.name() : request.url();
         source.sendSystemMessage(Component.translatable("phonon.add.processing", label).withStyle(ChatFormatting.YELLOW));
 
         UUID resourceId = UUID.randomUUID();
         MinecraftServer server = source.getServer();
-        Job job = new Job(label);
+        Job job = new Job(label, request.url());
         jobs.add(job);
         publish(server);
         ServerAudioStorage.getInstance()
@@ -73,7 +83,7 @@ public final class AddFlow {
     private static void publish(MinecraftServer server) {
         List<LibraryJob> view = new ArrayList<>();
         for (Job job : jobs) {
-            view.add(new LibraryJob(job.label, job.percent));
+            view.add(new LibraryJob(job.label, job.percent, job.url));
         }
         PlatformHelper.INSTANCE.broadcastLibraryJobs(server, view);
     }

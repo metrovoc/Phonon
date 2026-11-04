@@ -6,6 +6,7 @@ import com.metrovoc.phonon.audio.OggPageScanner;
 import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.network.packets.AudioChunkPacket;
 import com.metrovoc.phonon.network.packets.AudioStreamStartPacket;
+import com.metrovoc.phonon.network.packets.AudioStreamFailedPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -75,19 +76,21 @@ public final class AudioTransferManager {
         AudioStreamInfo streamInfo = storage.getStreamInfo(resourceId).orElse(null);
         if (audioPath == null || streamInfo == null) {
             Phonon.LOGGER.warn("Cannot stream invalid or missing audio {}", resourceId);
+            fail(player, streamId, false);
             return;
         }
 
         UUID playerId = player.getUUID();
         ArrayDeque<PendingTransfer> queue = playerQueues.computeIfAbsent(playerId, ignored -> new ArrayDeque<>());
+        if (queue.stream().anyMatch(transfer -> transfer.streamId == streamId)) {
+            return;
+        }
         if (queue.size() >= MAX_TRANSFERS_PER_PLAYER || getActiveTransferCount() >= MAX_TOTAL_TRANSFERS) {
             Phonon.LOGGER.warn("Rejected excess audio stream request from {}", player.getName().getString());
+            fail(player, streamId, true);
             if (queue.isEmpty()) {
                 playerQueues.remove(playerId);
             }
-            return;
-        }
-        if (queue.stream().anyMatch(transfer -> transfer.streamId == streamId)) {
             return;
         }
 
@@ -100,6 +103,10 @@ public final class AudioTransferManager {
         OggPageScanner.SeekPoint seekPoint = streamInfo.findSeekPoint(positionMs);
         long fileSize = storage.getAudioSize(resourceId);
         if (seekPoint.fileOffset() >= fileSize) {
+            fail(player, streamId, false);
+            if (queue.isEmpty()) {
+                playerQueues.remove(playerId);
+            }
             return;
         }
 
@@ -136,10 +143,15 @@ public final class AudioTransferManager {
             );
         } catch (IOException e) {
             Phonon.LOGGER.error("Failed to open audio {} for streaming", resourceId, e);
+            fail(player, streamId, false);
             if (queue.isEmpty()) {
                 playerQueues.remove(playerId);
             }
         }
+    }
+
+    private static void fail(ServerPlayer player, long streamId, boolean retryable) {
+        PacketDistributor.sendToPlayer(player, new AudioStreamFailedPacket(streamId, retryable));
     }
 
     public void tick(MinecraftServer server) {
@@ -153,10 +165,13 @@ public final class AudioTransferManager {
         int totalBytesSent = 0;
         Map<UUID, Integer> playerBytesSent = new HashMap<>();
         int consecutiveStalls = 0;
+        // Visit every transfer even when the first queued disk read is still pending.
+        int stallLimit = activePlayers.size() * playerQueues.values().stream()
+            .mapToInt(ArrayDeque::size).max().orElse(1);
 
         while (!activePlayers.isEmpty()
             && totalBytesSent < maxTotal
-            && consecutiveStalls < activePlayers.size()) {
+            && consecutiveStalls < stallLimit) {
             normalizeRoundRobinIndex();
             UUID playerId = activePlayers.get(roundRobinIndex);
             ArrayDeque<PendingTransfer> queue = playerQueues.get(playerId);
@@ -185,12 +200,14 @@ public final class AudioTransferManager {
                 chunk = transfer.peekReadyChunk();
             } catch (CompletionException e) {
                 Phonon.LOGGER.error("Asynchronous read failed for stream {}", transfer.streamId, e.getCause());
+                fail(player, transfer.streamId, false);
                 finishHeadTransfer(playerId, queue, false);
                 consecutiveStalls = 0;
                 continue;
             }
 
             if (chunk == null) {
+                queue.addLast(queue.removeFirst());
                 advanceRoundRobin();
                 consecutiveStalls++;
                 continue;
@@ -200,6 +217,7 @@ public final class AudioTransferManager {
             int remainingPlayerBudget = maxPerPlayer - sentToPlayer;
             if (chunk.data.length > Math.min(remainingTotalBudget, remainingPlayerBudget)
                 && (totalBytesSent > 0 || sentToPlayer > 0)) {
+                queue.addLast(queue.removeFirst());
                 advanceRoundRobin();
                 consecutiveStalls++;
                 continue;
@@ -220,6 +238,7 @@ public final class AudioTransferManager {
             if (chunk.last) {
                 finishHeadTransfer(playerId, queue, true);
             } else {
+                queue.addLast(queue.removeFirst());
                 advanceRoundRobin();
             }
         }

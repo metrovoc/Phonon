@@ -28,6 +28,7 @@ public final class AudioDownloadSession {
     private boolean downloadComplete;
     private boolean cacheable;
     private boolean closed;
+    private int retryAttempts;
 
     public AudioDownloadSession(long streamId, UUID resourceId, long requestedPositionMs) {
         this.streamId = streamId;
@@ -106,6 +107,15 @@ public final class AudioDownloadSession {
             throw new IllegalStateException("Cannot retain a closed audio stream");
         }
         refCount++;
+    }
+
+    /** A capacity rejection may be retried before any bytes arrive, with a bounded backoff. */
+    public long nextRetryDelayMs() {
+        return closed || started || retryAttempts >= 3 ? -1 : 1_000L << retryAttempts++;
+    }
+
+    public long getRequestedPositionMs() {
+        return requestedPositionMs;
     }
 
     public int release() {

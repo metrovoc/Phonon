@@ -51,6 +51,8 @@ public record RequestAudioPacket(
                     player.getName().getString(),
                     packet.resourceId
                 );
+                net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(
+                    player, new AudioStreamFailedPacket(packet.streamId, false));
                 return;
             }
 

@@ -103,7 +103,7 @@ public final class Boombox implements StationListener {
             }
         }
         stations.changed(station());
-        stations.save();
+        stations.markDirty();
     }
 
     @Override
@@ -114,7 +114,7 @@ public final class Boombox implements StationListener {
     @Override
     public void setVolume(float volume) {
         this.volume = Float.isFinite(volume) ? Math.max(0.0f, Math.min(1.0f, volume)) : DEFAULT_VOLUME;
-        stations.save();
+        stations.markDirty();
     }
 
     @Override
@@ -206,7 +206,7 @@ public final class Boombox implements StationListener {
         present = false;
         stored = ownStation.toJson();
         stations.removePrivate(ownStation);
-        stations.save();
+        stations.markDirty();
     }
 
     JsonObject toJson() {

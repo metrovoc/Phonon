@@ -10,7 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Server -> Client: a private station's queue and modes changed.
+ * Server -> Client: one station's queue and modes changed.
  */
 public record SyncStationPacket(StationView view) implements CustomPacketPayload {
     public static final Type<SyncStationPacket> TYPE =

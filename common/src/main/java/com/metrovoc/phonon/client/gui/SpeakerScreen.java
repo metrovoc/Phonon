@@ -9,7 +9,9 @@ import com.metrovoc.phonon.item.BoomboxItem;
 import com.metrovoc.phonon.menu.SpeakerMenu;
 import com.metrovoc.phonon.client.ClientStations;
 import com.metrovoc.phonon.platform.PlatformHelper;
+import com.metrovoc.phonon.server.AddRequest;
 import com.metrovoc.phonon.server.LibraryJob;
+import com.metrovoc.phonon.server.SearchResult;
 import com.metrovoc.phonon.server.SpeakerAction;
 import com.metrovoc.phonon.station.Playlist;
 import com.metrovoc.phonon.station.Station;
@@ -66,6 +68,9 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     private static final int METER_BAR_MS = 100;
     private static final int SELECTED_Y = 151;
     private static final int MAX_SELECTED_LINES = 4;
+    private static final int RESULT_PICTURE_WIDTH = 64;
+    private static final int RESULT_PICTURE_HEIGHT = 36;
+    private static final int MAX_RESULT_TITLE_LINES = 3;
     private static final double MAX_USE_DISTANCE_SQUARED = 64.0;
 
     private static final String[] ICON_PLAY = {
@@ -148,6 +153,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     @Nullable private UUID openPlaylist;
     @Nullable private UUID confirmDelete;
     private boolean linkMode;
+    @Nullable private SearchResult selectedResult;
     /** A click finishes by focusing what was clicked, so the field takes focus after it. */
     private boolean focusFieldNextTick;
     private String search = "";
@@ -248,6 +254,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     public void removed() {
         super.removed();
         ClientSpeakerManager.getInstance().releaseNowPlaying();
+        ClientSearch.getInstance().clear();
     }
 
     @Override
@@ -291,6 +298,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     private void openTab(Tab next) {
         tab = next;
         linkMode = false;
+        endSearch();
         openPlaylist = null;
         confirmDelete = null;
         search = "";
@@ -319,8 +327,14 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         }));
     }
 
+    private void endSearch() {
+        selectedResult = null;
+        ClientSearch.getInstance().clear();
+    }
+
     private void toggleLinkMode() {
         linkMode = !linkMode;
+        endSearch();
         search = "";
         field.setValue("");
         applyTab();
@@ -337,6 +351,15 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     void submitField() {
         String text = field.getValue().strip();
         if (text.isEmpty()) {
+            return;
+        }
+        if (tab == Tab.TRACKS && linkMode && AddRequest.parse(text) == null) {
+            // The words stay in the field, to refine them
+            selectedResult = null;
+            list.setScroll(0);
+            PlatformHelper.INSTANCE.sendSpeakerAction(pos(), SpeakerAction.SEARCH, null, null,
+                ClientSearch.getInstance().start(text), text);
+            refreshRows();
             return;
         }
         if (tab == Tab.TRACKS && linkMode) {
@@ -389,7 +412,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         @Nullable String[] marker, int markerColor, @Nullable UUID head,
         List<RowList.Action> actions, @Nullable Runnable click, @Nullable Runnable doubleClick
     ) {
-        return new RowList.Row(key, text, detail, color, selected, marker, markerColor, head, -1, actions, click, doubleClick);
+        return new RowList.Row(key, text, detail, color, selected, marker, markerColor, head, -1, false, null, actions, click, doubleClick);
     }
 
     private static Component label(String key) {
@@ -401,7 +424,11 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         for (LibraryJob job : ClientStations.getInstance().jobs()) {
             rows.add(new RowList.Row(null, job.label(),
                 job.percent() >= 0 ? job.percent() + "%" : label("gui.phonon.speaker.adding").getString(),
-                SteelStyle.TEXT_MUTED, false, null, 0, null, Math.max(0, job.percent()), List.of(), null, null));
+                SteelStyle.TEXT_MUTED, false, null, 0, null, Math.max(0, job.percent()), false, null, List.of(), null, null));
+        }
+        if (linkMode && ClientSearch.getInstance().active()) {
+            addSearchRows(rows);
+            return rows;
         }
         List<AudioResource> resources = search.isEmpty() || linkMode
             ? ClientAudioManager.getInstance().getAllResources()
@@ -433,6 +460,34 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
                 () -> send(SpeakerAction.PLAY_TRACK, resource.id())));
         }
         return rows;
+    }
+
+    /** What a title search has come back with so far. */
+    private void addSearchRows(List<RowList.Row> rows) {
+        ClientSearch search = ClientSearch.getInstance();
+        String status = search.searching() ? Component.translatable("gui.phonon.speaker.searching", search.query()).getString()
+            : !search.failureKey().isEmpty() ? Component.translatable(search.failureKey()).getString()
+            : search.results().isEmpty() ? Component.translatable("gui.phonon.speaker.no_results", search.query()).getString()
+            : null;
+        if (status != null) {
+            rows.add(plainRow(null, status, "", SteelStyle.TEXT_MUTED, false, null, 0, null, List.of(), null, null));
+        }
+        for (SearchResult result : search.results()) {
+            boolean added = search.wasAdded(result.videoId());
+            boolean selected = selectedResult != null && result.videoId().equals(selectedResult.videoId());
+            Runnable add = () -> addResult(result);
+            rows.add(new RowList.Row(null, result.title(),
+                added ? label("gui.phonon.speaker.added").getString() : SteelStyle.time(result.durationMs()),
+                added ? SteelStyle.TEXT_OFF : selected ? SteelStyle.TEXT : SteelStyle.TEXT_DIM, selected,
+                null, 0, null, -1, true, search.picture(result.videoId()),
+                added ? List.of() : List.of(new RowList.Action(ICON_PLUS, label("gui.phonon.speaker.action_add"), add)),
+                () -> selectedResult = result, added ? null : add));
+        }
+    }
+
+    private void addResult(SearchResult result) {
+        ClientSearch.getInstance().markAdded(result.videoId());
+        sendText(SpeakerAction.ADD_LINK, result.title() + " " + result.url());
     }
 
     private List<RowList.Row> queueRows() {
@@ -724,6 +779,11 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         canvas.text(Component.translatable("gui.phonon.speaker.selected"), x, y, SteelStyle.TEXT_MUTED);
         y += canvas.font.lineHeight + 3;
 
+        if (selectedResult != null) {
+            drawSelectedResult(canvas, selectedResult, x, y);
+            return;
+        }
+
         Optional<AudioResource> selected = track(selectedTrack);
         if (selected.isEmpty()) {
             for (FormattedCharSequence line : canvas.font.split(Component.translatable("gui.phonon.speaker.select_hint"), RIGHT_WIDTH)) {
@@ -741,6 +801,30 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         y += 3;
         canvas.text(Component.translatable("gui.phonon.speaker.selected_details",
             SteelStyle.time(selected.get().durationMs()), size(selected.get().sizeBytes())), x, y, SteelStyle.TEXT_DIM);
+    }
+
+    /** A search result's picture with its title beside it, and who made it underneath. */
+    private void drawSelectedResult(GuiPort.Canvas canvas, SearchResult result, int x, int y) {
+        GuiPort.Picture picture = ClientSearch.getInstance().picture(result.videoId());
+        if (picture != null) {
+            canvas.picture(picture, x, y, RESULT_PICTURE_WIDTH, RESULT_PICTURE_HEIGHT);
+        } else {
+            canvas.fill(x, y, x + RESULT_PICTURE_WIDTH, y + RESULT_PICTURE_HEIGHT, 0xFF000000);
+        }
+        int textX = x + RESULT_PICTURE_WIDTH + 4;
+        int lineY = y;
+        List<FormattedCharSequence> lines = canvas.font.split(Component.literal(result.title()), RIGHT_WIDTH - RESULT_PICTURE_WIDTH - 4);
+        for (int i = 0; i < Math.min(lines.size(), MAX_RESULT_TITLE_LINES); i++) {
+            canvas.line(lines.get(i), textX, lineY, SteelStyle.TEXT);
+            lineY += canvas.font.lineHeight + 1;
+        }
+        String uploader = result.uploader();
+        if (canvas.font.width(uploader) > RIGHT_WIDTH) {
+            uploader = canvas.font.plainSubstrByWidth(uploader, RIGHT_WIDTH - canvas.font.width("...")) + "...";
+        }
+        int detailY = y + RESULT_PICTURE_HEIGHT + 3;
+        canvas.text(uploader, x, detailY, SteelStyle.TEXT_DIM);
+        canvas.text(SteelStyle.time(result.durationMs()), x, detailY + canvas.font.lineHeight + 1, SteelStyle.TEXT_MUTED);
     }
 
     private static String size(long bytes) {

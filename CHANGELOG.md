@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Find tracks by title: press **+** on the Tracks tab, type a title and press Enter, then
+  add a result with its **+** or a double click. Results show thumbnails, uploader and length.
+- `/phonon add <title>` adds the first result.
+- The server does the searching and fetches the thumbnails, so players never contact YouTube.
+
 ## 0.3.0-beta.3
 
 The final beta of this round: the Boombox, stations, queue and playlists, and a new look

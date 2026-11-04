@@ -18,13 +18,19 @@ final class RowList extends GuiPort.Control {
     private static final int ROW_TEXT_Y = 5;
     private static final int ACTION_WIDTH = 13;
     private static final int LEAD_WIDTH = 16;
+    private static final int PICTURE_WIDTH = 32;
+    private static final int PICTURE_LEAD_WIDTH = 36;
 
     record Action(String[] icon, Component label, Runnable run) {}
 
-    /** One row. Key identifies it for scrolling and double clicks; head shows a player's face in the lead space. */
+    /**
+     * One row. Key identifies it for scrolling and double clicks; head shows a player's face in the lead space.
+     * A row with pictureSlot leaves room for a picture, which may arrive later.
+     */
     record Row(
         @Nullable UUID key, String text, String detail, int color, boolean selected,
         @Nullable String[] marker, int markerColor, @Nullable UUID head, int progress,
+        boolean pictureSlot, @Nullable GuiPort.Picture picture,
         List<Action> actions, @Nullable Runnable click, @Nullable Runnable doubleClick
     ) {}
 
@@ -154,7 +160,13 @@ final class RowList extends GuiPort.Control {
         if (row.progress() >= 0) {
             canvas.fill(x, y + ROW_HEIGHT - 2, x + (right - x) * row.progress() / 100, y + ROW_HEIGHT - 1, SteelStyle.PLAYING);
         }
-        if (row.head() != null) {
+        if (row.pictureSlot()) {
+            if (row.picture() != null) {
+                canvas.picture(row.picture(), x, y, PICTURE_WIDTH, ROW_HEIGHT);
+            } else {
+                canvas.fill(x, y, x + PICTURE_WIDTH, y + ROW_HEIGHT, 0xFF000000);
+            }
+        } else if (row.head() != null) {
             canvas.head(row.head(), x + 4, y + 5, 8);
         } else if (row.marker() != null) {
             SteelStyle.icon(canvas, row.marker(), x + 4, y + 4, row.markerColor());
@@ -162,14 +174,15 @@ final class RowList extends GuiPort.Control {
 
         boolean showActions = hovered && !row.actions().isEmpty();
         int detailWidth = showActions ? row.actions().size() * ACTION_WIDTH : canvas.font.width(row.detail()) + 8;
-        int textWidth = rowWidth() - LEAD_WIDTH - detailWidth;
+        int lead = row.pictureSlot() ? PICTURE_LEAD_WIDTH : LEAD_WIDTH;
+        int textWidth = rowWidth() - lead - detailWidth;
         String text = row.text();
         boolean cut = canvas.font.width(text) > textWidth;
         if (cut) {
             text = canvas.font.plainSubstrByWidth(text, Math.max(0, textWidth - canvas.font.width("..."))) + "...";
         }
         int color = hovered && !row.selected() && row.color() == SteelStyle.TEXT_DIM ? 0xFFE0E0E0 : row.color();
-        canvas.text(text, x + LEAD_WIDTH, y + ROW_TEXT_Y, color);
+        canvas.text(text, x + lead, y + ROW_TEXT_Y, color);
 
         Component tooltip = cut ? Component.literal(row.text()) : null;
         if (showActions) {

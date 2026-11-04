@@ -15,7 +15,10 @@ import com.metrovoc.phonon.network.packets.SpeakerActionPacket;
 import com.metrovoc.phonon.network.packets.SyncLibraryJobsPacket;
 import com.metrovoc.phonon.network.packets.SyncStationPacket;
 import com.metrovoc.phonon.network.packets.SyncStationsPacket;
+import com.metrovoc.phonon.network.packets.SearchResultsPacket;
+import com.metrovoc.phonon.network.packets.SearchThumbnailPacket;
 import com.metrovoc.phonon.server.LibraryJob;
+import com.metrovoc.phonon.server.SearchResult;
 import com.metrovoc.phonon.server.SpeakerAction;
 import com.metrovoc.phonon.station.StationView;
 import com.metrovoc.phonon.network.packets.SpeakerSeekPacket;
@@ -110,6 +113,16 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void broadcastLibraryJobs(MinecraftServer server, List<LibraryJob> jobs) {
         PacketDistributor.sendToAllPlayers(new SyncLibraryJobsPacket(jobs));
+    }
+
+    @Override
+    public void sendSearchResults(ServerPlayer player, int searchId, List<SearchResult> results, String failureKey) {
+        sendToPlayer(player, new SearchResultsPacket(searchId, results, failureKey));
+    }
+
+    @Override
+    public void sendSearchThumbnail(ServerPlayer player, int searchId, String videoId, byte[] png) {
+        sendToPlayer(player, new SearchThumbnailPacket(searchId, videoId, png));
     }
 
     @Override

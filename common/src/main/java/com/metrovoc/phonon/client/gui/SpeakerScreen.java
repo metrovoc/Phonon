@@ -45,8 +45,13 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     private static final int TRANSPORT_Y = 106;
     private static final int TRANSPORT_HEIGHT = 20;
     private static final int TRANSPORT_GAP = 4;
-    private static final int SELECTED_Y = 136;
-    private static final int MAX_SELECTED_LINES = 5;
+    private static final int METER_Y = 131;
+    private static final int METER_HEIGHT = 14;
+    private static final int METER_BARS = 38;
+    private static final int METER_BAR_WIDTH = 3;
+    private static final int METER_BAR_MS = 100;
+    private static final int SELECTED_Y = 151;
+    private static final int MAX_SELECTED_LINES = 4;
     private static final double MAX_USE_DISTANCE_SQUARED = 64.0;
 
     private static final String[] ICON_PLAY = {
@@ -91,6 +96,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     private int listScroll = -1;
     private String titleShown = "";
     private boolean titleCut;
+    private final float[] meter = new float[METER_BARS];
 
     public SpeakerScreen(SpeakerMenu menu, Inventory playerInv, Component title) {
         super(menu, playerInv, title, WIDTH, HEIGHT);
@@ -309,6 +315,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
 
         canvas.text(Component.translatable("gui.phonon.speaker.now_playing"), rightX, topPos + LABEL_Y, SteelStyle.TEXT);
         drawNowPlaying(canvas, rightX, mouseX, mouseY);
+        drawMeter(canvas, rightX);
         drawSelected(canvas, rightX);
         drawButtonTooltip(canvas, mouseX, mouseY);
     }
@@ -352,6 +359,23 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         return ClientSpeakerManager.getInstance().isBuffering(pos())
             ? Component.translatable("gui.phonon.speaker.buffering")
             : null;
+    }
+
+    /** Recent loudness of what this speaker is playing, newest on the right. */
+    private void drawMeter(GuiPort.Canvas canvas, int x) {
+        PlaybackState state = currentState();
+        int bottom = topPos + METER_Y + METER_HEIGHT;
+        canvas.fill(x, topPos + METER_Y, x + RIGHT_WIDTH, bottom, SteelStyle.WELL);
+        if (state.isPlaying()) {
+            PlatformHelper.INSTANCE.readAudioLevels(pos(), state.getCurrentPositionMs(), meter, METER_BAR_MS);
+        } else {
+            java.util.Arrays.fill(meter, 0);
+        }
+        for (int i = 0; i < METER_BARS; i++) {
+            int height = Math.round(meter[i] * (METER_HEIGHT - 2));
+            int left = x + 1 + i * (METER_BAR_WIDTH + 1);
+            canvas.fill(left, bottom - 1 - height, left + METER_BAR_WIDTH, bottom - 1, SteelStyle.PLAYING);
+        }
     }
 
     private void drawSelected(GuiPort.Canvas canvas, int x) {

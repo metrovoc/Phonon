@@ -1,11 +1,8 @@
 package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
-import com.metrovoc.phonon.audio.AudioManager;
-import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
-import com.metrovoc.phonon.platform.PlatformHelper;
-import com.metrovoc.phonon.server.ServerSpeakerManager;
+import com.metrovoc.phonon.server.SpeakerControl;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.DecoderException;
 import net.minecraft.core.BlockPos;
@@ -71,57 +68,11 @@ public record SpeakerControlPacket(
             SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
             if (speaker == null) return;
 
-            long serverTime = PlaybackState.nowMs();
-            PlaybackState current = speaker.getPlayback();
-            PlaybackState newState;
-
             switch (packet.action) {
-                case PLAY -> {
-                    if (packet.resourceId == null
-                        || AudioManager.getInstance().getResource(packet.resourceId).isEmpty()) {
-                        return;
-                    }
-                    if (current.isPaused() && current.resourceId() != null
-                        && current.resourceId().equals(packet.resourceId)) {
-                        // 从暂停恢复: 更新 anchor 到现在，保持 position
-                        long pausedPos = current.positionAtAnchorMs();
-                        newState = new PlaybackState(current.resourceId(), serverTime, pausedPos, 1.0f);
-                    } else {
-                        // 新播放: 从头开始
-                        newState = new PlaybackState(packet.resourceId, serverTime, 0, 1.0f);
-                    }
-
-                    speaker.setPlayback(newState);
-                    long durationMs = ServerSpeakerManager.getDurationMs(newState.resourceId());
-                    ServerSpeakerManager.getInstance().registerSpeaker(
-                        level.dimension(), packet.pos, newState, durationMs);
-                }
-                case PAUSE -> {
-                    if (!current.isPlaying() || current.resourceId() == null) return;
-
-                    // 计算当前位置并锁定
-                    long currentPos = current.getCurrentPositionMs(serverTime);
-                    newState = new PlaybackState(current.resourceId(), serverTime, currentPos, 0f);
-
-                    speaker.setPlayback(newState);
-                    ServerSpeakerManager.getInstance().registerSpeaker(
-                        level.dimension(), packet.pos, newState, -1);
-                }
-                case STOP -> {
-                    newState = PlaybackState.STOPPED;
-                    speaker.setPlayback(newState);
-                    ServerSpeakerManager.getInstance().unregisterSpeaker(level.dimension(), packet.pos);
-                }
-                default -> {
-                    return;
-                }
+                case PLAY -> SpeakerControl.play(level, packet.pos, speaker, packet.resourceId);
+                case PAUSE -> SpeakerControl.pause(level, packet.pos, speaker);
+                case STOP -> SpeakerControl.stop(level, packet.pos, speaker);
             }
-
-            PlatformHelper.INSTANCE.sendToAllTracking(
-                level,
-                packet.pos,
-                SyncSpeakerStatePacket.snapshot(packet.pos, newState, speaker.getVolume(), serverTime)
-            );
         });
     }
 }

@@ -1,6 +1,7 @@
 package com.metrovoc.phonon.platform;
 
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
@@ -26,6 +27,8 @@ public interface PlatformHelper {
 
     void broadcastAudioResources(MinecraftServer server);
 
+    void broadcastSpeakerState(Level level, BlockPos pos, SpeakerBlockEntity speaker);
+
     // Speaker controls (only called on client)
     void playOnSpeaker(BlockPos pos, UUID resourceId);
 
@@ -43,6 +46,9 @@ public interface PlatformHelper {
     void stopAudio(BlockPos pos);
 
     void setAudioVolume(BlockPos pos, float volume);
+
+    /** Fills bars with recent loudness from 0 to 1, newest last, or zeros when nothing is audible. */
+    void readAudioLevels(BlockPos pos, long positionMs, float[] bars, int msPerBar);
 
     void stopAllAudio();
 

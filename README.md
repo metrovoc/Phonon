@@ -55,6 +55,21 @@ To add local files, put them in `phonon_music` inside the world folder and run
 `/phonon reload`. MP3, WAV, FLAC, M4A, AAC, Opus, WMA and OGG are accepted. The
 originals stay in the folder.
 
+## Redstone
+
+A signal turning on acts by side, as seen facing the speaker:
+
+| Side | Action |
+|------|--------|
+| Left | Previous track |
+| Right | Next track |
+| Back | Stop |
+| Front, top, bottom | Play or pause |
+
+A comparator reads how far through the track the speaker is: 1 at the start up to
+15 at the end, and 0 when stopped. Sculk sensors hear it start and stop, and nearby
+parrots and allays dance.
+
 ## Commands
 
 All commands need operator permission.

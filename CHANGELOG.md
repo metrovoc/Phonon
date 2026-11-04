@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Speaker screen
+
+- Replace the grey vanilla buttons and slider with steel ones, keeping the panel.
+- Add previous and next track buttons, and a Selected panel with the full track
+  name, length and size.
+- The main button plays the selected track, instead of pausing the current one.
+- Mark the playing track in the list, and show tooltips for long names.
+- Explain an empty library, a search with no results, buffering and unavailable
+  tracks.
+- Scroll the list with the mouse wheel.
+- One Esc closes the screen even from the search box, and it closes by itself when
+  you walk away or the Speaker is gone.
+
+### Speaker block
+
+- Show a playing state: the cone pulses and a green light stays bright in the dark.
+
+### Also
+
 - Show "Now Playing" when the Speaker screen closes if a track started behind it,
   since the screen hid the line for its whole 3 seconds.
 

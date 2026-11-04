@@ -14,17 +14,17 @@ use 1 120 2
 wait 30
 click 100 54
 wait 6
-press ▶ Play
+press Play
 wait 120
 pstate e_n1 1 120 2
-press ■ Stop
+press Stop
 wait 20
 click 100 72
 wait 6
-press ▶ Play
+press Play
 wait 120
 pstate e_n2 1 120 2
-press ■ Stop
+press Stop
 wait 20
 key escape
 wait 20

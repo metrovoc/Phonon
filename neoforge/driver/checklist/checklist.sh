@@ -11,7 +11,7 @@ cap() { local t=$1; shift; perl -e 'alarm shift; exec @ARGV' "$t" "$@"; }
 rm -rf "${RD:?}"; mkdir -p "$RD/driver" "$RD/driver2" "$A" "$T"; : > "$O"
 ffmpeg -v error -y -f lavfi -i "sine=frequency=330:duration=120" "$A/long.wav"
 ffmpeg -v error -y -f lavfi -i "sine=frequency=440:duration=5" -c:a libvorbis "$A/short.ogg"
-for n in n1 n2; do ffmpeg -v error -y -f lavfi -i "anoisesrc=d=60:c=pink" -ac 2 -c:a libvorbis -q:a 6 "$A/$n.ogg"; done
+for n in n1 n2; do ffmpeg -v error -y -f lavfi -i "anoisesrc=d=60:c=pink" -ac 2 -c:a libvorbis -q:a 4 "$A/$n.ogg"; done
 (cd "$A"; exec python3 -m http.server "$WWW" --bind 127.0.0.1 >/dev/null 2>&1) & HS=$!
 trap 'kill $HS 2>/dev/null' EXIT
 script() { sed -e "s/PORT/$PORT/g" -e "s/51990/$WWW/g" "$C/$1" > "$T/$1"; echo "$T/$1"; }

@@ -5,6 +5,9 @@ import com.metrovoc.phonon.client.audio.AudioPlayer;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.network.packets.RequestAudioPacket;
 import com.metrovoc.phonon.network.packets.CancelAudioStreamPacket;
+import com.metrovoc.phonon.network.packets.SpeakerControlPacket;
+import com.metrovoc.phonon.network.packets.SpeakerSeekPacket;
+import com.metrovoc.phonon.network.packets.SpeakerVolumePacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -43,6 +46,31 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void broadcastAudioResources(MinecraftServer server) {
         PacketDistributor.sendToAllPlayers(new SyncAudioResourcesPacket(AudioManager.getInstance().getAllResources()));
+    }
+
+    @Override
+    public void playOnSpeaker(BlockPos pos, UUID resourceId) {
+        sendToServer(new SpeakerControlPacket(pos, SpeakerControlPacket.Action.PLAY, resourceId));
+    }
+
+    @Override
+    public void pauseSpeaker(BlockPos pos, UUID resourceId) {
+        sendToServer(new SpeakerControlPacket(pos, SpeakerControlPacket.Action.PAUSE, resourceId));
+    }
+
+    @Override
+    public void stopSpeaker(BlockPos pos) {
+        sendToServer(new SpeakerControlPacket(pos, SpeakerControlPacket.Action.STOP, null));
+    }
+
+    @Override
+    public void seekSpeaker(BlockPos pos, long positionMs) {
+        sendToServer(new SpeakerSeekPacket(pos, positionMs));
+    }
+
+    @Override
+    public void setSpeakerVolume(BlockPos pos, float volume) {
+        sendToServer(new SpeakerVolumePacket(pos, volume));
     }
 
     // Client-side audio methods - delegate to AudioPlayer

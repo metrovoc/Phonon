@@ -11,7 +11,7 @@ use -2 120 2
 wait 30
 click 100 54
 wait 6
-press ▶ Play
+press Play
 wait 60
 pstate s1_playing -2 120 2
 wait 20
@@ -221,13 +221,13 @@ cmd tp Dev2 0 120 1 0 0
 wait 20
 pstate s1_seek9 -2 120 2
 cmd tp Dev2 0 120 1 0 0
-press ⏸ Pause
+press Pause
 wait 100
 pstate s1_pause -2 120 2
-press ▶ Play
+press Play
 wait 40
 pstate s1_after -2 120 2
-press ■ Stop
+press Stop
 wait 40
 pstate s1_stopped -2 120 2
 key escape

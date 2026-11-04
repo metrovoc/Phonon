@@ -20,7 +20,7 @@ use 1 120 2
 wait 30
 click 100 54
 wait 6
-press ▶ Play
+press Play
 wait 80
 pstate mp_a_play 1 120 2
 shot mp_a
@@ -30,7 +30,7 @@ use 4 120 2
 wait 30
 click 100 72
 wait 6
-press ▶ Play
+press Play
 wait 40
 pstate mp_c_diff 4 120 2
 pstate mp_a_during 1 120 2
@@ -47,13 +47,13 @@ pstate mp_a_rejoin 1 120 2
 shot mp_rejoin
 use 1 120 2
 wait 30
-press ⏸ Pause
+press Pause
 wait 30
 pstate mp_a_pause 1 120 2
 click 310 52
 wait 30
 pstate mp_a_seek 1 120 2
-press ▶ Play
+press Play
 wait 40
 pstate mp_a_resume 1 120 2
 key escape

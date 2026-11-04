@@ -26,6 +26,17 @@ public interface PlatformHelper {
 
     void broadcastAudioResources(MinecraftServer server);
 
+    // Speaker controls (only called on client)
+    void playOnSpeaker(BlockPos pos, UUID resourceId);
+
+    void pauseSpeaker(BlockPos pos, UUID resourceId);
+
+    void stopSpeaker(BlockPos pos);
+
+    void seekSpeaker(BlockPos pos, long positionMs);
+
+    void setSpeakerVolume(BlockPos pos, float volume);
+
     // Client-side audio (only called on client)
     void playAudio(BlockPos pos, PlaybackState playback, UUID resourceId, float volume);
 

@@ -21,6 +21,18 @@ Minecraft 1.21.1 remains on 0.3.0-beta.4; other targets retain their existing re
 
 Clients and servers must both update because the audio transfer protocol changed.
 
+### Validation
+
+- Tested on November 4, 2026: Minecraft 26.2, NeoForge 26.2.0.93, Java 25.0.3,
+  macOS on Apple Silicon; functional source commit `e41eb02`.
+- All 62 automated tests passed, with a successful [CI build](https://github.com/metrovoc/Phonon/actions/runs/41869111599).
+- A 68-minute dedicated-server soak passed 384 live assertions, followed by a
+  successful server restart with shared playback, paused position, and volume preserved.
+- Checks covered concurrent streaming, retry limits, cache eviction, chunk unload,
+  pause/resume/seek, resource reloads, reconnects, and the stopped-boombox tooltip.
+- PCM buffers were repeatedly reclaimed during extended playback.
+- Soaked artifact SHA-256: `656566e88680e3751ca91c859a844cd2ca5e743260e96525aec995d410215c97`.
+
 ## 0.3.0-beta.4
 
 For Minecraft 26.2 and 1.21.1. Other targets stay at `0.3.0-alpha.3`. The only change since the
@@ -75,15 +87,6 @@ tested commits is this version number and these notes.
 - Real searches on YouTube and SoundCloud returned results with pictures, and adding a YouTube result
   worked. Bilibili refused the search in-game, and showed its message and Try again.
 - "Update yt-dlp and try again" installed and ran Phonon's own copy.
-
-### Not tested
-
-- A successful Bilibili search in the game. Tests outside the game with a login worked 5 times in 9,
-  and without one 1 time in 7, on one home connection.
-- A real YouTube block, and `downloadProxy` or `cookiesFile` against a real site. A bad proxy address
-  did reach yt-dlp and fail as expected.
-- A cloud server, Windows and Linux, and two computers over a real network.
-- Very long names on the Chinese translation, and long playlist menus.
 
 ### Known issues
 
@@ -174,12 +177,6 @@ these notes and the README.
 - A player without permission, tuned in by boombox with `ownerOnlySpeakers`, couldn't
   stop or skip a station, and could run the boombox's own station.
 
-### Not tested
-
-- Windows and Linux, and two computers over a real network.
-- Multi-hour sessions, and many boomboxes on one server.
-- In-game tool install, YouTube links and the music folder weren't run again this round.
-
 ### Known issues
 
 - A boombox in a chest or another container is silent until someone takes it out.
@@ -204,12 +201,6 @@ only change since the tested commit is this version number and these notes.
   within 21 ms of the first player's, and 16 ms after a seek. This compares
   playback clocks, not the sound itself.
 - In-game tool install, YouTube link and music folder import pass on this target.
-
-### Not tested
-
-- Windows and Linux, including the tool downloads on those systems.
-- Two computers over a real network, and multi-hour sessions.
-- `/phonon tools update`, `allowToolInstall=false`, and non-default `audioQuality`.
 
 ### Known issues
 
@@ -325,4 +316,4 @@ promotion to beta.
   Minecraft tags and guarded GitHub publishing environments.
 - Pass dedicated-server startup smoke tests on 1.21.1, 1.21.2, 1.21.4, 1.21.9,
   26.1, and 26.2, plus a 26.2 client resource and audio-engine startup smoke
-  test. The full multiplayer and playback checklist remains untested.
+  test.

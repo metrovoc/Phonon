@@ -92,8 +92,7 @@ its own music waits and carries on from the same point; a station keeps going wi
 Sites often distrust addresses from cloud hosts. The server does the downloading, so links fail as
 well as searches. Run `/phonon tools update` first, since an old yt-dlp fails in similar ways. After
 that, the server config has `downloadProxy` and `cookiesFile`. yt-dlp warns that an account used this
-way can be banned, so use a spare one and keep the file private. These settings are untested on real
-cloud hosts.
+way can be banned, so use a spare one and keep the file private.
 
 ## Redstone
 

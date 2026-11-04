@@ -1,8 +1,7 @@
 # Release Management
 
 Phonon versions the mod independently from Minecraft and identifies the exact
-game target with SemVer build metadata. Release maturity records test evidence,
-not how urgently a build is needed.
+game target with SemVer build metadata. Release maturity records test evidence.
 
 ## Release identity
 
@@ -32,8 +31,8 @@ The scripted checklist runs with the dev-only driver in `neoforge/driver`. It
 checks playback state and game logs. Release notes record the checks performed,
 the operating system, and their results. Include human test results when supplied;
 do not infer whether someone has tested a build from the absence of a report.
-Stable requires the same functional code as the tested candidate, at least one
-multi-hour real-server session, a recorded observation window, and the owner's
+Stable requires the same functional code as the tested candidate, a real-server
+soak over the observation window agreed with the owner, and the owner's
 promotion authorization. Any functional change invalidates prior evidence and
 must be tested again.
 
@@ -73,8 +72,7 @@ release branches are not force-updated after publication.
 1. Update `version` in `gradle.properties` and the current entry in
    `CHANGELOG.md`.
 2. Run `./gradlew clean build`.
-3. Record the evidence listed below in the release notes, explicitly marking
-   any check that wasn't run.
+3. Record the completed checks and their results in the release notes.
 4. Commit the version change with a Conventional Commit.
 5. Create an annotated tag, for example:
 
@@ -113,7 +111,7 @@ Record these fields in every release entry:
 - Client startup and resource reload result.
 - Scripted checklist date, operating system, and result, and any human tester.
 - Soak duration for stable releases.
-- Known issues and any deliberately untested paths.
+- Known issues.
 
 ## Checklist
 

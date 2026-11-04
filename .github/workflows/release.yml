@@ -109,6 +109,30 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Extract release notes
+        id: notes
+        env:
+          RELEASE_VERSION: ${{ needs.metadata.outputs.mod_version }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          heading = f"## {os.environ['RELEASE_VERSION']}"
+          lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+          matches = [i for i, line in enumerate(lines) if line == heading]
+          if len(matches) != 1:
+              raise SystemExit(f"Expected exactly one changelog entry for {heading}")
+          start = matches[0]
+          end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+          if not "\n".join(lines[start + 1:end]).strip():
+              raise SystemExit(f"Empty changelog entry for {heading}")
+          notes = Path(os.environ["RUNNER_TEMP"]) / "release-notes.md"
+          notes.write_text("\n".join(lines[start:end]).strip() + "\n", encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"path={notes}\n")
+          PY
+
       - name: Build and test
         run: ./gradlew clean build --console=plain
         env:
@@ -138,7 +162,7 @@ jobs:
           version-type: ${{ needs.metadata.outputs.channel }}
           loaders: neoforge
           game-versions: ${{ needs.metadata.outputs.minecraft }}
-          changelog-file: CHANGELOG.md
+          changelog-file: ${{ steps.notes.outputs.path }}
 
       - name: Read current listing source
         if: needs.metadata.outputs.channel != 'alpha'
@@ -162,6 +186,5 @@ jobs:
           files: |
             ${{ steps.artifact.outputs.path }}
             ${{ steps.artifact.outputs.path }}.sha256
-          body_path: CHANGELOG.md
-          generate_release_notes: true
+          body_path: ${{ steps.notes.outputs.path }}
           prerelease: ${{ needs.metadata.outputs.prerelease }}

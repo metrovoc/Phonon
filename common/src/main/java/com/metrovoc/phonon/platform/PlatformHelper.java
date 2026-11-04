@@ -3,6 +3,7 @@ package com.metrovoc.phonon.platform;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.server.LibraryJob;
+import com.metrovoc.phonon.server.SearchResult;
 import com.metrovoc.phonon.server.SpeakerAction;
 import com.metrovoc.phonon.station.StationView;
 import com.metrovoc.phonon.audio.Receiver;
@@ -56,6 +57,10 @@ public interface PlatformHelper {
     void broadcastStations(MinecraftServer server);
 
     void broadcastLibraryJobs(MinecraftServer server, List<LibraryJob> jobs);
+
+    void sendSearchResults(ServerPlayer player, int searchId, List<SearchResult> results, String failureKey);
+
+    void sendSearchThumbnail(ServerPlayer player, int searchId, String videoId, byte[] png);
 
     // Speaker controls (only called on client)
     void sendSpeakerAction(Receiver receiver, SpeakerAction action, UUID target, UUID second, int number, String text);

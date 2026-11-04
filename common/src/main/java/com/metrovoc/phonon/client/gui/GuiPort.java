@@ -1,6 +1,8 @@
 package com.metrovoc.phonon.client.gui;
 
+import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.menu.SpeakerMenu;
+import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -12,15 +14,19 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.permissions.Permissions;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.util.UUID;
 
 /** The only GUI file that touches APIs which change between Minecraft versions. */
@@ -34,6 +40,43 @@ final class GuiPort {
 
     static void playClick() {
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.UI_BUTTON_CLICK, 1.0f));
+    }
+
+    /** A small image the server sent, held as a texture until released. */
+    static final class Picture {
+        private static final int MAX_SIDE = 256;
+        private static int nextId;
+
+        private final Identifier id;
+        private final int width;
+        private final int height;
+
+        private Picture(Identifier id, int width, int height) {
+            this.id = id;
+            this.width = width;
+            this.height = height;
+        }
+
+        /** Null when the bytes aren't a picture of a sensible size. */
+        @Nullable
+        static Picture read(byte[] png) {
+            try {
+                NativeImage image = NativeImage.read(png);
+                if (image.getWidth() > MAX_SIDE || image.getHeight() > MAX_SIDE) {
+                    image.close();
+                    return null;
+                }
+                Identifier id = Identifier.fromNamespaceAndPath(Constants.MOD_ID, "search/" + nextId++);
+                Minecraft.getInstance().getTextureManager().register(id, new DynamicTexture(id::toString, image));
+                return new Picture(id, image.getWidth(), image.getHeight());
+            } catch (IOException invalid) {
+                return null;
+            }
+        }
+
+        void release() {
+            Minecraft.getInstance().getTextureManager().release(id);
+        }
     }
 
     static final class Canvas {
@@ -73,6 +116,11 @@ final class GuiPort {
             var connection = Minecraft.getInstance().getConnection();
             var info = connection == null ? null : connection.getPlayerInfo(player);
             PlayerFaceExtractor.extractRenderState(graphics, info != null ? info.getSkin() : DefaultPlayerSkin.get(player), x, y, size);
+        }
+
+        void picture(Picture picture, int x, int y, int width, int height) {
+            graphics.blit(RenderPipelines.GUI_TEXTURED, picture.id, x, y, 0, 0, width, height,
+                picture.width, picture.height, picture.width, picture.height);
         }
 
         void tooltip(Component text, int mouseX, int mouseY) {

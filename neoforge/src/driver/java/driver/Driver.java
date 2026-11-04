@@ -30,9 +30,6 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.GLFW;
-import org.lwjgl.system.macosx.ObjCRuntime;
-import org.lwjgl.system.Platform;
-import org.lwjgl.system.JNI;
 import org.slf4j.Logger;
 
 /** Small test driver for targets whose input APIs predate the full driver. */
@@ -49,7 +46,7 @@ public final class Driver {
         String script = System.getProperty("driver.script", "");
         if (script.isEmpty()) return;
         if (!moved) { moved = true; moveWindow(mc, System.getProperty("driver.monitor", "")); }
-        yieldFocus(mc);
+        Quiet.tick(mc);
         if (mc.getOverlay() != null) return;
         if (steps == null) {
             try { steps = Files.readAllLines(Path.of(script)); } catch (Exception e) { LOG.error("[driver] script", e); steps = List.of(); }
@@ -123,21 +120,6 @@ public final class Driver {
             field.setDouble(mc.mouseHandler, Double.parseDouble(axis[1]));
         }
         if (mc.screen != null) { mc.screen.mouseMoved(x, y); }
-    }
-
-    /**
-     * Gives keyboard focus back to the app that had it. On macOS the window takes focus when it opens, and while it
-     * has focus the game moves the system cursor whenever it grabs or releases the mouse. Hiding the app and showing
-     * it again without activating it hands focus back.
-     */
-    private static void yieldFocus(Minecraft mc) {
-        if (Platform.get() != Platform.MACOSX || GLFW.glfwGetWindowAttrib(mc.getWindow().getWindow(), GLFW.GLFW_FOCUSED) == 0) {
-            return;
-        }
-        long send = ObjCRuntime.getLibrary().getFunctionAddress("objc_msgSend");
-        long app = JNI.invokePPP(ObjCRuntime.objc_getClass("NSApplication"), ObjCRuntime.sel_getUid("sharedApplication"), send);
-        JNI.invokePPPP(app, ObjCRuntime.sel_getUid("hide:"), 0L, send);
-        JNI.invokePPV(app, ObjCRuntime.sel_getUid("unhideWithoutActivation"), send);
     }
 
     private static void createWorld(Minecraft mc, String seed) throws Exception {

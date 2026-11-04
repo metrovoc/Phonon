@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- On a station, the speaker screen shows who runs it beside Now Playing, and the audio meter stays clear.
+- Playback buttons say when they act for everyone, such as "Pause · for everyone". Locked ones still say why.
+
 ## 0.3.0
 
 For Minecraft 26.2. This release promotes the 0.3 beta line, including stations,

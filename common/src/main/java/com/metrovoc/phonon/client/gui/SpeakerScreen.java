@@ -34,7 +34,7 @@ import java.util.UUID;
 
 /**
  * The screen of a speaker or boombox. The left column browses: tracks, queue, playlists and stations.
- * The right column is what's playing and, when it's not simply yours, who a button affects.
+ * The right column is what's playing and, when it's not simply yours, who runs it.
  */
 public class SpeakerScreen extends GuiPort.PanelScreen {
     private static final int WIDTH = 360;
@@ -66,7 +66,6 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
     private static final int METER_BARS = 38;
     private static final int METER_BAR_WIDTH = 3;
     private static final int METER_BAR_MS = 100;
-    private static final int METER_QUIET = 0x3840FF40;
     private static final int SELECTED_Y = 151;
     private static final int MAX_SELECTED_LINES = 4;
     private static final int RESULT_PICTURE_WIDTH = 64;
@@ -260,15 +259,27 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         return GuiPort.isOperator() || (owner != null && owner.equals(me()));
     }
 
-    /** What the transport buttons do to other people, or why they're locked. Empty on your own music. */
-    private String scopeText() {
+    private String runnerText(StationView view) {
+        return view.ownerId() != null && view.ownerId().equals(me())
+            ? label("gui.phonon.speaker.you_run_it").getString()
+            : Component.translatable("gui.phonon.speaker.run_by", view.ownerName()).getString();
+    }
+
+    private boolean onSharedStation() {
         StationView view = station();
-        if (view != null && view.shared()) {
-            return canControl()
-                ? label("gui.phonon.speaker.changes_everyone").getString()
-                : Component.translatable("gui.phonon.speaker.picks_music", view.ownerName()).getString();
-        }
-        return canTune() ? "" : Component.translatable("gui.phonon.speaker.only_owner", ownerName()).getString();
+        return view != null && view.shared();
+    }
+
+    /** Why the playback controls are locked, when they are. */
+    private Component lockReason() {
+        return onSharedStation()
+            ? Component.translatable("gui.phonon.speaker.picks_music", station().ownerName())
+            : Component.translatable("gui.phonon.speaker.only_owner", ownerName());
+    }
+
+    /** What a playback control does, saying so when it reaches everyone on the station. */
+    private Component controlTip(Component action) {
+        return onSharedStation() ? Component.translatable("gui.phonon.speaker.for_everyone", action) : action;
     }
 
     @Override
@@ -984,9 +995,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             boolean on = tuned != null && view.id().equals(tuned.id());
             boolean confirming = view.id().equals(confirmDelete);
             UUID current = view.cursor() >= 0 && view.cursor() < view.queue().size() ? view.queue().get(view.cursor()) : null;
-            String who = view.ownerId() != null && view.ownerId().equals(me())
-                ? label("gui.phonon.speaker.you_run_it").getString()
-                : Component.translatable("gui.phonon.speaker.run_by", view.ownerName()).getString();
+            String who = runnerText(view);
             String sub = track(current).map(each -> who + " · " + each.name()).orElse(who);
             rows.add(new RowList.Row(view.name()).head(view.ownerId()).color(on ? SteelStyle.PLAYING : SteelStyle.TEXT).subtext(sub, SteelStyle.TEXT_MUTED)
                 .actions(mayManage(view.ownerId()) ? List.of(new RowList.Action(ICON_TRASH,
@@ -1116,6 +1125,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             drawQueueHeading(canvas, leftX);
         }
         canvas.text(Component.translatable("gui.phonon.speaker.now_playing"), rightX, topPos + LABEL_Y, SteelStyle.TEXT);
+        drawRunner(canvas, rightX);
         drawNowPlaying(canvas, rightX, mouseX, mouseY);
         drawMeter(canvas, rightX);
         drawSelected(canvas, rightX);
@@ -1187,14 +1197,28 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         return at < MARQUEE_REST_MS ? 0 : (int) ((at - MARQUEE_REST_MS) * loop / travelMs);
     }
 
+    /** Who runs the station you're on, across from the heading. */
+    private void drawRunner(GuiPort.Canvas canvas, int x) {
+        if (!onSharedStation()) {
+            return;
+        }
+        String runner = runnerText(station());
+        int heading = canvas.font.width(Component.translatable("gui.phonon.speaker.now_playing"));
+        int room = RIGHT_WIDTH - heading - 8;
+        int width = Math.min(room, canvas.font.width(runner));
+        cropped(canvas, runner, x + RIGHT_WIDTH - width, topPos + LABEL_Y, room, SteelStyle.TEXT_DIM);
+    }
+
     /** The station you're on, or how your own music is doing, under the title. */
     private void drawStatus(GuiPort.Canvas canvas, int x, PlaybackState state, boolean available) {
         int y = topPos + STATUS_Y;
         Component status = status(state, available);
         StationView view = station();
         if (view == null || !view.shared()) {
-            if (status != null) {
-                canvas.text(status, x, y, SteelStyle.TEXT_MUTED);
+            String locked = canTune() ? null : lockReason().getString();
+            String text = status == null ? locked : locked == null ? status.getString() : status.getString() + " · " + locked;
+            if (text != null) {
+                cropped(canvas, text, x, y, RIGHT_WIDTH, SteelStyle.TEXT_MUTED);
             }
             return;
         }
@@ -1220,7 +1244,7 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
             : null;
     }
 
-    /** Recent loudness of what this speaker is playing, newest on the right, and what the buttons above it affect. */
+    /** Recent loudness of what this speaker is playing, newest on the right. */
     private void drawMeter(GuiPort.Canvas canvas, int x) {
         PlaybackState state = currentState();
         int bottom = topPos + METER_Y + METER_HEIGHT;
@@ -1230,16 +1254,10 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
         } else {
             java.util.Arrays.fill(meter, 0);
         }
-        String scope = scopeText();
-        int barColor = scope.isEmpty() ? SteelStyle.PLAYING : METER_QUIET;
         for (int i = 0; i < METER_BARS; i++) {
             int height = Math.round(meter[i] * (METER_HEIGHT - 2));
             int left = x + 1 + i * (METER_BAR_WIDTH + 1);
-            canvas.fill(left, bottom - 1 - height, left + METER_BAR_WIDTH, bottom - 1, barColor);
-        }
-        if (!scope.isEmpty()) {
-            int room = RIGHT_WIDTH - 4;
-            cropped(canvas, scope, x + (RIGHT_WIDTH - Math.min(room, canvas.font.width(scope))) / 2, topPos + METER_Y + 3, room, SteelStyle.TEXT);
+            canvas.fill(left, bottom - 1 - height, left + METER_BAR_WIDTH, bottom - 1, SteelStyle.PLAYING);
         }
     }
 
@@ -1310,15 +1328,15 @@ public class SpeakerScreen extends GuiPort.PanelScreen {
 
     /** Disabled controls explain themselves rather than showing their name. */
     private void drawControlTooltip(GuiPort.Canvas canvas, int mouseX, int mouseY) {
-        String scope = scopeText();
+        boolean control = canControl();
         for (SteelButton button : List.of(shuffleButton, previousButton, mainButton, nextButton, repeatButton, stopButton)) {
             if (within(button, mouseX, mouseY)) {
-                canvas.tooltip(!canControl() ? Component.literal(scope) : button.getMessage(), mouseX, mouseY);
+                canvas.tooltip(control ? controlTip(button.getMessage()) : lockReason(), mouseX, mouseY);
                 return;
             }
         }
-        if (within(progressSlider, mouseX, mouseY) && !canControl()) {
-            canvas.tooltip(Component.literal(scope), mouseX, mouseY);
+        if (within(progressSlider, mouseX, mouseY) && (!control || onSharedStation())) {
+            canvas.tooltip(control ? controlTip(label("gui.phonon.speaker.seek")) : lockReason(), mouseX, mouseY);
         } else if (within(volumeSlider, mouseX, mouseY)) {
             canvas.tooltip(canTune() ? label("gui.phonon.speaker.volume_here") : Component.translatable("gui.phonon.speaker.only_owner", ownerName()), mouseX, mouseY);
         } else if (within(leaveLink, mouseX, mouseY)) {

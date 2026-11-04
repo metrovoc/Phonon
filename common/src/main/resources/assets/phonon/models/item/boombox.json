@@ -1,0 +1,14 @@
+{
+    "parent": "minecraft:item/generated",
+    "textures": {
+        "layer0": "phonon:item/boombox"
+    },
+    "overrides": [
+        {
+            "predicate": {
+                "phonon:playing": 1
+            },
+            "model": "phonon:item/boombox_on"
+        }
+    ]
+}

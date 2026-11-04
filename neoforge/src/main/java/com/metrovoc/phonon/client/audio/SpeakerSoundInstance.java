@@ -3,7 +3,7 @@ package com.metrovoc.phonon.client.audio;
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.Phonon;
-import com.metrovoc.phonon.block.SpeakerBlockEntity;
+import com.metrovoc.phonon.audio.Receiver;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
 import com.metrovoc.phonon.config.PhononClientConfig;
 import com.mojang.blaze3d.audio.Channel;
@@ -64,8 +64,9 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     private static final float OCCLUSION_LERP_FACTOR = 0.5f;
 
     private final AudioStream stream;
-    private final BlockPos sourcePos;
-    private final Vec3 sourceVec;
+    private final Receiver receiver;
+    private BlockPos sourcePos;
+    private Vec3 sourceVec;
     private float baseVolume;
 
     private int tickCounter;
@@ -91,7 +92,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     // (Minecraft skips play() when volume is exactly 0)
     private static final float MIN_INITIAL_VOLUME = 0.0001f;
 
-    public SpeakerSoundInstance(AudioStream stream, BlockPos pos, float volume) {
+    public SpeakerSoundInstance(AudioStream stream, Receiver receiver, float volume) {
         super(
             SoundEvent.createVariableRangeEvent(DUMMY_SOUND_LOCATION),
             SoundSource.RECORDS,
@@ -99,17 +100,21 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         );
 
         this.stream = stream;
-        this.sourcePos = pos;
-        this.sourceVec = Vec3.atCenterOf(pos);
+        this.receiver = receiver;
         this.baseVolume = volume;
-
-        this.x = pos.getX() + 0.5;
-        this.y = pos.getY() + 0.5;
-        this.z = pos.getZ() + 0.5;
+        moveToSource();
         // Ensure initial volume > 0 so SoundEngine creates audio channel
         this.volume = MIN_INITIAL_VOLUME;
         this.attenuation = Attenuation.NONE;
-        this.tickCounter = Math.floorMod(pos.hashCode(), NEAR_OCCLUSION_INTERVAL);
+        this.tickCounter = Math.floorMod(receiver.hashCode(), NEAR_OCCLUSION_INTERVAL);
+    }
+
+    private void moveToSource() {
+        sourceVec = ClientSpeakerManager.getInstance().sourcePosition(receiver);
+        sourcePos = BlockPos.containing(sourceVec);
+        x = sourceVec.x;
+        y = sourceVec.y;
+        z = sourceVec.z;
     }
 
     @Override
@@ -140,8 +145,8 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         }
 
         age++;
-        var state = ClientSpeakerManager.getInstance().getSpeakerState(sourcePos);
-        boolean wanted = level.getBlockEntity(sourcePos) instanceof SpeakerBlockEntity
+        var state = ClientSpeakerManager.getInstance().getSpeakerState(receiver);
+        boolean wanted = ClientSpeakerManager.getInstance().exists(receiver)
             && state.isPresent() && state.get().isPlaying();
         if (!wanted) {
             fadingOut = true;
@@ -154,6 +159,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
             return;
         }
 
+        moveToSource();
         updateAcoustics(level, player.getEyePosition(), player.isUnderWater());
         if (!fadingOut) {
             reactWorld(level, player.position(), state.get());
@@ -217,9 +223,9 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         float loudness = tap == null ? 0 : tap.levelAt(state.getCurrentPositionMs());
         if (random.nextFloat() < loudness * loudness * NOTE_RATE && level.getBlockState(sourcePos.above()).isAir()) {
             level.addParticle(ParticleTypes.NOTE,
-                sourcePos.getX() + 0.5 + (random.nextDouble() - 0.5) * 0.4,
+                sourceVec.x + (random.nextDouble() - 0.5) * 0.4,
                 sourcePos.getY() + 1.2,
-                sourcePos.getZ() + 0.5 + (random.nextDouble() - 0.5) * 0.4,
+                sourceVec.z + (random.nextDouble() - 0.5) * 0.4,
                 random.nextInt(25) / 24.0, 0, 0);
         }
     }
@@ -259,7 +265,9 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         int occlusionInterval = dist <= 16.0 ? NEAR_OCCLUSION_INTERVAL : FAR_OCCLUSION_INTERVAL;
         if (tickCounter >= occlusionInterval) {
             tickCounter = 0;
-            targetOcclusion = calculateOcclusion(level, sourceVec, listenerPos);
+            targetOcclusion = ClientSpeakerManager.getInstance().carriedHere(receiver)
+                ? 1.0f
+                : calculateOcclusion(level, sourceVec, listenerPos);
         }
 
         occlusionFactor = Mth.lerp(OCCLUSION_LERP_FACTOR, occlusionFactor, targetOcclusion);
@@ -365,10 +373,6 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
             return cached.tap();
         }
         return stream instanceof StreamingAudioStream streaming ? streaming.tap() : null;
-    }
-
-    public BlockPos getPosition() {
-        return sourcePos;
     }
 
     public void setVolume(float newVolume) {

@@ -1,5 +1,6 @@
 package com.metrovoc.phonon.block;
 
+import com.metrovoc.phonon.audio.Receiver;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -89,7 +90,7 @@ public class SpeakerBlock extends Block implements EntityBlock {
     ) {
         if (level.isClientSide) {
             // Open GUI on client
-            openGui(pos);
+            openGui(new Receiver.Block(pos));
         }
         return InteractionResult.SUCCESS;
     }
@@ -98,15 +99,15 @@ public class SpeakerBlock extends Block implements EntityBlock {
      * Open speaker GUI (client-side).
      * Platform-specific implementation via static method.
      */
-    private static java.util.function.Consumer<BlockPos> guiOpener;
+    private static java.util.function.Consumer<Receiver> guiOpener;
 
-    public static void setGuiOpener(java.util.function.Consumer<BlockPos> opener) {
+    public static void setGuiOpener(java.util.function.Consumer<Receiver> opener) {
         guiOpener = opener;
     }
 
-    private void openGui(BlockPos pos) {
+    public static void openGui(Receiver receiver) {
         if (guiOpener != null) {
-            guiOpener.accept(pos);
+            guiOpener.accept(receiver);
         }
     }
 }

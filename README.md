@@ -2,6 +2,8 @@
 
 A custom audio system designed to orchestrate an immersive soundscape in your game.
 
+![Boombox: playing a track from the hand, then dropped on the ground and still playing](https://raw.githubusercontent.com/metrovoc/Phonon/main/docs/images/boombox.webp)
+
 Phonon is currently in beta. The default branch targets Minecraft 26.2, and
 every supported Minecraft release receives its own NeoForge artifact. The
 Minecraft version in the filename must match the game exactly.
@@ -9,6 +11,8 @@ Minecraft version in the filename must match the game exactly.
 ## Features
 
 - **Speaker Blocks** - Place in-world speakers that play custom audio
+- **Boombox** - A speaker you carry, that keeps playing in your inventory, on your cursor and on the ground
+- **Stations and Playlists** - A queue, shuffle and repeat, and named stations that keep every speaker in step
 - **Real-time Sync** - All players hear the same audio at the same time
 - **Universal URL Support** - YouTube, Bilibili, or any URL via yt-dlp integration
 - **Music Folder** - Drop audio files into the world and they become tracks
@@ -66,7 +70,16 @@ The Speaker screen has four tabs:
 - **Stations**: tune speakers to a shared station to play the same thing in step.
 
 The server config's `ownerOnlySpeakers` limits a speaker to whoever placed it and
-operators, and `anyoneCanAddTracks` lets every player manage the library.
+operators, and what plays on a station to whoever created it and operators.
+`anyoneCanAddTracks` lets every player manage the library.
+
+## Boombox
+
+A speaker you carry: craft one from a Speaker, or find it after the music discs in the
+creative menu. Use it to open its controls, or sneak and use it to switch it on or off.
+It plays from wherever it is, in your inventory, on your cursor or on the ground, and
+tunes to stations like a speaker does. Put away in a chest, or with its holder offline,
+its own music waits and carries on from the same point; a station keeps going without it.
 
 ## Redstone
 

@@ -1,6 +1,9 @@
 package com.metrovoc.phonon.block;
 
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.audio.Receiver;
+import com.metrovoc.phonon.platform.PlatformHelper;
+import com.metrovoc.phonon.station.StationListener;
 import com.google.gson.JsonParser;
 import com.metrovoc.phonon.client.ClientStations;
 import com.metrovoc.phonon.station.Station;
@@ -25,7 +28,7 @@ import java.util.function.Supplier;
  * Speaker block entity, 存储播放状态和音量。
  * NBT 保存时"坍缩" - 只保存当前位置和 speed，不保存 anchorTime。
  */
-public class SpeakerBlockEntity extends BlockEntity {
+public class SpeakerBlockEntity extends BlockEntity implements StationListener {
     private static final float DEFAULT_VOLUME = 0.5f;
 
     private static Supplier<BlockEntityType<SpeakerBlockEntity>> typeSupplier;
@@ -75,7 +78,18 @@ public class SpeakerBlockEntity extends BlockEntity {
         updateComparators();
     }
 
+    @Override
+    public Receiver receiver() {
+        return new Receiver.Block(worldPosition);
+    }
+
+    @Override
+    public void broadcast(Object packet) {
+        PlatformHelper.INSTANCE.sendToAllTracking(level, worldPosition, packet);
+    }
+
     /** The station this speaker is tuned to, or its own private one. */
+    @Override
     public Station station() {
         Station tuned = StationManager.getInstance().get(tunedTo);
         return tuned != null ? tuned : ownStation;
@@ -86,11 +100,13 @@ public class SpeakerBlockEntity extends BlockEntity {
         setChanged();
     }
 
+    @Override
     public UUID getOwnerId() {
         return ownerId;
     }
 
     /** Listens to a shared station, or with null goes back to this speaker's own. */
+    @Override
     public void tune(UUID stationId) {
         Station before = station();
         StationManager manager = StationManager.getInstance();
@@ -162,10 +178,12 @@ public class SpeakerBlockEntity extends BlockEntity {
         }
     }
 
+    @Override
     public float getVolume() {
         return volume;
     }
 
+    @Override
     public void setVolume(float volume) {
         this.volume = sanitizeVolume(volume);
         setChanged();
@@ -189,7 +207,7 @@ public class SpeakerBlockEntity extends BlockEntity {
                 playback = station.playback();
             } else {
                 // 客户端：区块加载时立即恢复播放
-                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().updateSpeaker(worldPosition, playback, volume);
+                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().updateSpeaker(receiver(), playback, volume);
                 publishStationToClient();
             }
         }
@@ -200,7 +218,7 @@ public class SpeakerBlockEntity extends BlockEntity {
         // BlockEntity 被移除时清理状态
         if (level != null) {
             if (level.isClientSide) {
-                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().removeSpeaker(worldPosition);
+                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().removeSpeaker(receiver());
             } else {
                 StationManager manager = StationManager.getInstance();
                 manager.detach(station().id(), level.dimension(), worldPosition);
@@ -303,7 +321,7 @@ public class SpeakerBlockEntity extends BlockEntity {
 
             // 如果此时 level 已存在且为客户端，立即同步
             if (level != null && level.isClientSide) {
-                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().updateSpeaker(worldPosition, playback, volume);
+                com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().updateSpeaker(receiver(), playback, volume);
             }
         } catch (Exception e) {
             playback = PlaybackState.STOPPED;
@@ -357,7 +375,7 @@ public class SpeakerBlockEntity extends BlockEntity {
 
     /** Tells the client's screen which station this speaker is on, once its data has arrived. */
     private void publishStationToClient() {
-        ClientStations.getInstance().setSpeakerStation(worldPosition, tunedTo != null ? tunedTo : ownStation.id());
+        ClientStations.getInstance().setSpeakerStation(receiver(), tunedTo != null ? tunedTo : ownStation.id());
         ClientStations.getInstance().put(ownStation.view());
     }
 }

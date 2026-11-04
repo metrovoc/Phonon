@@ -59,6 +59,7 @@ public class PhononNeoForge {
             modBus.addListener(PhononClient::onClientSetup);
             NeoForge.EVENT_BUS.addListener(PhononClient::onClientLogout);
             NeoForge.EVENT_BUS.addListener(PhononClient::onClientTick);
+            NeoForge.EVENT_BUS.addListener(PhononClient::onTooltip);
             NeoForge.EVENT_BUS.addListener(PhononClient::onStreamStart);
             ConfigScreenFactory.create().ifPresent(factory ->
                 modContainer.registerExtensionPoint(IConfigScreenFactory.class, factory));
@@ -76,6 +77,7 @@ public class PhononNeoForge {
         NeoForge.EVENT_BUS.addListener(this::onPlayerJoin);
         NeoForge.EVENT_BUS.addListener(this::onPlayerLogout);
         NeoForge.EVENT_BUS.addListener(this::onServerTick);
+        NeoForge.EVENT_BUS.addListener(this::onEntityJoin);
     }
 
     private void onRegisterCommands(RegisterCommandsEvent event) {
@@ -160,6 +162,13 @@ public class PhononNeoForge {
     private void onPlayerLogout(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             AudioTransferManager.getInstance().cancelPlayerTransfers(player.getUUID());
+            StationManager.getInstance().boomboxes().playerLeft(player.getUUID());
+        }
+    }
+
+    private void onEntityJoin(net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) {
+        if (!event.getLevel().isClientSide()) {
+            StationManager.getInstance().boomboxes().entityJoined(event.getEntity());
         }
     }
 

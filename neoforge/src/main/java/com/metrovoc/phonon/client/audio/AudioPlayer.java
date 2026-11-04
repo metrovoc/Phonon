@@ -3,11 +3,11 @@ package com.metrovoc.phonon.client.audio;
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.audio.Receiver;
 import com.metrovoc.phonon.client.ClientAudioManager;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
 import com.metrovoc.phonon.client.AudioCache;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,7 +28,7 @@ public class AudioPlayer {
     private static AudioPlayer instance;
     private static final float MUSIC_DUCK_VOLUME = 0.03f;
 
-    private final Map<BlockPos, SpeakerSoundInstance> playingSounds = new HashMap<>();
+    private final Map<Receiver, SpeakerSoundInstance> playingSounds = new HashMap<>();
 
     private AudioPlayer() {}
 
@@ -39,7 +39,7 @@ public class AudioPlayer {
         return instance;
     }
 
-    public void play(BlockPos pos, PlaybackState playback, UUID resourceId, float volume) {
+    public void play(Receiver pos, PlaybackState playback, UUID resourceId, float volume) {
         Path cachedAudio = AudioCache.getInstance().getCachedAudio(resourceId).orElse(null);
         if (cachedAudio == null || !Files.exists(cachedAudio)) {
             Phonon.LOGGER.error("Audio {} not cached (caller should have downloaded first)", resourceId);
@@ -70,7 +70,7 @@ public class AudioPlayer {
         }
     }
 
-    public void playStreaming(BlockPos pos, StreamingAudioStream stream, float volume) {
+    public void playStreaming(Receiver pos, StreamingAudioStream stream, float volume) {
         stop(pos);
 
         SpeakerSoundInstance sound = new SpeakerSoundInstance(stream, pos, volume);
@@ -80,7 +80,7 @@ public class AudioPlayer {
         Phonon.LOGGER.debug("Started streaming audio at {}", pos);
     }
 
-    public void stop(BlockPos pos) {
+    public void stop(Receiver pos) {
         SpeakerSoundInstance sound = playingSounds.remove(pos);
         if (sound != null) {
             sound.fadeOut();
@@ -92,7 +92,7 @@ public class AudioPlayer {
     public void tick() {
         Minecraft minecraft = Minecraft.getInstance();
         boolean audible = false;
-        for (Map.Entry<BlockPos, SpeakerSoundInstance> entry : Map.copyOf(playingSounds).entrySet()) {
+        for (Map.Entry<Receiver, SpeakerSoundInstance> entry : Map.copyOf(playingSounds).entrySet()) {
             SpeakerSoundInstance sound = entry.getValue();
             audible |= sound.audibleVolume() > MUSIC_DUCK_VOLUME;
             StreamTap tap = sound.tap();
@@ -100,7 +100,9 @@ public class AudioPlayer {
             if (tap != null && state.isPresent() && state.get().isPlaying()) {
                 long durationMs = ClientAudioManager.getInstance().getResource(state.get().resourceId())
                     .map(AudioResource::durationMs).orElse(-1L);
-                if (DriftCheck.needsResync(tap.writtenMs(), state.get().getCurrentPositionMs(), durationMs, sound.age())) {
+                boolean lost = sound.age() > 0 && !minecraft.getSoundManager().isActive(sound)
+                    && (durationMs <= 0 || state.get().getCurrentPositionMs() < durationMs - 1000);
+                if (lost || DriftCheck.needsResync(tap.writtenMs(), state.get().getCurrentPositionMs(), durationMs, sound.age())) {
                     ClientSpeakerManager.getInstance().resync(entry.getKey());
                 }
             }
@@ -110,7 +112,7 @@ public class AudioPlayer {
         }
     }
 
-    public void readLevels(BlockPos pos, long positionMs, float[] bars, int msPerBar) {
+    public void readLevels(Receiver pos, long positionMs, float[] bars, int msPerBar) {
         SpeakerSoundInstance sound = playingSounds.get(pos);
         StreamTap tap = sound == null ? null : sound.tap();
         if (tap == null) {
@@ -120,7 +122,7 @@ public class AudioPlayer {
         }
     }
 
-    public void setVolume(BlockPos pos, float volume) {
+    public void setVolume(Receiver pos, float volume) {
         SpeakerSoundInstance sound = playingSounds.get(pos);
         if (sound != null) {
             sound.setVolume(volume);

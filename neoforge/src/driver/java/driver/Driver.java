@@ -1,6 +1,5 @@
 package driver;
 
-import com.mojang.blaze3d.platform.TextInputManager;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.datafixers.util.Pair;
@@ -77,9 +76,6 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.GLFW;
-import org.lwjgl.system.JNI;
-import org.lwjgl.system.Platform;
-import org.lwjgl.system.macosx.ObjCRuntime;
 import org.slf4j.Logger;
 
 /**
@@ -181,8 +177,7 @@ public final class Driver {
             moved = true;
             moveWindow(mc, System.getProperty("driver.monitor", ""));
         }
-        yieldFocus(mc);
-        leaveInputMethodAlone(mc);
+        Quiet.tick(mc);
         if (mc.gui.overlay() != null) {
             return;
         }
@@ -256,42 +251,6 @@ public final class Driver {
         mc.options.tutorialStep = TutorialSteps.NONE;
         mc.options.getSoundSourceOptionInstance(SoundSource.MASTER).set(0.01);
         mc.options.save();
-    }
-
-    /**
-     * Gives keyboard focus back to the app that had it. On macOS the window takes focus when it opens, and while it
-     * has focus the game moves the system cursor whenever it grabs or releases the mouse. Hiding the app and showing
-     * it again without activating it hands focus back.
-     */
-    private static void yieldFocus(Minecraft mc) {
-        if (Platform.get() != Platform.MACOSX || GLFW.glfwGetWindowAttrib(mc.getWindow().handle(), GLFW.GLFW_FOCUSED) == 0) {
-            return;
-        }
-        long send = ObjCRuntime.getLibrary().getFunctionAddress("objc_msgSend");
-        long app = JNI.invokePPP(ObjCRuntime.objc_getClass("NSApplication"), ObjCRuntime.sel_getUid("sharedApplication"), send);
-        JNI.invokePPPP(app, ObjCRuntime.sel_getUid("hide:"), 0L, send);
-        JNI.invokePPV(app, ObjCRuntime.sel_getUid("unhideWithoutActivation"), send);
-    }
-
-    /**
-     * Keeps the game's hands off the system's input method while someone else is typing. A window that never had focus
-     * still believes it has, since GLFW only reports changes, and a window that believes it has focus switches the
-     * system's input source back to ASCII whenever no text box is open, which undoes every switch to another language
-     * the moment it is made. What it would restore when a scripted text box opens goes too.
-     */
-    private static void leaveInputMethodAlone(Minecraft mc) {
-        try {
-            if (GLFW.glfwGetWindowAttrib(mc.getWindow().handle(), GLFW.GLFW_FOCUSED) == 0) {
-                Field focused = Window.class.getDeclaredField("focused");
-                focused.setAccessible(true);
-                focused.setBoolean(mc.getWindow(), false);
-            }
-            Field requested = TextInputManager.class.getDeclaredField("imeRequested");
-            requested.setAccessible(true);
-            requested.setBoolean(mc.textInputManager(), false);
-        } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException(e);
-        }
     }
 
     /** Puts the window on the named monitor, such as a virtual display, so it stays out of the way. */

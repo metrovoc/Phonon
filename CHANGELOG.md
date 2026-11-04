@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.3.0-beta.3
+
+The final beta of this round: the Boombox, stations, queue and playlists, and a new look
+and sound for the Speaker. For Minecraft 26.2 and 1.21.1; other targets stay at
+`0.3.0-alpha.3`. The only change since the tested commits is this version number,
+these notes and the README.
 
 ### Boombox
 
@@ -59,6 +64,35 @@
 
 - Show "Now Playing" when the Speaker screen closes if a track started behind it,
   since the screen hid the line for its whole 3 seconds.
+
+### Test evidence
+
+- Target: Minecraft 26.2, NeoForge 26.2.0.93, Java 25, and Minecraft 1.21.1, NeoForge
+  21.1.235, Java 21, both tested on macOS on Apple Silicon.
+- Automated tests and the scripted checklist (`neoforge/driver/checklist`) pass on both
+  in the real client and on a dedicated server.
+- Boombox, with two clients on a dedicated server, on both targets: the same sound carried
+  on through a change of slot, the cursor, sorting into another slot, dropping and picking
+  up. It switched off and on, resumed after a relog at the point it had reached, followed
+  its holder through the Nether, and stayed tuned through a server restart.
+- Playback clocks between the two clients stayed within 5 ms on a station and after a
+  relog within 18 ms; a client joining while the track played was off by up to 114 ms until
+  its next restart. This compares playback clocks, not the sound itself.
+- A player without permission, tuned in by boombox with `ownerOnlySpeakers`, couldn't
+  stop or skip a station, and could run the boombox's own station.
+
+### Not tested
+
+- Nobody has listened to this build, including muffling and the boombox moving around.
+- Windows and Linux, and two computers over a real network.
+- Multi-hour sessions, and many boomboxes on one server.
+- In-game tool install, YouTube links and the music folder weren't run again this round.
+
+### Known issues
+
+- A boombox in a chest or another container is silent until someone takes it out.
+- In creative mode the server can't see the cursor, so a boombox held there longer than
+  5 seconds goes quiet until it's put down.
 
 ## 0.3.0-beta.2
 

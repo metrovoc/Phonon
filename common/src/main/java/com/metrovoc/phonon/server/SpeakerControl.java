@@ -3,10 +3,10 @@ package com.metrovoc.phonon.server;
 import com.metrovoc.phonon.audio.AudioLimits;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioResource;
-import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.config.PhononServerConfig;
 import com.metrovoc.phonon.station.Playlist;
 import com.metrovoc.phonon.station.Station;
+import com.metrovoc.phonon.station.StationListener;
 import com.metrovoc.phonon.station.StationManager;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -36,12 +36,20 @@ public final class SpeakerControl {
         return track != null && AudioManager.getInstance().getResource(track).isPresent();
     }
 
-    /** Whether this player may change what the speaker does. */
-    public static boolean canControl(ServerPlayer player, SpeakerBlockEntity speaker) {
+    /** Whether this player may change where the speaker is tuned. */
+    public static boolean canTune(ServerPlayer player, StationListener speaker) {
         return !PhononServerConfig.getOwnerOnlySpeakers()
             || PlayerPermissions.isOperator(player)
             || speaker.getOwnerId() == null
             || speaker.getOwnerId().equals(player.getUUID());
+    }
+
+    /** Whether this player may change what plays: a shared station answers to its owner, not to whoever tuned in. */
+    public static boolean canControl(ServerPlayer player, StationListener speaker) {
+        Station station = speaker.station();
+        return station.shared() && PhononServerConfig.getOwnerOnlySpeakers()
+            ? ownsOrOperates(player, station.ownerId())
+            : canTune(player, speaker);
     }
 
     private static boolean ownsOrOperates(ServerPlayer player, @Nullable UUID owner) {
@@ -58,7 +66,7 @@ public final class SpeakerControl {
 
     /** Runs what a player's screen asked for, after checking they may. */
     public static void handle(
-        ServerPlayer player, SpeakerBlockEntity speaker, SpeakerAction action,
+        ServerPlayer player, StationListener speaker, SpeakerAction action,
         @Nullable UUID target, @Nullable UUID second, int number, String text
     ) {
         switch (action) {
@@ -78,7 +86,8 @@ public final class SpeakerControl {
             }
         }
 
-        if (!canControl(player, speaker)) {
+        boolean tuning = action == SpeakerAction.CREATE_STATION || action == SpeakerAction.TUNE || action == SpeakerAction.DELETE_STATION;
+        if (!(tuning ? canTune(player, speaker) : canControl(player, speaker))) {
             deny(player);
             return;
         }
@@ -197,7 +206,7 @@ public final class SpeakerControl {
     // Redstone
 
     /** Pauses when playing; otherwise resumes, or starts the queue, or starts the library. */
-    public static void toggle(SpeakerBlockEntity speaker) {
+    public static void toggle(StationListener speaker) {
         Station station = speaker.station();
         if (station.playback().isPlaying()) {
             station.pause();
@@ -211,19 +220,19 @@ public final class SpeakerControl {
         stations().changed(station);
     }
 
-    public static void step(SpeakerBlockEntity speaker, int direction) {
+    public static void step(StationListener speaker, int direction) {
         Station station = speaker.station();
         step(station, direction);
         stations().changed(station);
     }
 
-    public static void stop(SpeakerBlockEntity speaker) {
+    public static void stop(StationListener speaker) {
         Station station = speaker.station();
         station.stop();
         stations().changed(station);
     }
 
-    public static void seek(SpeakerBlockEntity speaker, long positionMs) {
+    public static void seek(StationListener speaker, long positionMs) {
         Station station = speaker.station();
         long durationMs = StationManager.durationMs(station.playback().resourceId());
         long position = Math.max(0, positionMs);

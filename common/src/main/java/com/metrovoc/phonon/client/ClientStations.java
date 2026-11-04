@@ -3,7 +3,7 @@ package com.metrovoc.phonon.client;
 import com.metrovoc.phonon.server.LibraryJob;
 import com.metrovoc.phonon.station.Playlist;
 import com.metrovoc.phonon.station.StationView;
-import net.minecraft.core.BlockPos;
+import com.metrovoc.phonon.audio.Receiver;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
@@ -16,7 +16,7 @@ public final class ClientStations {
     private static final ClientStations INSTANCE = new ClientStations();
 
     private final Map<UUID, StationView> views = new HashMap<>();
-    private final Map<BlockPos, UUID> speakerStations = new HashMap<>();
+    private final Map<Receiver, UUID> speakerStations = new HashMap<>();
     private List<StationView> shared = List.of();
     private List<Playlist> playlists = List.of();
     private List<LibraryJob> jobs = List.of();
@@ -31,8 +31,8 @@ public final class ClientStations {
         views.put(view.id(), view);
     }
 
-    public void setSpeakerStation(BlockPos pos, UUID stationId) {
-        speakerStations.put(pos.immutable(), stationId);
+    public void setSpeakerStation(Receiver receiver, UUID stationId) {
+        speakerStations.put(receiver, stationId);
     }
 
     public void setShared(List<StationView> shared, List<Playlist> playlists) {
@@ -46,8 +46,8 @@ public final class ClientStations {
     }
 
     @Nullable
-    public StationView stationOf(BlockPos pos) {
-        UUID id = speakerStations.get(pos);
+    public StationView stationOf(Receiver receiver) {
+        UUID id = speakerStations.get(receiver);
         return id == null ? null : views.get(id);
     }
 

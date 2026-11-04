@@ -2,12 +2,12 @@ package com.metrovoc.phonon.network.packets;
 
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.audio.AudioLimits;
-import com.metrovoc.phonon.block.SpeakerBlockEntity;
+import com.metrovoc.phonon.station.StationListener;
 import com.metrovoc.phonon.server.SpeakerAction;
 import com.metrovoc.phonon.server.SpeakerControl;
 import io.netty.buffer.ByteBuf;
 import io.netty.handler.codec.DecoderException;
-import net.minecraft.core.BlockPos;
+import com.metrovoc.phonon.audio.Receiver;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -21,7 +21,7 @@ import java.util.UUID;
  * Client -> Server: something asked of a speaker from its screen.
  */
 public record SpeakerActionPacket(
-    BlockPos pos,
+    Receiver pos,
     SpeakerAction action,
     UUID target,
     UUID second,
@@ -45,7 +45,7 @@ public record SpeakerActionPacket(
     );
 
     public static final StreamCodec<ByteBuf, SpeakerActionPacket> CODEC = StreamCodec.composite(
-        BlockPos.STREAM_CODEC,
+        ReceiverCodec.STREAM_CODEC,
         SpeakerActionPacket::pos,
         ACTION_CODEC,
         SpeakerActionPacket::action,
@@ -69,7 +69,7 @@ public record SpeakerActionPacket(
         ctx.enqueueWork(() -> {
             if (!(ctx.player() instanceof ServerPlayer player)) return;
 
-            SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
+            StationListener speaker = SpeakerPacketValidator.getAccessible(player, packet.pos);
             if (speaker == null) return;
 
             SpeakerControl.handle(player, speaker, packet.action, packet.target, packet.second, packet.number, packet.text);

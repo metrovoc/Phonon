@@ -1,7 +1,11 @@
 package com.metrovoc.phonon.platform;
 
 import com.metrovoc.phonon.audio.PlaybackState;
-import com.metrovoc.phonon.block.SpeakerBlockEntity;
+import com.metrovoc.phonon.audio.Receiver;
+import com.metrovoc.phonon.network.packets.SyncBoomboxPlacePacket;
+import com.metrovoc.phonon.station.StationListener;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 import com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket;
 import com.metrovoc.phonon.client.audio.AudioPlayer;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
@@ -57,15 +61,46 @@ public class NeoForgePlatformHelper implements PlatformHelper {
         PacketDistributor.sendToAllPlayers(new SyncAudioResourcesPacket(AudioManager.getInstance().getAllResources()));
     }
 
-    @Override
-    public void broadcastSpeakerState(Level level, BlockPos pos, SpeakerBlockEntity speaker) {
-        sendToAllTracking(level, pos,
-            SyncSpeakerStatePacket.snapshot(pos, speaker.getPlayback(), speaker.getVolume(), speaker.station().id(), PlaybackState.nowMs()));
+    private static SyncSpeakerStatePacket snapshot(StationListener listener) {
+        return SyncSpeakerStatePacket.snapshot(listener.receiver(), listener.station().playback(), listener.getVolume(),
+            listener.station().id(), PlaybackState.nowMs());
     }
 
     @Override
-    public void broadcastStationView(Level level, BlockPos pos, StationView view) {
-        sendToAllTracking(level, pos, new SyncStationPacket(view));
+    public void broadcastSpeakerState(StationListener listener) {
+        listener.broadcast(snapshot(listener));
+    }
+
+    @Override
+    public void sendListenerState(ServerPlayer player, StationListener listener) {
+        sendToPlayer(player, snapshot(listener));
+    }
+
+    @Override
+    public void sendToPlayer(ServerPlayer player, Object packet) {
+        if (packet instanceof CustomPacketPayload payload) {
+            PacketDistributor.sendToPlayer(player, payload);
+        }
+    }
+
+    @Override
+    public void sendBoomboxPlace(ServerPlayer player, UUID id, int entityId, Vec3 position) {
+        sendToPlayer(player, new SyncBoomboxPlacePacket(id, entityId, position.x, position.y, position.z));
+    }
+
+    @Override
+    public void sendBoomboxGone(ServerPlayer player, UUID id) {
+        sendToPlayer(player, new SyncBoomboxPlacePacket(id, -1, 0, 0, 0));
+    }
+
+    @Override
+    public void sendStationView(ServerPlayer player, StationView view) {
+        sendToPlayer(player, new SyncStationPacket(view));
+    }
+
+    @Override
+    public void broadcastStationView(StationListener listener, StationView view) {
+        listener.broadcast(new SyncStationPacket(view));
     }
 
     @Override
@@ -79,45 +114,45 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     }
 
     @Override
-    public void readAudioLevels(BlockPos pos, long positionMs, float[] bars, int msPerBar) {
+    public void readAudioLevels(Receiver pos, long positionMs, float[] bars, int msPerBar) {
         if (isClient()) {
             AudioPlayer.getInstance().readLevels(pos, positionMs, bars, msPerBar);
         }
     }
 
     @Override
-    public void sendSpeakerAction(BlockPos pos, SpeakerAction action, UUID target, UUID second, int number, String text) {
+    public void sendSpeakerAction(Receiver pos, SpeakerAction action, UUID target, UUID second, int number, String text) {
         sendToServer(new SpeakerActionPacket(pos, action, target, second, number, text));
     }
 
     @Override
-    public void seekSpeaker(BlockPos pos, long positionMs) {
+    public void seekSpeaker(Receiver pos, long positionMs) {
         sendToServer(new SpeakerSeekPacket(pos, positionMs));
     }
 
     @Override
-    public void setSpeakerVolume(BlockPos pos, float volume) {
+    public void setSpeakerVolume(Receiver pos, float volume) {
         sendToServer(new SpeakerVolumePacket(pos, volume));
     }
 
     // Client-side audio methods - delegate to AudioPlayer
 
     @Override
-    public void playAudio(BlockPos pos, PlaybackState playback, UUID resourceId, float volume) {
+    public void playAudio(Receiver pos, PlaybackState playback, UUID resourceId, float volume) {
         if (isClient()) {
             AudioPlayer.getInstance().play(pos, playback, resourceId, volume);
         }
     }
 
     @Override
-    public void stopAudio(BlockPos pos) {
+    public void stopAudio(Receiver pos) {
         if (isClient()) {
             AudioPlayer.getInstance().stop(pos);
         }
     }
 
     @Override
-    public void setAudioVolume(BlockPos pos, float volume) {
+    public void setAudioVolume(Receiver pos, float volume) {
         if (isClient()) {
             AudioPlayer.getInstance().setVolume(pos, volume);
         }
@@ -131,7 +166,7 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     }
 
     @Override
-    public void playStreamingAudio(BlockPos pos, StreamingAudioStream stream, float volume) {
+    public void playStreamingAudio(Receiver pos, StreamingAudioStream stream, float volume) {
         if (isClient()) {
             AudioPlayer.getInstance().playStreaming(pos, stream, volume);
         }

@@ -1,12 +1,15 @@
 package com.metrovoc.phonon.platform;
 
 import com.metrovoc.phonon.audio.PlaybackState;
-import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.server.LibraryJob;
 import com.metrovoc.phonon.server.SpeakerAction;
 import com.metrovoc.phonon.station.StationView;
+import com.metrovoc.phonon.audio.Receiver;
+import com.metrovoc.phonon.station.StationListener;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 
@@ -31,10 +34,23 @@ public interface PlatformHelper {
 
     void broadcastAudioResources(MinecraftServer server);
 
-    void broadcastSpeakerState(Level level, BlockPos pos, SpeakerBlockEntity speaker);
+    void broadcastSpeakerState(StationListener listener);
+
+    void sendToPlayer(ServerPlayer player, Object packet);
+
+    /** Where a boombox is, for a player who can hear it. */
+    void sendBoomboxPlace(ServerPlayer player, UUID id, int entityId, Vec3 position);
+
+    /** A player can no longer hear this boombox. */
+    void sendBoomboxGone(ServerPlayer player, UUID id);
+
+    /** What a boombox is doing, for one player who can now hear it. */
+    void sendListenerState(ServerPlayer player, StationListener listener);
+
+    void sendStationView(ServerPlayer player, StationView view);
 
     /** A private station's details, for players near its speaker. */
-    void broadcastStationView(Level level, BlockPos pos, StationView view);
+    void broadcastStationView(StationListener listener, StationView view);
 
     /** Shared stations and playlists, for everyone. */
     void broadcastStations(MinecraftServer server);
@@ -42,25 +58,25 @@ public interface PlatformHelper {
     void broadcastLibraryJobs(MinecraftServer server, List<LibraryJob> jobs);
 
     // Speaker controls (only called on client)
-    void sendSpeakerAction(BlockPos pos, SpeakerAction action, UUID target, UUID second, int number, String text);
+    void sendSpeakerAction(Receiver receiver, SpeakerAction action, UUID target, UUID second, int number, String text);
 
-    void seekSpeaker(BlockPos pos, long positionMs);
+    void seekSpeaker(Receiver receiver, long positionMs);
 
-    void setSpeakerVolume(BlockPos pos, float volume);
+    void setSpeakerVolume(Receiver receiver, float volume);
 
     // Client-side audio (only called on client)
-    void playAudio(BlockPos pos, PlaybackState playback, UUID resourceId, float volume);
+    void playAudio(Receiver receiver, PlaybackState playback, UUID resourceId, float volume);
 
-    void stopAudio(BlockPos pos);
+    void stopAudio(Receiver receiver);
 
-    void setAudioVolume(BlockPos pos, float volume);
+    void setAudioVolume(Receiver receiver, float volume);
 
     /** Fills bars with recent loudness from 0 to 1, newest last, or zeros when nothing is audible. */
-    void readAudioLevels(BlockPos pos, long positionMs, float[] bars, int msPerBar);
+    void readAudioLevels(Receiver receiver, long positionMs, float[] bars, int msPerBar);
 
     void stopAllAudio();
 
-    void playStreamingAudio(BlockPos pos, StreamingAudioStream stream, float volume);
+    void playStreamingAudio(Receiver receiver, StreamingAudioStream stream, float volume);
 
     // Client-side utilities
     void runOnClient(Runnable task);

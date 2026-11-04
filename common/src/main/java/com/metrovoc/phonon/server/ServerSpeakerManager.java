@@ -91,6 +91,12 @@ public class ServerSpeakerManager {
             // 未知 duration 的不自动结束
             if (info.durationMs <= 0) continue;
 
+            ServerLevel level = server.getLevel(key.dimension);
+            if (level != null && level.isLoaded(key.pos)
+                && level.getBlockEntity(key.pos) instanceof SpeakerBlockEntity speaker) {
+                speaker.updateComparators();
+            }
+
             long currentPos = info.state.getCurrentPositionMs(now);
             if (currentPos >= info.durationMs) {
                 // 播放结束

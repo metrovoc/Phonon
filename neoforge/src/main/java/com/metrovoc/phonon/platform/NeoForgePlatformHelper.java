@@ -1,6 +1,8 @@
 package com.metrovoc.phonon.platform;
 
 import com.metrovoc.phonon.audio.PlaybackState;
+import com.metrovoc.phonon.block.SpeakerBlockEntity;
+import com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket;
 import com.metrovoc.phonon.client.audio.AudioPlayer;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.network.packets.RequestAudioPacket;
@@ -45,6 +47,19 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void broadcastAudioResources(MinecraftServer server) {
         PacketDistributor.sendToAllPlayers(new SyncAudioResourcesPacket(AudioManager.getInstance().getAllResources()));
+    }
+
+    @Override
+    public void broadcastSpeakerState(Level level, BlockPos pos, SpeakerBlockEntity speaker) {
+        sendToAllTracking(level, pos,
+            SyncSpeakerStatePacket.snapshot(pos, speaker.getPlayback(), speaker.getVolume(), PlaybackState.nowMs()));
+    }
+
+    @Override
+    public void readAudioLevels(BlockPos pos, long positionMs, float[] bars, int msPerBar) {
+        if (isClient()) {
+            AudioPlayer.getInstance().readLevels(pos, positionMs, bars, msPerBar);
+        }
     }
 
     @Override

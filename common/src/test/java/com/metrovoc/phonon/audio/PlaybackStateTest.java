@@ -29,4 +29,16 @@ class PlaybackStateTest {
         assertEquals(16.0f, excessive.speed());
         assertEquals(Long.MAX_VALUE, excessive.getCurrentPositionMs(1));
     }
+
+    @Test
+    void clockHoldsWhilePaused() throws InterruptedException {
+        PlaybackState.setClockPaused(true);
+        long held = PlaybackState.nowMs();
+        Thread.sleep(30);
+        assertEquals(held, PlaybackState.nowMs());
+        PlaybackState.setClockPaused(false);
+        Thread.sleep(30);
+        long resumed = PlaybackState.nowMs();
+        assertTrue(resumed >= held + 20 && resumed < held + 1000, "resumed at " + (resumed - held));
+    }
 }

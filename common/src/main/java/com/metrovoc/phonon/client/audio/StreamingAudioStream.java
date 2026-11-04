@@ -25,6 +25,7 @@ public final class StreamingAudioStream implements AudioStream {
     private int readCursor;
     private long samplesToSkip;
     private boolean closed;
+    private final StreamTap tap;
 
     public StreamingAudioStream(SharedAudioBuffer buffer, long targetPositionMs) {
         this.buffer = buffer;
@@ -43,6 +44,7 @@ public final class StreamingAudioStream implements AudioStream {
         }
 
         format = new AudioFormat(sampleRate, 16, 1, true, false);
+        tap = new StreamTap(sampleRate, targetPositionMs);
         readCursor = header.length;
 
         long skipMs = Math.max(0, targetPositionMs - buffer.getStreamStartPositionMs());
@@ -70,6 +72,7 @@ public final class StreamingAudioStream implements AudioStream {
         fill(pcm);
 
         int decodedSamples = pcm.position();
+        tap.record(pcm, 0, decodedSamples);
         if (decodedSamples == 0) {
             MemoryUtil.memFree(output);
             return MemoryUtil.memAlloc(0);
@@ -142,6 +145,10 @@ public final class StreamingAudioStream implements AudioStream {
         closed = true;
         decoder.close();
         MemoryUtil.memFree(discardBuffer);
+    }
+
+    public StreamTap tap() {
+        return tap;
     }
 
     public boolean isClosed() {

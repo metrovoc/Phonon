@@ -80,7 +80,8 @@ public final class Driver {
             case "press" -> { var w = mc.screen.children().stream().filter(c -> c instanceof AbstractWidget v && v.getMessage().getString().contains(arg)).map(c -> (AbstractWidget) c).findFirst().orElseThrow();
                 click(mc, w.getX() + w.getWidth() / 2.0, w.getY() + w.getHeight() / 2.0); }
             case "key" -> { int key = GLFW.class.getField("GLFW_KEY_" + arg.toUpperCase(java.util.Locale.ROOT)).getInt(null);
-                if (mc.screen != null) { mc.screen.keyPressed(key, 0, 0); } }
+                if (mc.screen != null) { mc.screen.keyPressed(key, 0, 0); }
+                else { mc.keyboardHandler.keyPress(mc.getWindow().getWindow(), key, 0, GLFW.GLFW_PRESS, 0); mc.keyboardHandler.keyPress(mc.getWindow().getWindow(), key, 0, GLFW.GLFW_RELEASE, 0); } }
             case "hover" -> { double[] at = spot(mc, a[0], a[1]); moveMouse(mc, at[0], at[1]); }
             case "scroll" -> mc.screen.mouseScrolled(mouseX, mouseY, 0, Double.parseDouble(arg));
             case "drag" -> { double[] from = spot(mc, a[0], a[1]), to = spot(mc, a[2], a[3]); moveMouse(mc, from[0], from[1]);

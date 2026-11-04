@@ -31,6 +31,7 @@ public class PhononAudioStream implements AudioStream {
     private final int totalSamples;
     private ShortBuffer pcmScratch;
     private boolean closed = false;
+    private StreamTap tap;
 
     public PhononAudioStream(Path oggFile) throws IOException {
         this.sharedFile = SharedOggFile.acquire(oggFile);
@@ -64,6 +65,7 @@ public class PhononAudioStream implements AudioStream {
             false
         );
         this.pcmScratch = channels > 1 ? MemoryUtil.memAllocShort(8192 * channels) : null;
+        this.tap = new StreamTap(sampleRate, 0);
     }
 
     @Override
@@ -106,6 +108,7 @@ public class PhononAudioStream implements AudioStream {
             }
         }
 
+        tap.record(outputShorts, 0, outputShorts.position());
         outputBuffer.position(0);
         outputBuffer.limit(outputShorts.position() * 2);
         return outputBuffer;
@@ -127,7 +130,12 @@ public class PhononAudioStream implements AudioStream {
         }
     }
 
+    public StreamTap tap() {
+        return tap;
+    }
+
     public void seekMs(long milliseconds) {
+        tap = new StreamTap(sampleRate, Math.max(0, milliseconds));
         if (milliseconds <= 0) {
             seek(0);
             return;

@@ -6,8 +6,10 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.PlayerFaceRenderer;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.resources.DefaultPlayerSkin;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
@@ -15,6 +17,8 @@ import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
+
+import java.util.UUID;
 
 /** The only GUI file that touches APIs which change between Minecraft versions. */
 final class GuiPort {
@@ -61,6 +65,13 @@ final class GuiPort {
 
         void unclip() {
             graphics.disableScissor();
+        }
+
+        /** A player's face, from their skin if they're online and the default for their ID if not. */
+        void head(UUID player, int x, int y, int size) {
+            var connection = Minecraft.getInstance().getConnection();
+            var info = connection == null ? null : connection.getPlayerInfo(player);
+            PlayerFaceRenderer.draw(graphics, info != null ? info.getSkin() : DefaultPlayerSkin.get(player), x, y, size);
         }
 
         void tooltip(Component text, int mouseX, int mouseY) {
@@ -149,6 +160,9 @@ final class GuiPort {
         @Nullable
         abstract EditBox textField();
 
+        /** Enter was pressed in the text field. */
+        abstract void submitField();
+
         @Override
         protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
             drawPanel(new Canvas(graphics));
@@ -169,6 +183,10 @@ final class GuiPort {
         public boolean keyPressed(int key, int scanCode, int modifiers) {
             EditBox field = textField();
             if (field != null && field.isFocused() && key != GLFW.GLFW_KEY_ESCAPE) {
+                if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+                    submitField();
+                    return true;
+                }
                 return field.keyPressed(key, scanCode, modifiers);
             }
             return super.keyPressed(key, scanCode, modifiers);

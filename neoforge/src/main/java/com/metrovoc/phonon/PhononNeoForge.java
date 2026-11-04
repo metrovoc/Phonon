@@ -3,22 +3,22 @@ package com.metrovoc.phonon;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.audio.AudioResource;
-import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
 import com.metrovoc.phonon.client.PhononClient;
-import com.metrovoc.phonon.platform.PlatformHelper;
 import com.metrovoc.phonon.command.PhononCommand;
 import com.metrovoc.phonon.config.ConfigScreenFactory;
 import com.metrovoc.phonon.config.NeoForgeClientConfig;
 import com.metrovoc.phonon.config.NeoForgeServerConfig;
 import com.metrovoc.phonon.network.PhononNetwork;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
+import com.metrovoc.phonon.network.packets.SyncStationsPacket;
+import com.metrovoc.phonon.station.StationManager;
 import com.metrovoc.phonon.registry.PhononRegistry;
+import com.metrovoc.phonon.server.AddFlow;
 import com.metrovoc.phonon.server.AudioLibrary;
 import com.metrovoc.phonon.server.AudioTools;
 import com.metrovoc.phonon.server.AudioTransferManager;
 import com.metrovoc.phonon.server.ServerAudioStorage;
-import com.metrovoc.phonon.server.ServerSpeakerManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
@@ -35,6 +35,7 @@ import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.server.ServerAboutToStartEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -69,6 +70,7 @@ public class PhononNeoForge {
         modBus.addListener(this::onConfigLoad);
 
         NeoForge.EVENT_BUS.addListener(this::onRegisterCommands);
+        NeoForge.EVENT_BUS.addListener(this::onServerAboutToStart);
         NeoForge.EVENT_BUS.addListener(this::onServerStarted);
         NeoForge.EVENT_BUS.addListener(this::onServerStopping);
         NeoForge.EVENT_BUS.addListener(this::onPlayerJoin);
@@ -78,6 +80,11 @@ public class PhononNeoForge {
 
     private void onRegisterCommands(RegisterCommandsEvent event) {
         PhononCommand.register(event.getDispatcher());
+    }
+
+    /** Before any chunk loads, so speakers tuned to a shared station find it. */
+    private void onServerAboutToStart(ServerAboutToStartEvent event) {
+        StationManager.getInstance().load(event.getServer());
     }
 
     private void onServerStarted(ServerStartedEvent event) {
@@ -95,15 +102,6 @@ public class PhononNeoForge {
         repairMissingDurations(manager, storage);
 
         serverTickCount = 0;
-
-        // 设置 speaker 停止回调
-        ServerSpeakerManager.getInstance().setStopCallback((level, pos, speaker) -> {
-            long now = PlaybackState.nowMs();
-            var packet = com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket.snapshot(
-                pos, PlaybackState.STOPPED, speaker.getVolume(), now
-            );
-            PlatformHelper.INSTANCE.sendToAllTracking(level, pos, packet);
-        });
 
         Phonon.LOGGER.info("Loaded {} audio resources", manager.getAllResources().size());
         AudioLibrary.importMusicFolder(event.getServer(), (file, failure) -> {
@@ -143,7 +141,9 @@ public class PhononNeoForge {
 
         ServerAudioStorage.reset();
         AudioTransferManager.reset();
-        ServerSpeakerManager.reset();
+        StationManager.getInstance().save();
+        StationManager.reset();
+        AddFlow.clear();
     }
 
     private void onPlayerJoin(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
@@ -152,6 +152,7 @@ public class PhononNeoForge {
             var resources = AudioManager.getInstance().getAllResources();
             var packet = new SyncAudioResourcesPacket(resources);
             PacketDistributor.sendToPlayer(player, packet);
+            PacketDistributor.sendToPlayer(player, SyncStationsPacket.current());
             Phonon.LOGGER.info("Synced {} audio resources to {}", resources.size(), player.getName().getString());
         }
     }
@@ -165,7 +166,7 @@ public class PhononNeoForge {
     private void onServerTick(ServerTickEvent.Post event) {
         serverTickCount++;
         AudioTransferManager.getInstance().tick(event.getServer());
-        ServerSpeakerManager.getInstance().tick(event.getServer(), serverTickCount);
+        StationManager.getInstance().tick(event.getServer());
     }
 
     private void onConfigLoad(ModConfigEvent event) {

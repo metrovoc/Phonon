@@ -36,6 +36,10 @@ public final class PhononServerConfig {
     // Tool settings
     private static BooleanSupplier allowToolInstall = () -> true;
 
+    // Permission settings
+    private static BooleanSupplier ownerOnlySpeakers = () -> false;
+    private static BooleanSupplier anyoneCanAddTracks = () -> false;
+
     // Getters
     public static int getChunkSize() { return chunkSize.getAsInt(); }
     public static int getMaxBytesPerTick() { return maxBytesPerTick.getAsInt(); }
@@ -45,6 +49,8 @@ public final class PhononServerConfig {
     public static int getMaxAudioSizeMB() { return maxAudioSizeMB.getAsInt(); }
     public static int getAudioQuality() { return audioQuality.getAsInt(); }
     public static boolean getAllowToolInstall() { return allowToolInstall.getAsBoolean(); }
+    public static boolean getOwnerOnlySpeakers() { return ownerOnlySpeakers.getAsBoolean(); }
+    public static boolean getAnyoneCanAddTracks() { return anyoneCanAddTracks.getAsBoolean(); }
 
     // Setters (called by platform-specific config registration)
     public static void setChunkSize(IntSupplier supplier) { chunkSize = supplier; }
@@ -55,4 +61,6 @@ public final class PhononServerConfig {
     public static void setMaxAudioSizeMB(IntSupplier supplier) { maxAudioSizeMB = supplier; }
     public static void setAudioQuality(IntSupplier supplier) { audioQuality = supplier; }
     public static void setAllowToolInstall(BooleanSupplier supplier) { allowToolInstall = supplier; }
+    public static void setOwnerOnlySpeakers(BooleanSupplier supplier) { ownerOnlySpeakers = supplier; }
+    public static void setAnyoneCanAddTracks(BooleanSupplier supplier) { anyoneCanAddTracks = supplier; }
 }

@@ -8,6 +8,7 @@ final class SteelButton extends GuiPort.Control {
 
     private final Runnable action;
     private String[] icon;
+    private boolean lit;
 
     SteelButton(int x, int y, int width, int height, Component label, String[] icon, Runnable action) {
         super(x, y, width, height, label);
@@ -20,6 +21,11 @@ final class SteelButton extends GuiPort.Control {
         this.icon = icon;
     }
 
+    /** Lit buttons show a mode that's on. */
+    void setLit(boolean lit) {
+        this.lit = lit;
+    }
+
     @Override
     void draw(GuiPort.Canvas canvas, int mouseX, int mouseY) {
         boolean hovered = active && isMouseOver(mouseX, mouseY);
@@ -28,7 +34,7 @@ final class SteelButton extends GuiPort.Control {
         SteelStyle.icon(canvas, icon,
             getX() + (getWidth() - ICON_SIZE) / 2,
             getY() + (getHeight() - ICON_SIZE) / 2,
-            active ? SteelStyle.TEXT : SteelStyle.TEXT_OFF);
+            !active ? SteelStyle.TEXT_OFF : lit ? SteelStyle.PLAYING : SteelStyle.TEXT);
     }
 
     @Override

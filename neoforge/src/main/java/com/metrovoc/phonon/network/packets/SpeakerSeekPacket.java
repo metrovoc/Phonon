@@ -42,11 +42,12 @@ public record SpeakerSeekPacket(
         ctx.enqueueWork(() -> {
             if (!(ctx.player() instanceof ServerPlayer player)) return;
 
-            var level = player.serverLevel();
             SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
             if (speaker == null) return;
 
-            SpeakerControl.seek(level, packet.pos, speaker, packet.seekPositionMs);
+            if (SpeakerControl.canControl(player, speaker)) {
+                SpeakerControl.seek(speaker, packet.seekPositionMs);
+            }
         });
     }
 }

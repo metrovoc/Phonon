@@ -14,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.IntConsumer;
 import java.util.stream.Stream;
 
 /**
@@ -22,6 +23,8 @@ import java.util.stream.Stream;
  */
 public class FFmpegHelper {
     private static final String TITLE_FILE = "title.txt";
+    private static final String PROGRESS_MARK = "phonon-progress ";
+    private static final long PROGRESS_POLL_MS = 500;
 
     /**
      * Download any URL using yt-dlp and convert to OGG Vorbis.
@@ -31,7 +34,7 @@ public class FFmpegHelper {
      * @param url        The source URL to download
      * @param targetFile The destination OGG file path
      */
-    public static DownloadResult downloadAndConvert(String url, Path targetFile) {
+    public static DownloadResult downloadAndConvert(String url, Path targetFile, IntConsumer progress) {
         Path tempDir = null;
         Process process = null;
         try {
@@ -51,10 +54,7 @@ public class FFmpegHelper {
                 return DownloadResult.failed(AudioFailure.TOOLS_MISSING);
             }
 
-            boolean finished = process.waitFor(
-                PhononServerConfig.getDownloadReadTimeoutSeconds(),
-                TimeUnit.SECONDS
-            );
+            boolean finished = waitReportingProgress(process, log, progress);
             if (!finished) {
                 process.destroyForcibly();
                 Phonon.LOGGER.error("yt-dlp timed out:\n{}", readLog(log));
@@ -83,6 +83,44 @@ public class FFmpegHelper {
         }
     }
 
+    /** yt-dlp's download percentage, from its log, until it exits or runs out of time. */
+    private static boolean waitReportingProgress(Process process, Path log, IntConsumer progress)
+        throws InterruptedException, IOException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(PhononServerConfig.getDownloadReadTimeoutSeconds());
+        int last = -1;
+        while (System.nanoTime() < deadline) {
+            if (process.waitFor(PROGRESS_POLL_MS, TimeUnit.MILLISECONDS)) {
+                return true;
+            }
+            int percent = lastPercent(readLog(log));
+            if (percent != last) {
+                last = percent;
+                progress.accept(percent);
+            }
+        }
+        return false;
+    }
+
+    static int lastPercent(String log) {
+        int at = log.lastIndexOf(PROGRESS_MARK);
+        if (at < 0) {
+            return -1;
+        }
+        int start = at + PROGRESS_MARK.length();
+        int end = log.indexOf('\n', start);
+        if (end < 0) {
+            return -1;
+        }
+        try {
+            String[] parts = log.substring(start, end).trim().split(" ");
+            long done = Long.parseLong(parts[0]);
+            long total = Long.parseLong(parts[1]);
+            return total > 0 ? (int) Math.min(100, done * 100 / total) : -1;
+        } catch (RuntimeException unknownSize) {
+            return -1;
+        }
+    }
+
     private static List<String> ytDlpArguments(String url, Path tempDir) {
         List<String> arguments = new ArrayList<>(List.of(
             AudioTools.command("yt-dlp"),
@@ -92,7 +130,8 @@ public class FFmpegHelper {
             "-o", "%(id)s.%(ext)s",         // Output filename template
             "--no-playlist",                // Download single video only
             "--max-filesize", PhononServerConfig.getMaxAudioSizeMB() + "M",
-            "--no-progress",
+            "--newline",
+            "--progress-template", "download:" + PROGRESS_MARK + "%(progress.downloaded_bytes)s %(progress.total_bytes,progress.total_bytes_estimate)s",
             "--encoding", "utf-8",
             "--print-to-file", "after_move:title", tempDir.resolve(TITLE_FILE).toString()
         ));

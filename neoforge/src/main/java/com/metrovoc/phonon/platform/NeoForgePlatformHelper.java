@@ -7,7 +7,13 @@ import com.metrovoc.phonon.client.audio.AudioPlayer;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.network.packets.RequestAudioPacket;
 import com.metrovoc.phonon.network.packets.CancelAudioStreamPacket;
-import com.metrovoc.phonon.network.packets.SpeakerControlPacket;
+import com.metrovoc.phonon.network.packets.SpeakerActionPacket;
+import com.metrovoc.phonon.network.packets.SyncLibraryJobsPacket;
+import com.metrovoc.phonon.network.packets.SyncStationPacket;
+import com.metrovoc.phonon.network.packets.SyncStationsPacket;
+import com.metrovoc.phonon.server.LibraryJob;
+import com.metrovoc.phonon.server.SpeakerAction;
+import com.metrovoc.phonon.station.StationView;
 import com.metrovoc.phonon.network.packets.SpeakerSeekPacket;
 import com.metrovoc.phonon.network.packets.SpeakerVolumePacket;
 import net.minecraft.client.Minecraft;
@@ -22,6 +28,7 @@ import net.minecraft.server.MinecraftServer;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.util.List;
 import java.util.UUID;
 
 public class NeoForgePlatformHelper implements PlatformHelper {
@@ -52,7 +59,22 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     @Override
     public void broadcastSpeakerState(Level level, BlockPos pos, SpeakerBlockEntity speaker) {
         sendToAllTracking(level, pos,
-            SyncSpeakerStatePacket.snapshot(pos, speaker.getPlayback(), speaker.getVolume(), PlaybackState.nowMs()));
+            SyncSpeakerStatePacket.snapshot(pos, speaker.getPlayback(), speaker.getVolume(), speaker.station().id(), PlaybackState.nowMs()));
+    }
+
+    @Override
+    public void broadcastStationView(Level level, BlockPos pos, StationView view) {
+        sendToAllTracking(level, pos, new SyncStationPacket(view));
+    }
+
+    @Override
+    public void broadcastStations(MinecraftServer server) {
+        PacketDistributor.sendToAllPlayers(SyncStationsPacket.current());
+    }
+
+    @Override
+    public void broadcastLibraryJobs(MinecraftServer server, List<LibraryJob> jobs) {
+        PacketDistributor.sendToAllPlayers(new SyncLibraryJobsPacket(jobs));
     }
 
     @Override
@@ -63,18 +85,8 @@ public class NeoForgePlatformHelper implements PlatformHelper {
     }
 
     @Override
-    public void playOnSpeaker(BlockPos pos, UUID resourceId) {
-        sendToServer(new SpeakerControlPacket(pos, SpeakerControlPacket.Action.PLAY, resourceId));
-    }
-
-    @Override
-    public void pauseSpeaker(BlockPos pos, UUID resourceId) {
-        sendToServer(new SpeakerControlPacket(pos, SpeakerControlPacket.Action.PAUSE, resourceId));
-    }
-
-    @Override
-    public void stopSpeaker(BlockPos pos) {
-        sendToServer(new SpeakerControlPacket(pos, SpeakerControlPacket.Action.STOP, null));
+    public void sendSpeakerAction(BlockPos pos, SpeakerAction action, UUID target, UUID second, int number, String text) {
+        sendToServer(new SpeakerActionPacket(pos, action, target, second, number, text));
     }
 
     @Override

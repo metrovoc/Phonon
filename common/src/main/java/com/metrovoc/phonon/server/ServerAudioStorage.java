@@ -24,6 +24,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.IntConsumer;
 
 /** Server-owned OGG storage and seek metadata. */
 public final class ServerAudioStorage {
@@ -116,8 +117,8 @@ public final class ServerAudioStorage {
         return Optional.ofNullable(streamInfoCache.get(resourceId));
     }
 
-    public CompletableFuture<DownloadResult> downloadAndStore(UUID resourceId, String url) {
-        return CompletableFuture.supplyAsync(() -> downloadAndStoreBlocking(resourceId, url), downloadExecutor);
+    public CompletableFuture<DownloadResult> downloadAndStore(UUID resourceId, String url, IntConsumer progress) {
+        return CompletableFuture.supplyAsync(() -> downloadAndStoreBlocking(resourceId, url, progress), downloadExecutor);
     }
 
     /** Stores a local audio file, leaving the original where it is. */
@@ -130,10 +131,10 @@ public final class ServerAudioStorage {
         return CompletableFuture.runAsync(task, downloadExecutor);
     }
 
-    private DownloadResult downloadAndStoreBlocking(UUID resourceId, String url) {
+    private DownloadResult downloadAndStoreBlocking(UUID resourceId, String url, IntConsumer progress) {
         Path targetFile = storageDir.resolve(resourceId + ".ogg");
         Phonon.LOGGER.info("Processing audio: {}", url);
-        DownloadResult result = FFmpegHelper.downloadAndConvert(url, targetFile);
+        DownloadResult result = FFmpegHelper.downloadAndConvert(url, targetFile, progress);
 
         if (!result.success() && isDirectOggUrl(url)) {
             Phonon.LOGGER.info("Falling back to direct OGG download");

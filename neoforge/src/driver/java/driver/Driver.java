@@ -77,7 +77,7 @@ public final class Driver {
                 mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(p).relative(Direction.UP, 0.5), Direction.UP, p, false)); }
             case "click" -> { double x = Double.parseDouble(a[0]), y = Double.parseDouble(a[1]);
                 if (mc.screen instanceof AbstractContainerScreen<?> s) { x += s.getGuiLeft(); y += s.getGuiTop(); } click(mc, x, y); }
-            case "press" -> { var w = mc.screen.children().stream().filter(c -> c instanceof AbstractWidget v && v.getMessage().getString().contains(arg)).map(c -> (AbstractWidget) c).findFirst().orElseThrow();
+            case "press" -> { var w = mc.screen.children().stream().filter(c -> c instanceof AbstractWidget v && v.getMessage().getString().equals(arg)).map(c -> (AbstractWidget) c).findFirst().orElseThrow();
                 click(mc, w.getX() + w.getWidth() / 2.0, w.getY() + w.getHeight() / 2.0); }
             case "key" -> { int key = GLFW.class.getField("GLFW_KEY_" + arg.toUpperCase(java.util.Locale.ROOT)).getInt(null);
                 if (mc.screen != null) { mc.screen.keyPressed(key, 0, 0); }

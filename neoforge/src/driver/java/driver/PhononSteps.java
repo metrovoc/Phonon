@@ -91,6 +91,30 @@ public final class PhononSteps {
                 + " sensor=" + level.getBlockState(speakerPos.above().south(2)).getValue(net.minecraft.world.level.block.SculkSensorBlock.PHASE)).join();
             LOG.info("[check] {} {}", a[0], line);
         });
+        Driver.STEPS.put("pqueue", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+");
+            BlockPos pos = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
+            var view = com.metrovoc.phonon.client.ClientStations.getInstance().stationOf(pos);
+            PlaybackState s = ClientSpeakerManager.getInstance().getSpeakerState(pos).orElse(PlaybackState.STOPPED);
+            var names = com.metrovoc.phonon.client.ClientAudioManager.getInstance();
+            String now = s.resourceId() == null ? "-" : names.getResource(s.resourceId()).map(r -> r.name()).orElse("?");
+            LOG.info("[check] {} now={} playing={} posMs={} station={} shared={} queue={} cursor={} repeat={} shuffle={}", a[0], now, s.isPlaying(), s.getCurrentPositionMs(),
+                view == null ? "-" : view.name(), view != null && view.shared(), view == null ? 0 : view.queue().size(), view == null ? -1 : view.cursor(),
+                view == null ? "-" : view.repeat(), view != null && view.shuffle());
+        });
+        Driver.STEPS.put("plists", (mc, arg) -> {
+            var client = com.metrovoc.phonon.client.ClientStations.getInstance();
+            LOG.info("[check] {} stations={} playlists={} jobs={}", arg.trim(),
+                client.shared().stream().map(v -> v.name() + "/" + v.ownerName()).toList(),
+                client.playlists().stream().map(p -> p.name() + "/" + p.ownerName() + "/" + p.tracks().size()).toList(), client.jobs());
+        });
+        Driver.STEPS.put("plegacy", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+");
+            var track = com.metrovoc.phonon.client.ClientAudioManager.getInstance().getAllResources().get(0).id();
+            int[] id = net.minecraft.core.UUIDUtil.uuidToIntArray(track);
+            mc.player.connection.sendCommand("setblock " + a[0] + " " + a[1] + " " + a[2] + " phonon:speaker[facing=west]{resourceId:[I;"
+                + id[0] + "," + id[1] + "," + id[2] + "," + id[3] + "],position:5000L,speed:1.0f,volume:0.5f}");
+        });
         Driver.STEPS.put("reload", (mc, arg) -> mc.reloadResourcePacks());
     }
 

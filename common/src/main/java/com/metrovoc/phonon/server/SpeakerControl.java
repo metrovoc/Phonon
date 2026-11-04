@@ -1,13 +1,18 @@
 package com.metrovoc.phonon.server;
 
+import com.metrovoc.phonon.audio.AudioLimits;
 import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioResource;
-import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
-import com.metrovoc.phonon.platform.PlatformHelper;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.level.Level;
+import com.metrovoc.phonon.config.PhononServerConfig;
+import com.metrovoc.phonon.station.Playlist;
+import com.metrovoc.phonon.station.Station;
+import com.metrovoc.phonon.station.StationManager;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,83 +20,217 @@ import java.util.UUID;
 public final class SpeakerControl {
     private SpeakerControl() {}
 
-    /** Resumes a paused track, or starts a track from the beginning. */
-    public static void play(Level level, BlockPos pos, SpeakerBlockEntity speaker, UUID resourceId) {
-        if (resourceId == null || AudioManager.getInstance().getResource(resourceId).isEmpty()) {
+    private static StationManager stations() {
+        return StationManager.getInstance();
+    }
+
+    private static List<UUID> library() {
+        List<UUID> ids = new ArrayList<>();
+        for (AudioResource resource : AudioManager.getInstance().getAllResources()) {
+            ids.add(resource.id());
+        }
+        return ids;
+    }
+
+    private static boolean known(@Nullable UUID track) {
+        return track != null && AudioManager.getInstance().getResource(track).isPresent();
+    }
+
+    /** Whether this player may change what the speaker does. */
+    public static boolean canControl(ServerPlayer player, SpeakerBlockEntity speaker) {
+        return !PhononServerConfig.getOwnerOnlySpeakers()
+            || PlayerPermissions.isOperator(player)
+            || speaker.getOwnerId() == null
+            || speaker.getOwnerId().equals(player.getUUID());
+    }
+
+    private static boolean ownsOrOperates(ServerPlayer player, @Nullable UUID owner) {
+        return PlayerPermissions.isOperator(player) || player.getUUID().equals(owner);
+    }
+
+    private static boolean canManageLibrary(ServerPlayer player) {
+        return PhononServerConfig.getAnyoneCanAddTracks() || PlayerPermissions.isOperator(player);
+    }
+
+    private static void deny(ServerPlayer player) {
+        player.sendSystemMessage(Component.translatable("phonon.permission.denied"));
+    }
+
+    /** Runs what a player's screen asked for, after checking they may. */
+    public static void handle(
+        ServerPlayer player, SpeakerBlockEntity speaker, SpeakerAction action,
+        @Nullable UUID target, @Nullable UUID second, int number, String text
+    ) {
+        switch (action) {
+            case CREATE_PLAYLIST, ADD_TO_PLAYLIST, REMOVE_FROM_PLAYLIST, DELETE_PLAYLIST -> {
+                handlePlaylist(player, action, target, second, text);
+                return;
+            }
+            case ADD_LINK, DELETE_TRACK -> {
+                if (canManageLibrary(player)) {
+                    handleLibrary(player, action, target, text);
+                } else {
+                    deny(player);
+                }
+                return;
+            }
+            default -> {
+            }
+        }
+
+        if (!canControl(player, speaker)) {
+            deny(player);
             return;
         }
-        PlaybackState current = speaker.getPlayback();
-        long now = PlaybackState.nowMs();
-        long from = current.isPaused() && resourceId.equals(current.resourceId()) ? current.positionAtAnchorMs() : 0;
-        apply(level, pos, speaker, new PlaybackState(resourceId, now, from, 1.0f));
-    }
-
-    public static void pause(Level level, BlockPos pos, SpeakerBlockEntity speaker) {
-        PlaybackState current = speaker.getPlayback();
-        if (current.isPlaying()) {
-            long now = PlaybackState.nowMs();
-            apply(level, pos, speaker, new PlaybackState(current.resourceId(), now, current.getCurrentPositionMs(now), 0f));
+        Station station = speaker.station();
+        switch (action) {
+            case PLAY_TRACK -> {
+                if (known(target)) {
+                    List<UUID> ids = library();
+                    station.playFrom(ids, ids.indexOf(target), stations().random());
+                }
+            }
+            case PLAY_NEXT -> {
+                if (known(target)) {
+                    station.playNext(target);
+                }
+            }
+            case JUMP_TO -> station.jumpTo(number);
+            case REMOVE_FROM_QUEUE -> station.removeAt(number);
+            case PAUSE -> station.pause();
+            case RESUME -> station.resume();
+            case STOP -> station.stop();
+            case NEXT -> step(station, 1);
+            case PREVIOUS -> step(station, -1);
+            case CYCLE_REPEAT -> station.cycleRepeat();
+            case TOGGLE_SHUFFLE -> station.toggleShuffle(stations().random());
+            case PLAY_PLAYLIST -> {
+                Playlist playlist = stations().playlist(target);
+                if (playlist != null && !playlist.tracks().isEmpty()) {
+                    station.playFrom(playlist.tracks(), 0, stations().random());
+                }
+            }
+            case CREATE_STATION -> {
+                String name = cleanName(text);
+                if (!name.isEmpty() && stations().sharedStations().size() < StationManager.MAX_SHARED_STATIONS) {
+                    Station created = stations().createShared(name, player.getUUID(), player.getGameProfile().getName());
+                    speaker.tune(created.id());
+                }
+                return;
+            }
+            case TUNE -> {
+                speaker.tune(target);
+                return;
+            }
+            case DELETE_STATION -> {
+                Station shared = stations().get(target);
+                if (shared != null && shared.shared() && ownsOrOperates(player, shared.ownerId())) {
+                    stations().deleteShared(shared);
+                }
+                return;
+            }
+            default -> {
+                return;
+            }
         }
+        stations().changed(station);
     }
 
-    public static void stop(Level level, BlockPos pos, SpeakerBlockEntity speaker) {
-        apply(level, pos, speaker, PlaybackState.STOPPED);
-    }
-
-    public static void seek(Level level, BlockPos pos, SpeakerBlockEntity speaker, long positionMs) {
-        PlaybackState current = speaker.getPlayback();
-        if (current.isStopped()) {
+    private static void handlePlaylist(
+        ServerPlayer player, SpeakerAction action, @Nullable UUID target, @Nullable UUID second, String text
+    ) {
+        if (action == SpeakerAction.CREATE_PLAYLIST) {
+            String name = cleanName(text);
+            if (!name.isEmpty() && stations().playlists().size() < StationManager.MAX_PLAYLISTS) {
+                stations().putPlaylist(new Playlist(UUID.randomUUID(), name, player.getUUID(), player.getGameProfile().getName(), List.of()));
+            }
             return;
         }
-        long durationMs = ServerSpeakerManager.getDurationMs(current.resourceId());
+        Playlist playlist = stations().playlist(target);
+        if (playlist == null) {
+            return;
+        }
+        if (!ownsOrOperates(player, playlist.ownerId())) {
+            deny(player);
+            return;
+        }
+        switch (action) {
+            case ADD_TO_PLAYLIST -> {
+                if (known(second)) {
+                    stations().putPlaylist(playlist.withTrack(second));
+                }
+            }
+            case REMOVE_FROM_PLAYLIST -> stations().putPlaylist(playlist.withoutTrack(second));
+            case DELETE_PLAYLIST -> stations().deletePlaylist(playlist.id());
+            default -> {
+            }
+        }
+    }
+
+    private static void handleLibrary(ServerPlayer player, SpeakerAction action, @Nullable UUID target, String text) {
+        if (action == SpeakerAction.ADD_LINK) {
+            AddFlow.addFromText(player.createCommandSourceStack(), text);
+        } else {
+            AudioManager.getInstance().getResource(target)
+                .ifPresent(resource -> AudioLibrary.remove(player.getServer(), resource));
+        }
+    }
+
+    private static String cleanName(String text) {
+        String name = text.strip();
+        return name.substring(0, Math.min(name.length(), Station.MAX_NAME_CHARS));
+    }
+
+    private static void step(Station station, int direction) {
+        if (station.queue().isEmpty()) {
+            List<UUID> ids = library();
+            if (!ids.isEmpty()) {
+                station.playFrom(ids, 0, stations().random());
+            }
+        } else if (direction > 0) {
+            station.next(stations().random());
+        } else {
+            station.previous();
+        }
+    }
+
+    // Redstone
+
+    /** Pauses when playing; otherwise resumes, or starts the queue, or starts the library. */
+    public static void toggle(SpeakerBlockEntity speaker) {
+        Station station = speaker.station();
+        if (station.playback().isPlaying()) {
+            station.pause();
+        } else if (station.playback().isPaused()) {
+            station.resume();
+        } else if (station.currentTrack() != null) {
+            station.startCurrent();
+        } else {
+            step(station, 1);
+        }
+        stations().changed(station);
+    }
+
+    public static void step(SpeakerBlockEntity speaker, int direction) {
+        Station station = speaker.station();
+        step(station, direction);
+        stations().changed(station);
+    }
+
+    public static void stop(SpeakerBlockEntity speaker) {
+        Station station = speaker.station();
+        station.stop();
+        stations().changed(station);
+    }
+
+    public static void seek(SpeakerBlockEntity speaker, long positionMs) {
+        Station station = speaker.station();
+        long durationMs = StationManager.durationMs(station.playback().resourceId());
         long position = Math.max(0, positionMs);
         if (durationMs > 0) {
-            position = Math.min(position, Math.max(0, durationMs - 1));
+            position = Math.min(position, durationMs - 1);
         }
-        apply(level, pos, speaker, new PlaybackState(current.resourceId(), PlaybackState.nowMs(), position, current.speed()));
-    }
-
-    /** Pauses when playing; otherwise resumes, or starts the last track, or the first in the library. */
-    public static void toggle(Level level, BlockPos pos, SpeakerBlockEntity speaker) {
-        PlaybackState current = speaker.getPlayback();
-        if (current.isPlaying()) {
-            pause(level, pos, speaker);
-        } else if (current.isPaused()) {
-            play(level, pos, speaker, current.resourceId());
-        } else {
-            UUID last = speaker.getLastTrack();
-            boolean known = last != null && AudioManager.getInstance().getResource(last).isPresent();
-            List<AudioResource> tracks = AudioManager.getInstance().getAllResources();
-            if (known) {
-                play(level, pos, speaker, last);
-            } else if (!tracks.isEmpty()) {
-                play(level, pos, speaker, tracks.get(0).id());
-            }
-        }
-    }
-
-    /** Moves through the library in list order, wrapping at the ends. */
-    public static void step(Level level, BlockPos pos, SpeakerBlockEntity speaker, int direction) {
-        List<AudioResource> tracks = AudioManager.getInstance().getAllResources();
-        if (tracks.isEmpty()) {
-            return;
-        }
-        UUID from = speaker.getPlayback().isStopped() ? speaker.getLastTrack() : speaker.getPlayback().resourceId();
-        int index = -1;
-        for (int i = 0; i < tracks.size(); i++) {
-            if (tracks.get(i).id().equals(from)) {
-                index = i;
-            }
-        }
-        int next = index < 0 ? 0 : Math.floorMod(index + direction, tracks.size());
-        speaker.setPlayback(PlaybackState.STOPPED);
-        play(level, pos, speaker, tracks.get(next).id());
-    }
-
-    private static void apply(Level level, BlockPos pos, SpeakerBlockEntity speaker, PlaybackState state) {
-        speaker.setPlayback(state);
-        ServerSpeakerManager.getInstance().registerSpeaker(
-            level.dimension(), pos, state, state.isStopped() ? -1 : ServerSpeakerManager.getDurationMs(state.resourceId()));
-        PlatformHelper.INSTANCE.broadcastSpeakerState(level, pos, speaker);
+        station.seek(position);
+        stations().changed(station);
     }
 }

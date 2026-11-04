@@ -55,6 +55,19 @@ To add local files, put them in `phonon_music` inside the world folder and run
 `/phonon reload`. MP3, WAV, FLAC, M4A, AAC, Opus, WMA and OGG are accepted. The
 originals stay in the folder.
 
+## Stations and playlists
+
+The Speaker screen has four tabs:
+
+- **Tracks**: the library. Double-click to play, or press **+** on a row to play it
+  next. Operators can also add a link and delete tracks here.
+- **Queue**: what plays next. Double-click to jump, or remove a row.
+- **Playlists**: saved lists anyone can make, credited to their creator.
+- **Stations**: tune speakers to a shared station to play the same thing in step.
+
+The server config's `ownerOnlySpeakers` limits a speaker to whoever placed it and
+operators, and `anyoneCanAddTracks` lets every player manage the library.
+
 ## Redstone
 
 A signal turning on acts by side, as seen facing the speaker:

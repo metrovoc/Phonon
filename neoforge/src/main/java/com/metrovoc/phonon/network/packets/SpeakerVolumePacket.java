@@ -9,6 +9,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
+import com.metrovoc.phonon.server.SpeakerControl;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
@@ -43,7 +44,7 @@ public record SpeakerVolumePacket(
 
             var level = player.serverLevel();
             SpeakerBlockEntity speaker = SpeakerPacketValidator.getAccessibleSpeaker(player, packet.pos);
-            if (speaker == null) return;
+            if (speaker == null || !SpeakerControl.canControl(player, speaker)) return;
 
             speaker.setVolume(packet.volume);
             float volume = speaker.getVolume();

@@ -35,6 +35,15 @@
 - Parrots and allays dance to speakers, and sculk sensors hear them start and stop.
 - Note particles and a new level meter in the screen follow the music's loudness.
 
+### Stations and playlists
+
+- Add a queue with repeat, shuffle, previous and next. Tracks play on by themselves.
+- Add playlists, credited with their creator's name and head.
+- Add named stations: tune several speakers to one and they stay in step. Existing
+  speakers keep playing, on a private station of their own.
+- Operators can add a link and delete tracks from the screen, with live progress.
+- Add the `ownerOnlySpeakers` and `anyoneCanAddTracks` server settings.
+
 ### Also
 
 - Show "Now Playing" when the Speaker screen closes if a track started behind it,

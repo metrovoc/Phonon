@@ -1,8 +1,6 @@
 # Phonon
 
-A custom audio system designed to orchestrate an immersive soundscape in your game.
-
-![Boombox: playing a track from the hand, then dropped on the ground and still playing](https://raw.githubusercontent.com/metrovoc/Phonon/main/docs/images/boombox.webp)
+Give your world a soundtrack. Play your music through placed speakers, tune them to a shared station, or carry it with you in a boombox.
 
 Phonon is currently in beta. The default branch targets Minecraft 26.2, and
 every supported Minecraft release receives its own NeoForge artifact. The
@@ -48,7 +46,7 @@ winget also installs FFmpeg and Deno. Restart the Minecraft Launcher afterwards.
 
 1. Find the Speaker in the creative menu under Functional Blocks or Redstone
    Blocks, or craft it once you have a jukebox
-2. Add a song with `/phonon add <link>`
+2. Add a song with `/phonon add <link or title>`
 3. Right-click the Speaker, select the track and press play
 
 All players near the speaker will hear synchronized playback.
@@ -64,7 +62,8 @@ originals stay in the folder.
 The Speaker screen has four tabs:
 
 - **Tracks**: the library. Double-click to play, or press **+** on a row to play it
-  next. Operators can also add a link and delete tracks here.
+  next. Operators can also delete tracks here, and add new ones with the **+** by the
+  search box: paste a link, or type a title to pick from YouTube results with thumbnails.
 - **Queue**: what plays next. Double-click to jump, or remove a row.
 - **Playlists**: saved lists anyone can make, credited to their creator.
 - **Stations**: tune speakers to a shared station to play the same thing in step.
@@ -103,6 +102,7 @@ All commands need operator permission.
 | Command | Description |
 |---------|-------------|
 | `/phonon add [name] <link>` | Download and register audio. Without a name, it uses the video's title |
+| `/phonon add <title>` | Add the first YouTube result for the title |
 | `/phonon list` | View registered audio |
 | `/phonon remove <name>` | Remove audio |
 | `/phonon reload` | Reload configuration and import new files from the music folder |
@@ -145,5 +145,5 @@ in the real client and on a dedicated server. The other targets remain at
 Release tags use `v<mod-version>+mc<minecraft-version>`, for example
 `v0.3.0-beta.1+mc26.2`. New releases start at beta, and only soaked beta builds
 become stable. See
-[RELEASING.md](RELEASING.md) for the branch model, promotion rules, and test
+[RELEASING.md](https://github.com/metrovoc/Phonon/blob/main/RELEASING.md) for the branch model, promotion rules, and test
 checklist.

@@ -74,9 +74,9 @@ public final class SpeakerControl {
                 handlePlaylist(player, action, target, second, text);
                 return;
             }
-            case ADD_LINK, DELETE_TRACK -> {
+            case ADD_LINK, DELETE_TRACK, SEARCH -> {
                 if (canManageLibrary(player)) {
-                    handleLibrary(player, action, target, text);
+                    handleLibrary(player, action, target, number, text);
                 } else {
                     deny(player);
                 }
@@ -176,8 +176,10 @@ public final class SpeakerControl {
         }
     }
 
-    private static void handleLibrary(ServerPlayer player, SpeakerAction action, @Nullable UUID target, String text) {
-        if (action == SpeakerAction.ADD_LINK) {
+    private static void handleLibrary(ServerPlayer player, SpeakerAction action, @Nullable UUID target, int number, String text) {
+        if (action == SpeakerAction.SEARCH) {
+            TitleSearch.search(player, number, text);
+        } else if (action == SpeakerAction.ADD_LINK) {
             AddFlow.addFromText(player.createCommandSourceStack(), text);
         } else {
             AudioManager.getInstance().getResource(target)

@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** Adding audio from a link, whether it came from the command or the speaker screen. */
+/** Adding audio, whether it came from the command or the speaker screen. */
 public final class AddFlow {
     private static final List<Job> jobs = new ArrayList<>();
     /** An add that failed for lack of tools, retried once they are installed. */
@@ -34,12 +34,12 @@ public final class AddFlow {
 
     private AddFlow() {}
 
-    /** Returns whether the text was a link that started downloading. */
+    /** Adds from a link, or with no link, the first result of searching for the text. Returns whether it started. */
     public static boolean addFromText(CommandSourceStack source, String text) {
         AddRequest request = AddRequest.parse(text);
         if (request == null) {
-            source.sendFailure(Component.translatable("phonon.add.error.bad_link"));
-            return false;
+            TitleSearch.addFirstResult(source, text);
+            return true;
         }
         if (request.hasName() && AudioManager.getInstance().getResourceByName(request.name()).isPresent()) {
             source.sendFailure(Component.translatable("phonon.add.error.name_taken", request.name()));
@@ -49,7 +49,7 @@ public final class AddFlow {
         return true;
     }
 
-    private static void start(CommandSourceStack source, AddRequest request) {
+    static void start(CommandSourceStack source, AddRequest request) {
         String label = request.hasName() ? request.name() : request.url();
         source.sendSystemMessage(Component.translatable("phonon.add.processing", label).withStyle(ChatFormatting.YELLOW));
 

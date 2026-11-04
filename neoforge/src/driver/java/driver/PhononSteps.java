@@ -132,6 +132,17 @@ public final class PhononSteps {
                 throw new IllegalStateException(e);
             }
         });
+        Driver.STEPS.put("psearch", (mc, arg) -> {
+            var search = com.metrovoc.phonon.client.gui.ClientSearch.getInstance();
+            try {
+                var results = (java.util.List<?>) field(search, "results");
+                var pictures = (java.util.Map<?, ?>) field(search, "pictures");
+                LOG.info("[check] {} searching={} failure={} results={} pictures={} query={} first={}", arg.trim(), field(search, "searching"), field(search, "failureKey"),
+                    results.size(), pictures.size(), field(search, "query"), results.isEmpty() ? "-" : results.get(0));
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException(e);
+            }
+        });
         Driver.STEPS.put("pdrop", (mc, arg) -> mc.player.drop(false));
         Driver.STEPS.put("psneak", (mc, arg) -> mc.options.keyShift.setDown(arg.trim().equals("on")));
         Driver.STEPS.put("pclick", (mc, arg) -> mc.gameMode.handleContainerInput(mc.player.containerMenu.containerId, Integer.parseInt(arg.trim()), 0,
@@ -153,5 +164,11 @@ public final class PhononSteps {
     }
 
     public static void init() {
+    }
+
+    private static Object field(Object owner, String name) throws ReflectiveOperationException {
+        var field = owner.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(owner);
     }
 }

@@ -164,6 +164,7 @@ public class PhononNeoForge {
         if (event.getEntity() instanceof ServerPlayer player) {
             AudioTransferManager.getInstance().cancelPlayerTransfers(player.getUUID());
             StationManager.getInstance().boomboxes().playerLeft(player.getUUID());
+            com.metrovoc.phonon.server.TitleSearch.playerLeft(player.getUUID());
         }
     }
 

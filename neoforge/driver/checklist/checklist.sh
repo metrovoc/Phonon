@@ -30,7 +30,7 @@ stopserver() {
   errors "$RD/logs/latest.log" >> "$O"; grep -E 'Loaded [0-9]+ audio' "$RD/logs/latest.log" | cut -c30-110 >> "$O"
 }
 
-printf 'soundCategory_master:0.01\n' | tee "$RD/driver/options.txt" > "$RD/driver2/options.txt"
+printf 'soundCategory_master:0.01\nonboardAccessibility:false\n' | tee "$RD/driver/options.txt" > "$RD/driver2/options.txt"
 echo "=== singleplayer" >> "$O"; client check_sp.txt; filter "$L" >> "$O"; errors "$L" >> "$O"
 echo "=== cache eviction (1 MB)" >> "$O"
 perl -pi -e 's/^(\s*maxSizeMB\s*=).*/$1 1/' "$RD/driver/config/phonon-client.toml"; rm -rf "$RD/driver/phonon_cache"

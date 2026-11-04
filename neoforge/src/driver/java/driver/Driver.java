@@ -1,5 +1,6 @@
 package driver;
 
+import com.mojang.blaze3d.platform.TextInputManager;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.datafixers.util.Pair;
@@ -181,6 +182,7 @@ public final class Driver {
             moveWindow(mc, System.getProperty("driver.monitor", ""));
         }
         yieldFocus(mc);
+        leaveInputMethodAlone(mc);
         if (mc.gui.overlay() != null) {
             return;
         }
@@ -269,6 +271,27 @@ public final class Driver {
         long app = JNI.invokePPP(ObjCRuntime.objc_getClass("NSApplication"), ObjCRuntime.sel_getUid("sharedApplication"), send);
         JNI.invokePPPP(app, ObjCRuntime.sel_getUid("hide:"), 0L, send);
         JNI.invokePPV(app, ObjCRuntime.sel_getUid("unhideWithoutActivation"), send);
+    }
+
+    /**
+     * Keeps the game's hands off the system's input method while someone else is typing. A window that never had focus
+     * still believes it has, since GLFW only reports changes, and a window that believes it has focus switches the
+     * system's input source back to ASCII whenever no text box is open, which undoes every switch to another language
+     * the moment it is made. What it would restore when a scripted text box opens goes too.
+     */
+    private static void leaveInputMethodAlone(Minecraft mc) {
+        try {
+            if (GLFW.glfwGetWindowAttrib(mc.getWindow().handle(), GLFW.GLFW_FOCUSED) == 0) {
+                Field focused = Window.class.getDeclaredField("focused");
+                focused.setAccessible(true);
+                focused.setBoolean(mc.getWindow(), false);
+            }
+            Field requested = TextInputManager.class.getDeclaredField("imeRequested");
+            requested.setAccessible(true);
+            requested.setBoolean(mc.textInputManager(), false);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Puts the window on the named monitor, such as a virtual display, so it stays out of the way. */

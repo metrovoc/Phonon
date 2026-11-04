@@ -133,3 +133,10 @@ Record these fields in every release entry:
 
 Record the tested Minecraft version, NeoForge version, Java runtime, operating
 system, and result in the release notes.
+
+## Store listings
+
+`Sync Modrinth listing` publishes `README.md`, the project summary and
+`docs/gallery.json` on relevant changes to `main`, or by manual dispatch.
+Non-alpha releases use the current listing source from `main`. CurseForge's
+description and gallery are maintained through its author dashboard.

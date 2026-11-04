@@ -1,8 +1,10 @@
 # Phonon
 
-A custom audio system designed to orchestrate an immersive soundscape in your game.
+Give your world a soundtrack. Play your music through placed speakers, tune them to a shared station, or carry it with you in a boombox.
 
-![Boombox: playing a track from the hand, then dropped on the ground and still playing](https://raw.githubusercontent.com/metrovoc/Phonon/main/docs/images/boombox.webp)
+[![Phonon trailer: a speaker and boombox on a warm background](https://github.com/metrovoc/Phonon/releases/download/v0.3.0-beta.3%2Bmc26.2/Phonon-cover.jpg)](https://github.com/metrovoc/Phonon/releases/download/v0.3.0-beta.3%2Bmc26.2/Phonon-trailer.mp4)
+
+**[Watch the trailer](https://github.com/metrovoc/Phonon/releases/download/v0.3.0-beta.3%2Bmc26.2/Phonon-trailer.mp4)** · Real gameplay featuring speakers, stations, playlists and the boombox.
 
 Phonon is currently in beta. The default branch targets Minecraft 26.2, and
 every supported Minecraft release receives its own NeoForge artifact. The
@@ -145,5 +147,5 @@ in the real client and on a dedicated server. The other targets remain at
 Release tags use `v<mod-version>+mc<minecraft-version>`, for example
 `v0.3.0-beta.1+mc26.2`. New releases start at beta, and only soaked beta builds
 become stable. See
-[RELEASING.md](RELEASING.md) for the branch model, promotion rules, and test
+[RELEASING.md](https://github.com/metrovoc/Phonon/blob/main/RELEASING.md) for the branch model, promotion rules, and test
 checklist.

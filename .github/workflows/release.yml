@@ -140,13 +140,19 @@ jobs:
           game-versions: ${{ needs.metadata.outputs.minecraft }}
           changelog-file: CHANGELOG.md
 
-      - name: Sync Modrinth description
+      - name: Read current listing source
         if: needs.metadata.outputs.channel != 'alpha'
-        run: |
-          curl --fail-with-body -X PATCH "https://api.modrinth.com/v2/project/${{ vars.MODRINTH_ID }}" \
-            -H "Authorization: ${{ secrets.MODRINTH_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n --rawfile body README.md '{body: $body}')"
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: listing
+
+      - name: Sync Modrinth listing
+        if: needs.metadata.outputs.channel != 'alpha'
+        run: python3 listing/scripts/sync-modrinth.py
+        env:
+          MODRINTH_ID: ${{ vars.MODRINTH_ID }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2

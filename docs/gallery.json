@@ -1,0 +1,37 @@
+[
+  {
+    "file": "docs/gallery/cover.jpg",
+    "title": "Phonon",
+    "description": "Your music, wherever you build.",
+    "featured": true,
+    "ordering": 0
+  },
+  {
+    "file": "docs/gallery/speakers.jpg",
+    "title": "Shared stations",
+    "description": "Two speakers tuned to Harbor FM.",
+    "featured": false,
+    "ordering": 1
+  },
+  {
+    "file": "docs/gallery/boombox.jpg",
+    "title": "Portable music",
+    "description": "Carry a boombox or drop it on the ground while it keeps playing.",
+    "featured": false,
+    "ordering": 2
+  },
+  {
+    "file": "docs/gallery/library.jpg",
+    "title": "Tracks and queue",
+    "description": "Choose a track and build your queue.",
+    "featured": false,
+    "ordering": 3
+  },
+  {
+    "file": "docs/gallery/metrovoc.jpg",
+    "title": "Take it with you",
+    "description": "The boombox in hand, featuring metrovoc.",
+    "featured": false,
+    "ordering": 4
+  }
+]

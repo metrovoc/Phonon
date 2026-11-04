@@ -1,0 +1,33 @@
+name: Sync Modrinth listing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - README.md
+      - docs/gallery.json
+      - docs/gallery/**
+      - scripts/sync-modrinth.py
+      - .github/workflows/sync-listing.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: modrinth-listing
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: publish-beta
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Sync description, summary and gallery
+        run: python3 scripts/sync-modrinth.py
+        env:
+          MODRINTH_ID: ${{ vars.MODRINTH_ID }}
+          MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}

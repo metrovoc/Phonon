@@ -39,6 +39,37 @@ class StationTest {
     }
 
     @Test
+    void largeLibraryKeepsSelectedTrackAndFollowingTracksInBoundedQueue() {
+        List<UUID> library = tracks(Station.MAX_QUEUE * 3);
+        Station station = playing(library, Station.MAX_QUEUE + 10);
+        assertEquals(Station.MAX_QUEUE, station.queue().size());
+        assertEquals(library.get(Station.MAX_QUEUE + 10), station.playback().resourceId());
+        station.onTrackEnded(RANDOM);
+        assertEquals(library.get(Station.MAX_QUEUE + 11), station.playback().resourceId());
+    }
+
+    @Test
+    void finalLibraryTrackRemainsSelectedWithShuffleEnabled() {
+        List<UUID> library = tracks(Station.MAX_QUEUE + 1);
+        Station station = Station.ownedBySpeaker();
+        station.toggleShuffle(RANDOM);
+        station.playFrom(library, library.size() - 1, RANDOM);
+        assertEquals(Station.MAX_QUEUE, station.queue().size());
+        assertEquals(library.getLast(), station.playback().resourceId());
+        station.onTrackEnded(RANDOM);
+        assertTrue(station.playback().isStopped());
+    }
+
+    @Test
+    void replayingOwnQueueKeepsItsTracks() {
+        Station station = playing(tracks(3), 0);
+        List<UUID> before = List.copyOf(station.queue());
+        station.playFrom(station.queue(), 2, RANDOM);
+        assertEquals(before, station.queue());
+        assertEquals(before.get(2), station.playback().resourceId());
+    }
+
+    @Test
     void repeatAllWrapsAndRepeatOneStays() {
         List<UUID> t = tracks(2);
         Station station = playing(t, 1);

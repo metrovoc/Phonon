@@ -32,6 +32,9 @@ public final class ClientStations {
 
     public void put(StationView view) {
         views.put(view.id(), view);
+        if (view.shared()) {
+            shared = shared.stream().map(existing -> existing.id().equals(view.id()) ? view : existing).toList();
+        }
     }
 
     public void setSpeakerStation(Receiver receiver, UUID stationId) {
@@ -41,7 +44,8 @@ public final class ClientStations {
     public void setShared(List<StationView> shared, List<Playlist> playlists) {
         this.shared = shared;
         this.playlists = playlists;
-        shared.forEach(this::put);
+        views.entrySet().removeIf(entry -> entry.getValue().shared());
+        shared.forEach(view -> views.put(view.id(), view));
     }
 
     public void setPermissions(boolean ownerOnlySpeakers, boolean anyoneCanAddTracks, boolean anyoneCanControlStations) {

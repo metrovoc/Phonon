@@ -184,6 +184,17 @@ public final class ClientSpeakerManager {
         return failed.contains(pos);
     }
 
+    /** Ends every lease of a failed transfer, including speakers still waiting for their first audio. */
+    public void streamFailed(long streamId) {
+        for (Map.Entry<Receiver, Long> entry : Map.copyOf(activeStreams).entrySet()) {
+            if (entry.getValue() == streamId) {
+                Receiver pos = entry.getKey();
+                stopAndRelease(pos);
+                failed.add(pos);
+            }
+        }
+    }
+
     private void stopAndRelease(Receiver pos) {
         buffering.remove(pos);
         failed.remove(pos);

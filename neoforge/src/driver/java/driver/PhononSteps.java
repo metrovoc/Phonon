@@ -10,11 +10,149 @@ import org.slf4j.Logger;
 /** Checklist steps: report speaker state to the log so a run can be judged from text. */
 public final class PhononSteps {
     private static final Logger LOG = LogUtils.getLogger();
+    private static final java.util.List<com.metrovoc.phonon.client.AudioDownloadSession> burst = new java.util.ArrayList<>();
+    private record Bookmark(java.util.UUID track, long positionMs) {}
+    private static final java.util.Map<String, Bookmark> bookmarks = new java.util.HashMap<>();
 
     private PhononSteps() {
     }
 
     static {
+        Driver.STEPS.put("pbookmark", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+");
+            var state = ClientSpeakerManager.getInstance().getSpeakerState(receiver(java.util.Arrays.copyOfRange(a, 1, 4)))
+                .orElseThrow();
+            if (!state.isPlaying()) {
+                throw new IllegalStateException("Bookmark requires active playback");
+            }
+            bookmarks.put(a[0], new Bookmark(state.resourceId(), state.getCurrentPositionMs()));
+            LOG.info("[check] bookmark {} position={}ms", a[0], state.getCurrentPositionMs());
+        });
+        Driver.STEPS.put("passertprogress", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+");
+            var before = java.util.Objects.requireNonNull(bookmarks.remove(a[0]), "Missing playback bookmark");
+            var state = ClientSpeakerManager.getInstance().getSpeakerState(receiver(java.util.Arrays.copyOfRange(a, 1, 4)))
+                .orElseThrow();
+            long after = state.getCurrentPositionMs();
+            if (!before.track().equals(state.resourceId()) || after < before.positionMs()) {
+                throw new IllegalStateException("Playback rewound across unload: before=" + before.positionMs() + "ms after=" + after + "ms");
+            }
+            LOG.info("[check] ASSERT progress {} before={}ms after={}ms passed", a[0], before.positionMs(), after);
+        });
+        Driver.STEPS.put("passertlibrary", (mc, arg) -> {
+            int expected = Integer.parseInt(arg.trim());
+            int count = com.metrovoc.phonon.client.ClientAudioManager.getInstance().getAllResources().size();
+            if (count != expected) {
+                throw new IllegalStateException("Library expected " + expected + " tracks, got " + count);
+            }
+            LOG.info("[check] ASSERT library={} passed", count);
+        });
+        Driver.STEPS.put("passertvolume", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+");
+            float actual = ClientSpeakerManager.getInstance().getSpeakerVolume(receiver(a));
+            if (Math.abs(actual - Float.parseFloat(a[3])) > 0.001f) {
+                throw new IllegalStateException("Volume mismatch: " + arg + "; actual=" + actual);
+            }
+            LOG.info("[check] ASSERT volume {} passed", arg);
+        });
+        Driver.STEPS.put("pburst", (mc, arg) -> {
+            if (!burst.isEmpty()) {
+                throw new IllegalStateException("Previous burst still owns stream leases");
+            }
+            var resource = com.metrovoc.phonon.client.ClientAudioManager.getInstance().getAllResources().stream()
+                .filter(r -> r.name().equals(arg.trim())).findFirst().orElseThrow();
+            var manager = com.metrovoc.phonon.client.StreamingAudioManager.getInstance();
+            for (int i = 0; i < 18; i++) {
+                var acquisition = manager.acquire(resource.id(), i * 3000L);
+                if (!acquisition.requestRequired()) {
+                    throw new IllegalStateException("Burst must start with no reusable sessions");
+                }
+                burst.add(acquisition.session());
+                com.metrovoc.phonon.platform.PlatformHelper.INSTANCE.requestAudioFromServer(
+                    acquisition.session().getStreamId(), resource.id(), i * 3000L);
+            }
+        });
+        Driver.STEPS.put("pburstcheck", (mc, arg) -> {
+            if (burst.size() != 18) {
+                throw new IllegalStateException("Burst setup did not finish");
+            }
+            if (arg.trim().equals("fair")) {
+                if (burst.getFirst().isDownloadComplete() || !burst.get(1).getBuffer().hasEnoughData(32768)) {
+                    throw new IllegalStateException("Second transfer did not start before the first completed");
+                }
+                LOG.info("[check] ASSERT concurrent transfer progress passed");
+            } else {
+                try {
+                    for (int i = 16; i < 18; i++) {
+                        var session = burst.get(i);
+                        if (!session.isClosed() || (int) field(session, "retryAttempts") != 3) {
+                            throw new IllegalStateException("Capacity rejection did not terminate after three retries: " + i);
+                        }
+                    }
+                    LOG.info("[check] ASSERT bounded capacity retries passed");
+                } finally {
+                    var manager = com.metrovoc.phonon.client.StreamingAudioManager.getInstance();
+                    burst.forEach(s -> manager.release(s.getStreamId()));
+                    manager.clear();
+                    burst.clear();
+                }
+            }
+        });
+        // Protocol-driven soak steps exercise the same server handlers as the screen.
+        Driver.STEPS.put("paction", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+", 5);
+            var receiver = receiver(a);
+            var action = com.metrovoc.phonon.server.SpeakerAction.valueOf(a[3]);
+            java.util.UUID track = null;
+            String text = "";
+            if (a.length == 5) {
+                if (action == com.metrovoc.phonon.server.SpeakerAction.CREATE_STATION) {
+                    text = a[4];
+                } else if (action == com.metrovoc.phonon.server.SpeakerAction.TUNE) {
+                    track = com.metrovoc.phonon.client.ClientStations.getInstance().shared().stream()
+                        .filter(s -> s.name().equals(a[4])).findFirst().orElseThrow().id();
+                } else {
+                    track = com.metrovoc.phonon.client.ClientAudioManager.getInstance().getAllResources().stream()
+                        .filter(r -> r.name().equals(a[4])).findFirst().orElseThrow().id();
+                }
+            }
+            com.metrovoc.phonon.platform.PlatformHelper.INSTANCE.sendSpeakerAction(receiver, action, track, null, 0, text);
+        });
+        Driver.STEPS.put("pseek", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+");
+            com.metrovoc.phonon.platform.PlatformHelper.INSTANCE.seekSpeaker(receiver(a), Long.parseLong(a[3]));
+        });
+        Driver.STEPS.put("pvolume", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+");
+            com.metrovoc.phonon.platform.PlatformHelper.INSTANCE.setSpeakerVolume(receiver(a), Float.parseFloat(a[3]));
+        });
+        Driver.STEPS.put("passert", (mc, arg) -> {
+            String[] a = arg.trim().split("\\s+", 5);
+            var receiver = receiver(a);
+            var state = ClientSpeakerManager.getInstance().getSpeakerState(receiver).orElse(PlaybackState.STOPPED);
+            boolean matches = switch (a[3]) {
+                case "playing" -> state.isPlaying();
+                case "paused" -> state.isPaused();
+                case "stopped" -> state.isStopped();
+                default -> throw new IllegalArgumentException("Expected playing, paused or stopped");
+            };
+            var sounds = (java.util.Map<?, ?>) field(com.metrovoc.phonon.client.audio.AudioPlayer.getInstance(), "playingSounds");
+            var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) sounds.get(receiver);
+            if (!matches || state.isPlaying() && (sound == null || !mc.getSoundManager().isActive(sound))) {
+                throw new IllegalStateException("Playback assertion failed: " + arg + "; state=" + state + "; sound=" + sound);
+            }
+            if (a.length == 5 && !com.metrovoc.phonon.client.ClientAudioManager.getInstance().getResource(state.resourceId())
+                .map(r -> r.name().equals(a[4])).orElse(false)) {
+                throw new IllegalStateException("Wrong track: " + arg);
+            }
+            LOG.info("[check] ASSERT {} passed position={}ms", arg, state.getCurrentPositionMs());
+        });
+        Driver.STEPS.put("ptooltip", (mc, arg) -> {
+            var stack = mc.player.getMainHandItem();
+            var lines = stack.getTooltipLines(net.minecraft.world.item.Item.TooltipContext.of(mc.level), mc.player,
+                net.minecraft.world.item.TooltipFlag.NORMAL);
+            LOG.info("[check] tooltip {}", lines.stream().map(net.minecraft.network.chat.Component::getString).toList());
+        });
         Driver.STEPS.put("pstate", (mc, arg) -> {
             String[] a = arg.trim().split("\\s+");
             BlockPos pos = new BlockPos(Integer.parseInt(a[1]), Integer.parseInt(a[2]), Integer.parseInt(a[3]));
@@ -170,5 +308,10 @@ public final class PhononSteps {
         var field = owner.getClass().getDeclaredField(name);
         field.setAccessible(true);
         return field.get(owner);
+    }
+
+    private static com.metrovoc.phonon.audio.Receiver.Block receiver(String[] args) {
+        return new com.metrovoc.phonon.audio.Receiver.Block(new BlockPos(
+            Integer.parseInt(args[0]), Integer.parseInt(args[1]), Integer.parseInt(args[2])));
     }
 }

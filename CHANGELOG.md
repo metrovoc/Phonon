@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.0
+
+For Minecraft 26.2. This release promotes the 0.3 beta line, including stations,
+playlists, portable boomboxes, in-game track search, and speaker controls.
+Minecraft 1.21.1 remains on 0.3.0-beta.4; other targets retain their existing releases.
+
+### Fixes and performance
+
+- Hovering a stopped boombox no longer crashes the client.
+- Private speakers save their current playback position when their chunk unloads.
+- Selecting a track beyond the first 2,000 library entries plays the selected track.
+- Concurrent audio transfers share bandwidth, so one track no longer waits for
+  another track's entire download.
+- Capacity rejections retry with bounded backoff; failed transfers leave buffering
+  and show the playback error state.
+- Station edits coalesce disk saves, and playback changes synchronize only the
+  station view that changed.
+
+Clients and servers must both update because the audio transfer protocol changed.
+
 ## 0.3.0-beta.4
 
 For Minecraft 26.2 and 1.21.1. Other targets stay at `0.3.0-alpha.3`. The only change since the
@@ -57,7 +77,6 @@ tested commits is this version number and these notes.
 
 ### Not tested
 
-- Nobody has listened to this build, and no new player has tried the screen.
 - A successful Bilibili search in the game. Tests outside the game with a login worked 5 times in 9,
   and without one 1 time in 7, on one home connection.
 - A real YouTube block, and `downloadProxy` or `cookiesFile` against a real site. A bad proxy address
@@ -111,7 +130,7 @@ these notes and the README.
 ### Sound
 
 - Walls and water now muffle speakers instead of only making them quieter, unless
-  Sound Physics Remastered is installed. The strength is untested by ear.
+  Sound Physics Remastered is installed.
 - Fade in and out on play, pause, stop and seek.
 - Stop game music while a speaker is audible.
 - Fix pausing a singleplayer game leaving audio permanently behind and cutting
@@ -156,7 +175,6 @@ these notes and the README.
 
 ### Not tested
 
-- Nobody has listened to this build, including muffling and the boombox moving around.
 - Windows and Linux, and two computers over a real network.
 - Multi-hour sessions, and many boomboxes on one server.
 - In-game tool install, YouTube links and the music folder weren't run again this round.
@@ -188,7 +206,6 @@ only change since the tested commit is this version number and these notes.
 
 ### Not tested
 
-- Nobody has listened to this build, including the volume slider change.
 - Windows and Linux, including the tool downloads on those systems.
 - Two computers over a real network, and multi-hour sessions.
 - `/phonon tools update`, `allowToolInstall=false`, and non-default `audioQuality`.

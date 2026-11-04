@@ -64,9 +64,12 @@ public final class Station {
 
     /** Replaces the queue and starts one of its tracks from the beginning. */
     public void playFrom(List<UUID> tracks, int index, Random random) {
+        int selected = Math.max(0, Math.min(index, tracks.size() - 1));
+        int start = Math.min(selected, Math.max(0, tracks.size() - MAX_QUEUE));
+        List<UUID> window = List.copyOf(tracks.subList(start, Math.min(tracks.size(), start + MAX_QUEUE)));
         queue.clear();
-        queue.addAll(tracks.subList(0, Math.min(tracks.size(), MAX_QUEUE)));
-        cursor = Math.max(0, Math.min(index, queue.size() - 1));
+        queue.addAll(window);
+        cursor = selected - start;
         if (shuffle) {
             shuffleUpcoming(random);
         }

@@ -42,6 +42,7 @@ public final class StationManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String FILE = "phonon_stations.json";
     private static final int COMPARATOR_INTERVAL_TICKS = 20;
+    private static final int SAVE_DELAY_TICKS = 20;
     public static final int MAX_SHARED_STATIONS = 256;
     public static final int MAX_PLAYLISTS = 1024;
 
@@ -56,6 +57,8 @@ public final class StationManager {
     private final Random random = new Random();
     @Nullable private MinecraftServer server;
     private long ticks;
+    private long saveAtTick = Long.MAX_VALUE;
+    private final Map<UUID, StationView> sentSharedViews = new HashMap<>();
 
     private StationManager() {}
 
@@ -186,16 +189,31 @@ public final class StationManager {
         }
         boolean heldByBoombox = boomboxes.stationChanged(station);
         if (station.shared()) {
-            sharedChanged();
+            markDirty();
+            StationView view = station.view();
+            if (server != null && !view.equals(sentSharedViews.put(station.id(), view))) {
+                for (var player : server.getPlayerList().getPlayers()) {
+                    PlatformHelper.INSTANCE.sendStationView(player, view);
+                }
+            }
         } else if (heldByBoombox) {
-            save();
+            markDirty();
         }
     }
 
     private void sharedChanged() {
-        save();
+        markDirty();
         if (server != null) {
             PlatformHelper.INSTANCE.broadcastStations(server);
+            sentSharedViews.clear();
+            sharedViews().forEach(view -> sentSharedViews.put(view.id(), view));
+        }
+    }
+
+    /** Coalesces edits within one second without letting continuous edits postpone a save. */
+    public void markDirty() {
+        if (saveAtTick == Long.MAX_VALUE) {
+            saveAtTick = ticks + SAVE_DELAY_TICKS;
         }
     }
 
@@ -211,14 +229,24 @@ public final class StationManager {
             if (duration > 0 && station.playback().getCurrentPositionMs() >= duration) {
                 station.onTrackEnded(random);
                 changed(station);
-            } else if (ticks % COMPARATOR_INTERVAL_TICKS == 0) {
+            } else if (!station.shared() || ticks % COMPARATOR_INTERVAL_TICKS == 0) {
                 for (SpeakerRef ref : listeners.getOrDefault(station.id(), Set.of())) {
                     SpeakerBlockEntity speaker = speakerAt(ref);
                     if (speaker != null) {
-                        speaker.updateComparators();
+                        if (!station.shared()) {
+                            // The clock advances without a control edit. Keep its chunk dirty so an
+                            // unload saves the current position instead of reusing an older snapshot.
+                            speaker.getLevel().blockEntityChanged(ref.pos());
+                        }
+                        if (ticks % COMPARATOR_INTERVAL_TICKS == 0) {
+                            speaker.updateComparators();
+                        }
                     }
                 }
             }
+        }
+        if (ticks >= saveAtTick) {
+            save();
         }
     }
 
@@ -291,7 +319,9 @@ public final class StationManager {
             } catch (AtomicMoveNotSupportedException e) {
                 Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
             }
+            saveAtTick = Long.MAX_VALUE;
         } catch (IOException e) {
+            saveAtTick = ticks + SAVE_DELAY_TICKS;
             Phonon.LOGGER.error("Failed to save stations", e);
         }
     }

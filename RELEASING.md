@@ -29,13 +29,13 @@ New releases start at beta. Every Minecraft target needs its own scripted run:
 evidence from one game version doesn't carry over to another.
 
 The scripted checklist runs with the dev-only driver in `neoforge/driver`. It
-checks playback state and game logs, so nobody hears the result. Release notes
-say what was run, on which operating system, and what wasn't covered, including
-listening by ear. A human tester is optional for beta. Stable requires the same
-functional code as the tested beta, a named human tester who completed the
-checklist by ear, at least one multi-hour real-server session, and an observation
-window stated in the release notes. Any functional change invalidates prior
-evidence and must be tested again.
+checks playback state and game logs. Release notes record the checks performed,
+the operating system, and their results. Include human test results when supplied;
+do not infer whether someone has tested a build from the absence of a report.
+Stable requires the same functional code as the tested candidate, at least one
+multi-hour real-server session, a recorded observation window, and the owner's
+promotion authorization. Any functional change invalidates prior evidence and
+must be tested again.
 
 ## Choosing the next version
 

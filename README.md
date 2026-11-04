@@ -2,7 +2,7 @@
 
 Give your world a soundtrack. Play your music through placed speakers, tune them to a shared station, or carry it with you in a boombox.
 
-Phonon is currently in beta. The default branch targets Minecraft 26.2, and
+Phonon 0.3.0 targets Minecraft 26.2, and
 every supported Minecraft release receives its own NeoForge artifact. The
 Minecraft version in the filename must match the game exactly.
 
@@ -150,11 +150,10 @@ newest target (26.2); older targets live on permanent release branches.
 | 26.1 | 26.1.0.19-beta | 25 | `release/minecraft-26.1` |
 | 26.1.1 | 26.1.1.15-beta | 25 | `release/minecraft-26.1.1` |
 | 26.1.2 | 26.1.2.80 | 25 | `release/minecraft-26.1.2` |
-| 26.2 | 26.2.0.15-beta | 25 | `release/minecraft-26.2` |
+| 26.2 | 26.2.0.93 | 25 | `release/minecraft-26.2` |
 
-The beta line currently covers 26.2 and 1.21.1, which pass a scripted checklist
-in the real client and on a dedicated server. The other targets remain at
-`0.3.0-alpha.3`.
+Minecraft 26.2 is on 0.3.0. Minecraft 1.21.1 remains on 0.3.0-beta.4;
+the other targets remain at 0.3.0-alpha.3.
 
 ## Releases
 

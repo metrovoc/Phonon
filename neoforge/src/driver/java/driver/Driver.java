@@ -632,6 +632,12 @@ public final class Driver {
     }
 
     private static AbstractWidget widget(Minecraft mc, String label) {
+        var exact = mc.gui.screen().children().stream()
+                .filter(c -> c instanceof AbstractWidget w && w.getMessage().getString().equals(label))
+                .map(AbstractWidget.class::cast).findFirst();
+        if (exact.isPresent()) {
+            return exact.get();
+        }
         return mc.gui.screen().children().stream()
                 .filter(c -> c instanceof AbstractWidget w && w.getMessage().getString().startsWith(label))
                 .map(AbstractWidget.class::cast).findFirst()

@@ -40,6 +40,7 @@ public final class PhononClient {
     public static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         com.metrovoc.phonon.audio.PlaybackState.setClockPaused(false);
         com.metrovoc.phonon.client.ClientSpeakerManager.getInstance().clear();
+        com.metrovoc.phonon.client.ClientStations.getInstance().clear();
         com.metrovoc.phonon.client.ClientAudioManager.getInstance().setResources(java.util.List.of());
     }
 }

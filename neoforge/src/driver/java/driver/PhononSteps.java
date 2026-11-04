@@ -18,6 +18,26 @@ public final class PhononSteps {
     }
 
     static {
+        Driver.STEPS.put("pmemory", (mc, arg) -> {
+            var heap = java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+            long directUsed = 0;
+            long directCount = 0;
+            for (var pool : java.lang.management.ManagementFactory.getPlatformMXBeans(java.lang.management.BufferPoolMXBean.class)) {
+                if (pool.getName().equals("direct")) {
+                    directUsed = pool.getMemoryUsed();
+                    directCount = pool.getCount();
+                }
+            }
+            long collections = 0;
+            long gcTime = 0;
+            for (var collector : java.lang.management.ManagementFactory.getGarbageCollectorMXBeans()) {
+                collections += Math.max(0, collector.getCollectionCount());
+                gcTime += Math.max(0, collector.getCollectionTime());
+            }
+            LOG.info("[memory] {} uptimeMs={} heapUsedBytes={} heapCommittedBytes={} directUsedBytes={} directCount={} gcCollections={} gcTimeMs={}",
+                arg.trim(), java.lang.management.ManagementFactory.getRuntimeMXBean().getUptime(), heap.getUsed(), heap.getCommitted(),
+                directUsed, directCount, collections, gcTime);
+        });
         Driver.STEPS.put("pbookmark", (mc, arg) -> {
             String[] a = arg.trim().split("\\s+");
             var state = ClientSpeakerManager.getInstance().getSpeakerState(receiver(java.util.Arrays.copyOfRange(a, 1, 4)))

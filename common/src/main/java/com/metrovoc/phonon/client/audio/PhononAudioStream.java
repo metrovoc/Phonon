@@ -6,11 +6,11 @@ import org.lwjgl.stb.STBVorbis;
 import org.lwjgl.stb.STBVorbisInfo;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.BufferUtils;
 
 import javax.sound.sampled.AudioFormat;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
 import java.nio.file.Path;
@@ -76,12 +76,13 @@ public class PhononAudioStream implements AudioStream {
     @Override
     public ByteBuffer read(int bufferSize) throws IOException {
         if (closed) {
-            return MemoryUtil.memAlloc(0);
+            return BufferUtils.createByteBuffer(0);
         }
 
         int samplesToRead = bufferSize / 2;
 
-        ByteBuffer outputBuffer = MemoryUtil.memAlloc(samplesToRead * 2).order(ByteOrder.nativeOrder());
+        // SoundBuffer drops PCM after upload; returned buffers must own a GC cleaner.
+        ByteBuffer outputBuffer = BufferUtils.createByteBuffer(samplesToRead * 2);
         ShortBuffer outputShorts = outputBuffer.asShortBuffer();
 
         ShortBuffer pcmBuffer = channels == 1 ? outputShorts : ensurePcmScratch(samplesToRead * channels);
@@ -92,8 +93,8 @@ public class PhononAudioStream implements AudioStream {
         );
 
         if (samplesRead == 0) {
-            MemoryUtil.memFree(outputBuffer);
-            return MemoryUtil.memAlloc(0);
+            outputBuffer.limit(0);
+            return outputBuffer;
         }
 
         if (channels == 1) {

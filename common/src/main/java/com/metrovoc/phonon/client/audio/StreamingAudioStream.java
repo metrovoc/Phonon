@@ -2,10 +2,10 @@ package com.metrovoc.phonon.client.audio;
 
 import net.minecraft.client.sounds.AudioStream;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.BufferUtils;
 
 import javax.sound.sampled.AudioFormat;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.ShortBuffer;
 import java.util.concurrent.TimeUnit;
 
@@ -61,12 +61,12 @@ public final class StreamingAudioStream implements AudioStream {
     @Override
     public ByteBuffer read(int bufferSize) {
         if (closed || bufferSize <= 0) {
-            return MemoryUtil.memAlloc(0);
+            return BufferUtils.createByteBuffer(0);
         }
 
         int sampleCapacity = Math.max(1, bufferSize / Short.BYTES);
-        ByteBuffer output = MemoryUtil.memAlloc(sampleCapacity * Short.BYTES)
-            .order(ByteOrder.nativeOrder());
+        // SoundBuffer drops PCM after upload; returned buffers must own a GC cleaner.
+        ByteBuffer output = BufferUtils.createByteBuffer(sampleCapacity * Short.BYTES);
         ShortBuffer pcm = output.asShortBuffer();
 
         fill(pcm);
@@ -74,8 +74,8 @@ public final class StreamingAudioStream implements AudioStream {
         int decodedSamples = pcm.position();
         tap.record(pcm, 0, decodedSamples);
         if (decodedSamples == 0) {
-            MemoryUtil.memFree(output);
-            return MemoryUtil.memAlloc(0);
+            output.limit(0);
+            return output;
         }
 
         output.position(0);

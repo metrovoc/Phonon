@@ -27,7 +27,7 @@ def request(method, suffix="", data=None, content_type="application/json"):
 
 
 body = (ROOT / "README.md").read_text()
-summary = "Play your music through speakers and portable boomboxes. Share synchronized stations, build playlists, and bring your world to life."
+summary = "Listen together in Minecraft. Play your music through speakers and boomboxes, in sync for every player."
 request("PATCH", data=json.dumps({"body": body, "description": summary}).encode())
 project = json.loads(request("GET"))
 existing = {item.get("title") for item in project["gallery"]}

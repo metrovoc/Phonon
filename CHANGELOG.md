@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Phonon's logo shows in the game's mod list.
 - On a station, the speaker screen shows who runs it beside Now Playing, and the audio meter stays clear.
 - Playback buttons say when they act for everyone, such as "Pause · for everyone". Locked ones still say why.
 - Pressing Enter on an existing station's name tunes to that station instead of creating a second one with the same name.

@@ -46,6 +46,12 @@ public final class Station {
         return new Station(UUID.randomUUID(), "", null, "", false);
     }
 
+    /** Names identify stations to players, so a server keeps them unique regardless of case. */
+    @Nullable
+    public static Station named(List<Station> stations, String name) {
+        return stations.stream().filter(each -> each.name().equalsIgnoreCase(name)).findFirst().orElse(null);
+    }
+
     public UUID id() { return id; }
     public String name() { return name; }
     @Nullable public UUID ownerId() { return ownerId; }

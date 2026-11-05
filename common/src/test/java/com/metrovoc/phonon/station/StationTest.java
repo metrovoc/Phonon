@@ -29,6 +29,16 @@ class StationTest {
     }
 
     @Test
+    void namedMatchesWholeNameRegardlessOfCase() {
+        Station radio = new Station(UUID.randomUUID(), "Village Radio", null, "", true);
+        List<Station> stations = List.of(new Station(UUID.randomUUID(), "Other Radio", null, "", true), radio);
+
+        assertSame(radio, Station.named(stations, "Village Radio"));
+        assertSame(radio, Station.named(stations, "village radio"));
+        assertNull(Station.named(stations, "Village"));
+    }
+
+    @Test
     void endOfTrackMovesThroughQueueThenStops() {
         List<UUID> t = tracks(2);
         Station station = playing(t, 0);

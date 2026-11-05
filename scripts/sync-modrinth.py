@@ -27,7 +27,8 @@ def request(method, suffix="", data=None, content_type="application/json"):
 
 
 body = (ROOT / "README.md").read_text()
-summary = "Listen together in Minecraft. Play your music through speakers and boomboxes, in sync for every player."
+summary = next(line.split("=", 1)[1] for line in (ROOT / "gradle.properties").read_text().splitlines()
+               if line.startswith("description="))
 request("PATCH", data=json.dumps({"body": body, "description": summary}).encode())
 project = json.loads(request("GET"))
 existing = {item.get("title") for item in project["gallery"]}

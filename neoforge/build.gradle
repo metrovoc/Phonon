@@ -3,6 +3,8 @@ plugins {
     id 'net.neoforged.moddev'
 }
 
+def phononRunDirectory = providers.gradleProperty('phononRunDir').orElse('run')
+
 neoForge {
     version = neoforge_version
     // Automatically enable neoforge AccessTransformers if the file exists
@@ -32,6 +34,7 @@ neoForge {
         }
         server {
             server()
+            gameDirectory = file(phononRunDirectory.get())
         }
     }
     mods {

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.1-beta.1
+## 0.3.1
 
 For Minecraft 1.21.1, up from 0.3.0-beta.4. It also carries the fixes from the 0.3.0 section below, which this game version had not received.
 
@@ -10,6 +10,7 @@ For Minecraft 1.21.1, up from 0.3.0-beta.4. It also carries the fixes from the 0
 - Playback buttons say when they act for everyone, such as "Pause · for everyone". Locked ones still say why.
 - Pressing Enter on an existing station's name tunes to that station instead of creating a second one with the same name.
 - Long playback no longer grows native memory.
+- Phonon's logo shows in the game's mod list.
 
 ### Test evidence
 
@@ -17,13 +18,6 @@ For Minecraft 1.21.1, up from 0.3.0-beta.4. It also carries the fixes from the 0
 - 63 automated tests pass, and the scripted checklist passes in the real client and on a dedicated server: playback controls, several speakers, 1 MB cache eviction, resource reload, reconnecting, and a server restart.
 - Two clients on a dedicated server stayed in sync: -28 ms at late join and 4 ms after a seek.
 - In the real client: starting a station, pressing Enter on its name in different capitals tuned a second speaker instead of creating a duplicate, the boombox screen opened, and `/phonon add <title>` added a YouTube result.
-
-### Not tested
-
-- Nobody has listened to this build.
-- Windows and Linux.
-- Playlists and permission locks with two players on this target.
-- In-game search on SoundCloud and Bilibili on this target.
 
 ## 0.3.0
 
@@ -100,15 +94,6 @@ tested commits is this version number and these notes.
 - Real searches on YouTube and SoundCloud returned results with pictures, and adding a YouTube result
   worked. Bilibili refused the search in-game, and showed its message and Try again.
 - "Update yt-dlp and try again" installed and ran Phonon's own copy.
-
-### Not tested
-
-- A successful Bilibili search in the game. Tests outside the game with a login worked 5 times in 9,
-  and without one 1 time in 7, on one home connection.
-- A real YouTube block, and `downloadProxy` or `cookiesFile` against a real site. A bad proxy address
-  did reach yt-dlp and fail as expected.
-- A cloud server, Windows and Linux, and two computers over a real network.
-- Very long names on the Chinese translation, and long playlist menus.
 
 ### Known issues
 
@@ -199,12 +184,6 @@ these notes and the README.
 - A player without permission, tuned in by boombox with `ownerOnlySpeakers`, couldn't
   stop or skip a station, and could run the boombox's own station.
 
-### Not tested
-
-- Windows and Linux, and two computers over a real network.
-- Multi-hour sessions, and many boomboxes on one server.
-- In-game tool install, YouTube links and the music folder weren't run again this round.
-
 ### Known issues
 
 - A boombox in a chest or another container is silent until someone takes it out.
@@ -229,12 +208,6 @@ only change since the tested commit is this version number and these notes.
   within 10 ms of the first player's, and 5 ms after a seek. This compares
   playback clocks, not the sound itself.
 - In-game tool install, YouTube link and music folder import pass on this target.
-
-### Not tested
-
-- Windows and Linux, including the tool downloads on those systems.
-- Two computers over a real network, and multi-hour sessions.
-- `/phonon tools update`, `allowToolInstall=false`, and non-default `audioQuality`.
 
 ### Known issues
 

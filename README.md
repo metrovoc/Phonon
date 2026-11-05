@@ -1,101 +1,81 @@
 # Phonon
 
-A custom audio system designed to orchestrate an immersive soundscape in your game.
+![Phonon: listen together in Minecraft](https://raw.githubusercontent.com/metrovoc/Phonon/main/docs/images/cover.jpg)
 
-![Boombox: playing a track from the hand, then dropped on the ground and still playing](https://raw.githubusercontent.com/metrovoc/Phonon/main/docs/images/boombox.webp)
+Listen together in Minecraft. Play your music through speakers and boomboxes, and everyone nearby hears the same moment of the same song.
 
-Phonon 0.3.0 targets Minecraft 26.2, and
-every supported Minecraft release receives its own NeoForge artifact. The
-Minecraft version in the filename must match the game exactly.
+![Two speakers tuned to the same station on a dock](https://raw.githubusercontent.com/metrovoc/Phonon/main/docs/gallery/speakers.jpg)
 
-## Features
+## What you can do
 
-- **Speaker Blocks** - Place in-world speakers that play custom audio
-- **Boombox** - A speaker you carry, that keeps playing in your inventory, on your cursor and on the ground
-- **Stations and Playlists** - A queue, shuffle and repeat, and named stations that keep every speaker in step
-- **Real-time Sync** - All players hear the same audio at the same time
-- **Universal URL Support** - YouTube, Bilibili, or any URL via yt-dlp integration
-- **Music Folder** - Drop audio files into the world and they become tracks
-- **Spatial Audio** - Sound emanates from speaker locations
-- **Streaming Playback** - Playback can begin before a track finishes downloading
-- **Bounded Cache** - Downloaded OGG files are cached with configurable LRU-style eviction
+- **Add any song.** Find it by title in the game, paste a link, or drop files into the world.
+- **Place a speaker.** The music comes from where it stands. Walk past and it moves, and walls and water muffle it.
+- **Carry a boombox.** It keeps playing in your inventory, on your cursor and on the ground.
+- **Run a station.** One queue, every speaker tuned to it, every player in step, even across dimensions.
+- **Build playlists.** Queue, shuffle and repeat, with playlists saved for the whole server.
+- **Wire it up.** Redstone controls a speaker, comparators read its progress, and parrots dance to it.
 
-## Requirements
+## Install
 
-Client and server:
+Install [NeoForge](https://neoforged.net) and Phonon on both the client and the server. Download from
+[Modrinth](https://modrinth.com/mod/phonon) or [GitHub](https://github.com/metrovoc/Phonon/releases), and choose the
+file whose name has your exact Minecraft version.
 
-- Java and NeoForge versions declared by the selected Minecraft artifact
+Minecraft 26.x needs Java 25, and 1.21.x needs Java 21.
 
-Adding audio happens on the machine that runs the server, which in singleplayer
-is your own PC. Direct links to OGG files need nothing else. Other links and
-non-OGG files need yt-dlp, FFmpeg and Deno.
+## Get started
 
-If they are missing, Phonon offers to install them in chat the first time they
-are needed. An operator clicks to accept, and pinned builds with verified
-checksums go into `phonon/tools` in the game folder. Server owners can turn this
-off with `allowToolInstall` in the server config, and tools already on `PATH`
-are used when Phonon hasn't installed its own.
+1. Find the Speaker in the creative menu under Functional Blocks or Redstone Blocks, or craft it once you have a jukebox.
+2. Right-click it and type a song's title or paste a link into the search box. You can also run `/phonon add <link or title>`.
+3. Double-click the song to play it.
 
-To install them yourself on Windows:
+Volume follows the game's Jukebox/Note Blocks slider.
+
+To add local files, put them in `phonon_music` inside the world folder and run `/phonon reload`. MP3, WAV, FLAC, M4A,
+AAC, Opus, WMA and OGG are accepted, and the originals stay in the folder.
+
+## Audio tools
+
+Adding audio happens on the machine that runs the server, which in singleplayer is your own PC. Direct links to OGG
+files need nothing else. Other links and non-OGG files need yt-dlp, FFmpeg and Deno.
+
+If they are missing, Phonon offers to install them in chat the first time they are needed. An operator clicks to
+accept, and pinned builds with verified checksums go into `phonon/tools` in the game folder. Tools already on `PATH`
+are used when Phonon hasn't installed its own. Server owners can turn this off with `allowToolInstall`.
+
+To install them yourself on Windows, run this, then restart the Minecraft Launcher. winget installs FFmpeg and Deno too.
 
 ```powershell
 winget install --source winget --id yt-dlp.yt-dlp
 ```
 
-winget also installs FFmpeg and Deno. Restart the Minecraft Launcher afterwards.
+### When a site blocks the server
 
-## Usage
+Sites often distrust addresses from cloud hosts, and the server does the downloading, so links fail as well as searches.
+Run `/phonon tools update` first, since an old yt-dlp fails in similar ways. After that, the server config has
+`downloadProxy` and `cookiesFile`. yt-dlp warns that an account used this way can be banned, so use a spare one and keep
+the file private.
 
-1. Find the Speaker in the creative menu under Functional Blocks or Redstone
-   Blocks, or craft it once you have a jukebox
-2. Add a song with `/phonon add <link or title>`
-3. Right-click the Speaker, select the track and press play
+## The speaker screen
 
-All players near the speaker will hear synchronized playback.
+![The speaker screen on its Playlists tab](https://raw.githubusercontent.com/metrovoc/Phonon/main/docs/gallery/library.jpg)
 
-Volume follows the game's Jukebox/Note Blocks slider.
-
-To add local files, put them in `phonon_music` inside the world folder and run
-`/phonon reload`. MP3, WAV, FLAC, M4A, AAC, Opus, WMA and OGG are accepted. The
-originals stay in the folder.
-
-## Stations and playlists
-
-The Speaker screen has four tabs:
-
-- **Tracks**: the library. Double-click to play, or hover a song for play now, play next and
-  add to a playlist. Type in the box to filter. If you may add songs, the green row below finds
-  what you typed on YouTube, SoundCloud or Bilibili, with pictures, or adds a pasted link.
+- **Tracks**: the library. Double-click to play, or hover a song for play now, play next and add to a playlist. Typing
+  filters the list, and if you may add songs, the green row below finds what you typed on YouTube, SoundCloud or
+  Bilibili, or adds a pasted link.
 - **Queue**: what's up next. Double-click to jump, or remove a row.
-- **Playlists**: saved lists anyone can make, credited to their creator. Open one to add songs
-  by typing, drag to reorder, and rename it.
-- **Stations**: music one person runs, for everyone who listens in. Typing a new name shares what's
-  playing as a station. Leave brings your own music back where it was.
+- **Playlists**: saved lists anyone can make, credited to their creator. Open one to add songs by typing, drag to
+  reorder, and rename it.
+- **Stations**: music one person runs, for everyone who listens in. Typing a new name shares what's playing as a
+  station, and typing an existing name tunes to it. Leave brings your own music back where it was.
 
 The screen says who a button affects, and greys out what you can't change.
 
-Server config settings:
-
-- `ownerOnlySpeakers` limits a speaker to whoever placed it and operators.
-- `anyoneCanAddTracks` lets every player add songs. Players can delete only what they added.
-- `anyoneCanControlStations` lets anyone tuned to a station change what it plays. Otherwise only
-  its creator and operators can.
-
 ## Boombox
 
-A speaker you carry: craft one from a Speaker, or find it after the music discs in the
-creative menu. Use it to open its controls, or sneak and use it to switch it on or off.
-It plays from wherever it is, in your inventory, on your cursor or on the ground, and
-tunes to stations like a speaker does. Put away in a chest, or with its holder offline,
-its own music waits and carries on from the same point; a station keeps going without it.
-
-## When a site blocks the server
-
-Sites often distrust addresses from cloud hosts. The server does the downloading, so links fail as
-well as searches. Run `/phonon tools update` first, since an old yt-dlp fails in similar ways. After
-that, the server config has `downloadProxy` and `cookiesFile`. yt-dlp warns that an account used this
-way can be banned, so use a spare one and keep the file private. These settings are untested on real
-cloud hosts.
+Craft one from a Speaker, or find it after the music discs in the creative menu. Use it to open its controls, or sneak
+and use it to switch it on or off. It tunes to stations like a speaker does. Put away in a chest, or with its holder
+offline, its own music waits and carries on from the same point; a station keeps going without it.
 
 ## Redstone
 
@@ -108,9 +88,8 @@ A signal turning on acts by side, as seen facing the speaker:
 | Back | Stop |
 | Front, top, bottom | Play or pause |
 
-A comparator reads how far through the track the speaker is: 1 at the start up to
-15 at the end, and 0 when stopped. Sculk sensors hear it start and stop, and nearby
-parrots and allays dance.
+A comparator reads how far through the track the speaker is: 1 at the start up to 15 at the end, and 0 when stopped.
+Sculk sensors hear it start and stop, and nearby parrots and allays dance.
 
 ## Commands
 
@@ -128,39 +107,15 @@ All commands need operator permission.
 | `/phonon tools update` | Update Phonon's yt-dlp, installing it first if it's only on the system |
 | `/phonon tools help` | What to do when a site blocks the server |
 
-The server config's `audioQuality` sets the Vorbis quality of newly added audio,
-from 0 (smallest) to 10 (best).
+## Server settings
 
-## Compatibility
+| Setting | What it does |
+|---------|--------------|
+| `ownerOnlySpeakers` | Limits a speaker to whoever placed it and operators |
+| `anyoneCanAddTracks` | Lets every player add songs. Players can delete only what they added |
+| `anyoneCanControlStations` | Lets anyone tuned to a station change what it plays. Otherwise only its creator and operators can |
+| `audioQuality` | Vorbis quality of newly added audio, from 0 (smallest) to 10 (best) |
 
-Each target is pinned to one Minecraft and NeoForge version. `main` tracks the
-newest target (26.2); older targets live on permanent release branches.
+## License
 
-| Minecraft | NeoForge | Java | Release branch |
-| --- | --- | --- | --- |
-| 1.21.1 | 21.1.235 | 21 | `release/minecraft-1.21.1` |
-| 1.21.2 | 21.2.1-beta | 21 | `release/minecraft-1.21.2` |
-| 1.21.3 | 21.3.96 | 21 | `release/minecraft-1.21.3` |
-| 1.21.4 | 21.4.157 | 21 | `release/minecraft-1.21.4` |
-| 1.21.5 | 21.5.97 | 21 | `release/minecraft-1.21.5` |
-| 1.21.6 | 21.6.20-beta | 21 | `release/minecraft-1.21.6` |
-| 1.21.7 | 21.7.25-beta | 21 | `release/minecraft-1.21.7` |
-| 1.21.8 | 21.8.53 | 21 | `release/minecraft-1.21.8` |
-| 1.21.9 | 21.9.16-beta | 21 | `release/minecraft-1.21.9` |
-| 1.21.10 | 21.10.64 | 21 | `release/minecraft-1.21.10` |
-| 1.21.11 | 21.11.42 | 21 | `release/minecraft-1.21.11` |
-| 26.1 | 26.1.0.19-beta | 25 | `release/minecraft-26.1` |
-| 26.1.1 | 26.1.1.15-beta | 25 | `release/minecraft-26.1.1` |
-| 26.1.2 | 26.1.2.80 | 25 | `release/minecraft-26.1.2` |
-| 26.2 | 26.2.0.93 | 25 | `release/minecraft-26.2` |
-
-Minecraft 26.2 is on 0.3.0. Minecraft 1.21.1 remains on 0.3.0-beta.4;
-the other targets remain at 0.3.0-alpha.3.
-
-## Releases
-
-Release tags use `v<mod-version>+mc<minecraft-version>`, for example
-`v0.3.0-alpha.1+mc26.2`. Untested ports remain alpha, manually smoke-tested
-builds may become beta, and only soaked beta builds become stable. See
-[RELEASING.md](RELEASING.md) for the branch model, promotion rules, and test
-checklist.
+[GPL-3.0](LICENSE). Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.

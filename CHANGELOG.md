@@ -1,11 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
-- Phonon's logo shows in the game's mod list.
+For Minecraft 26.2, up from 0.3.0.
+
+### Changes
+
 - On a station, the speaker screen shows who runs it beside Now Playing, and the audio meter stays clear.
 - Playback buttons say when they act for everyone, such as "Pause · for everyone". Locked ones still say why.
 - Pressing Enter on an existing station's name tunes to that station instead of creating a second one with the same name.
+- Phonon's logo shows in the game's mod list.
+
+### Test evidence
+
+- Target: Minecraft 26.2, NeoForge 26.2.0.93, Java 25, tested on macOS on Apple Silicon.
+- 63 automated tests pass, and the scripted checklist passes in the real client and on a dedicated server: playback controls, several speakers, 1 MB cache eviction, resource reload, reconnecting and a server restart.
+- Two clients on a dedicated server stayed in sync: -33 ms at late join and 2 ms after a seek.
+- In the real client: starting a station, pressing Enter on its name tuned a second speaker instead of creating a duplicate, the boombox screen opened, and `/phonon add <title>` added a YouTube result.
 
 ## 0.3.0
 

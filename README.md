@@ -4,6 +4,8 @@
 
 Listen together in Minecraft. Play your music through speakers and boomboxes, and everyone nearby hears the same moment of the same song.
 
+[Watch the trailer on YouTube](https://youtu.be/mNl7PwrzPYM)
+
 ![Two speakers tuned to the same station on a dock](https://raw.githubusercontent.com/metrovoc/Phonon/main/docs/gallery/speakers.jpg)
 
 ## What you can do

@@ -15,9 +15,12 @@ For Minecraft 1.21.1, up from 0.3.0-beta.4. It also carries the fixes from the 0
 ### Test evidence
 
 - Target: Minecraft 1.21.1, NeoForge 21.1.235, Java 21, tested on macOS on Apple Silicon.
-- 63 automated tests pass, and the scripted checklist passes in the real client and on a dedicated server: playback controls, several speakers, 1 MB cache eviction, resource reload, reconnecting, and a server restart.
+- 63 automated tests pass, and the scripted checklist passes in the real client and on a dedicated server: playback controls, several speakers, 1 MB cache eviction, resource reload, reconnecting and a server restart.
+- Audio captured from the running client matched the source recording at 0.979 correlation. A test tone panned fully left and right, and a stone wall and water cut 3 kHz by 25 dB and 10 dB against 300 Hz.
+- 36 minutes of continuous play on a dedicated server, with three speakers and a station, passed 202 checks with Java and native memory flat. A separate full run passed its chunk unload and server restart checks.
 - Two clients on a dedicated server stayed in sync: -28 ms at late join and 4 ms after a seek.
 - In the real client: starting a station, pressing Enter on its name in different capitals tuned a second speaker instead of creating a duplicate, the boombox screen opened, and `/phonon add <title>` added a YouTube result.
+- The release jar booted into a world in a clean NeoForge install.
 
 ## 0.3.0
 

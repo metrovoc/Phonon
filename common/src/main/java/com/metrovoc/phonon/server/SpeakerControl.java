@@ -160,7 +160,10 @@ public final class SpeakerControl {
             }
             case CREATE_STATION -> {
                 String name = cleanName(text);
-                if (!name.isEmpty() && stations().sharedStations().size() < StationManager.MAX_SHARED_STATIONS) {
+                Station existing = Station.named(stations().sharedStations(), name);
+                if (existing != null) {
+                    speaker.tune(existing.id());
+                } else if (!name.isEmpty() && stations().sharedStations().size() < StationManager.MAX_SHARED_STATIONS) {
                     Station created = stations().shareAsStation(station, name, player.getUUID(), player.getName().getString());
                     if (!station.shared()) {
                         station.stop();

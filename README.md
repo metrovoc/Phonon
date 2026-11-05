@@ -116,6 +116,11 @@ All commands need operator permission.
 | `anyoneCanControlStations` | Lets anyone tuned to a station change what it plays. Otherwise only its creator and operators can |
 | `audioQuality` | Vorbis quality of newly added audio, from 0 (smallest) to 10 (best) |
 
+## Credits
+
+Phonon is greatly inspired by [WebDisplays](https://github.com/CinemaMod/webdisplays) and
+[Sound Physics Remastered](https://github.com/henkelmax/sound-physics-remastered).
+
 ## License
 
 [GPL-3.0](LICENSE). Not an official Minecraft product. Not approved by or associated with Mojang or Microsoft.

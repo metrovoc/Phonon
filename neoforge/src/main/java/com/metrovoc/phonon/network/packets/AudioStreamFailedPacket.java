@@ -6,13 +6,13 @@ import io.netty.buffer.ByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /** A rejected or aborted transfer; only temporary capacity failures should be retried. */
 public record AudioStreamFailedPacket(long streamId, boolean retryable) implements CustomPacketPayload {
     public static final Type<AudioStreamFailedPacket> TYPE =
-        new Type<>(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "audio_stream_failed"));
+        new Type<>(ResourceLocation.fromNamespaceAndPath(Constants.MOD_ID, "audio_stream_failed"));
 
     public static final StreamCodec<ByteBuf, AudioStreamFailedPacket> CODEC = StreamCodec.composite(
         ByteBufCodecs.VAR_LONG, AudioStreamFailedPacket::streamId,

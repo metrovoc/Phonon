@@ -31,7 +31,7 @@ summary = next(line.split("=", 1)[1] for line in (ROOT / "gradle.properties").re
                if line.startswith("description="))
 request("PATCH", data=json.dumps({"body": body, "description": summary}).encode())
 project = json.loads(request("GET"))
-existing = {item.get("title") for item in project["gallery"]}
+existing = {item.get("title"): item for item in project["gallery"]}
 gallery = json.loads((ROOT / "docs/gallery.json").read_text())
 desired_titles = {item["title"] for item in gallery}
 for item in project["gallery"]:
@@ -39,7 +39,14 @@ for item in project["gallery"]:
         request("DELETE", "/gallery?" + urlencode({"url": item["url"]}))
         print(f"Removed gallery image absent from manifest: {item.get('title')}")
 for item in gallery:
-    if item["title"] in existing:
+    current = existing.get(item["title"])
+    if current:
+        if (current.get("description"), current.get("ordering"), current.get("featured")) != \
+                (item["description"], item["ordering"], item["featured"]):
+            query = {"url": current["url"], "description": item["description"], "ordering": item["ordering"],
+                     "featured": str(item["featured"]).lower()}
+            request("PATCH", "/gallery?" + urlencode(query))
+            print(f"Updated gallery image: {item['title']}")
         continue
     path = ROOT / item["file"]
     query = {key: item[key] for key in ("title", "description", "ordering")}
@@ -50,5 +57,6 @@ for item in gallery:
 saved = json.loads(request("GET"))
 assert saved["body"] == body, "Description readback differs"
 assert saved["description"] == summary, "Summary readback differs"
-assert {item["title"] for item in gallery} <= {item.get("title") for item in saved["gallery"]}
+shown = {item.get("title"): (item.get("ordering"), item.get("featured")) for item in saved["gallery"]}
+assert all(shown.get(item["title"]) == (item["ordering"], item["featured"]) for item in gallery), "Gallery readback differs"
 print("Verified Modrinth description, summary and gallery.")

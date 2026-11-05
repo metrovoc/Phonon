@@ -32,6 +32,8 @@ stopserver() {
 
 printf 'soundCategory_master:0.01\nonboardAccessibility:false\n' | tee "$RD/driver/options.txt" > "$RD/driver2/options.txt"
 echo "=== singleplayer" >> "$O"; client check_sp.txt; filter "$L" >> "$O"; errors "$L" >> "$O"
+echo "=== stations and boombox" >> "$O"
+client stations.txt; filter "$L" >> "$O"; errors "$L" >> "$O"
 echo "=== cache eviction (1 MB)" >> "$O"
 perl -pi -e 's/^(\s*maxSizeMB\s*=).*/$1 1/' "$RD/driver/config/phonon-client.toml"; rm -rf "$RD/driver/phonon_cache"
 client evict.txt; filter "$L" >> "$O"; errors "$L" >> "$O"

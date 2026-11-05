@@ -1,0 +1,39 @@
+world 12345
+cmd gamerule send_command_feedback true
+cmd gamerule spawn_mobs false
+cmd gamerule advance_time false
+cmd time set noon
+gui 3
+wait 20
+cmd phonon add long http://127.0.0.1:51990/long.wav
+wait 240
+fly on
+cmd tp @s 0 120 0 0 0
+wait 40
+cmd setblock 1 120 2 phonon:speaker
+cmd setblock -2 120 2 phonon:speaker
+wait 20
+paction 1 120 2 PLAY_TRACK long
+wait 60
+passert 1 120 2 playing long
+paction 1 120 2 CREATE_STATION Village Radio
+wait 30
+plists st_created
+pqueue st_first 1 120 2
+paction -2 120 2 CREATE_STATION village radio
+wait 30
+plists st_same_name
+pqueue st_second -2 120 2
+passert -2 120 2 playing long
+cmd give @s phonon:boombox
+wait 10
+slot phonon:boombox
+wait 10
+useitem
+wait 30
+inspect
+shot st_boombox_screen
+key escape
+wait 10
+pboom st_boombox
+quit

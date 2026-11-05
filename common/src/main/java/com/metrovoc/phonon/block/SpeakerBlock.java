@@ -1,11 +1,12 @@
 package com.metrovoc.phonon.block;
 
+import com.metrovoc.phonon.audio.Receiver;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -17,7 +18,9 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.level.redstone.Orientation;
 import net.minecraft.world.phys.BlockHitResult;
+import org.jetbrains.annotations.Nullable;
 
 public class SpeakerBlock extends Block implements EntityBlock {
 
@@ -53,13 +56,29 @@ public class SpeakerBlock extends Block implements EntityBlock {
     }
 
     @Override
-    public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
-        if (state.getValue(PLAYING)) {
-            double x = pos.getX() + 0.5 + (random.nextDouble() - 0.5) * 0.4;
-            double y = pos.getY() + 1.2;
-            double z = pos.getZ() + 0.5 + (random.nextDouble() - 0.5) * 0.4;
-            level.addParticle(ParticleTypes.NOTE, x, y, z, random.nextInt(25) / 24.0, 0, 0);
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
+        if (!level.isClientSide() && placer != null && level.getBlockEntity(pos) instanceof SpeakerBlockEntity speaker) {
+            speaker.setOwner(placer.getUUID(), placer.getName().getString());
         }
+    }
+
+    @Override
+    protected void neighborChanged(
+        BlockState state, Level level, BlockPos pos, Block block, @Nullable Orientation orientation, boolean movedByPiston
+    ) {
+        if (level.getBlockEntity(pos) instanceof SpeakerBlockEntity speaker) {
+            speaker.onNeighborSignals();
+        }
+    }
+
+    @Override
+    protected boolean hasAnalogOutputSignal(BlockState state) {
+        return true;
+    }
+
+    @Override
+    protected int getAnalogOutputSignal(BlockState state, Level level, BlockPos pos, Direction direction) {
+        return level.getBlockEntity(pos) instanceof SpeakerBlockEntity speaker ? speaker.comparatorSignal() : 0;
     }
 
     @Override
@@ -72,7 +91,7 @@ public class SpeakerBlock extends Block implements EntityBlock {
     ) {
         if (level.isClientSide()) {
             // Open GUI on client
-            openGui(pos);
+            openGui(new Receiver.Block(pos));
         }
         return InteractionResult.SUCCESS;
     }
@@ -81,15 +100,15 @@ public class SpeakerBlock extends Block implements EntityBlock {
      * Open speaker GUI (client-side).
      * Platform-specific implementation via static method.
      */
-    private static java.util.function.Consumer<BlockPos> guiOpener;
+    private static java.util.function.Consumer<Receiver> guiOpener;
 
-    public static void setGuiOpener(java.util.function.Consumer<BlockPos> opener) {
+    public static void setGuiOpener(java.util.function.Consumer<Receiver> opener) {
         guiOpener = opener;
     }
 
-    private void openGui(BlockPos pos) {
+    public static void openGui(Receiver receiver) {
         if (guiOpener != null) {
-            guiOpener.accept(pos);
+            guiOpener.accept(receiver);
         }
     }
 }

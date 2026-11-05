@@ -22,21 +22,31 @@ public record SyncAudioResourcesPacket(List<AudioResource> resources) implements
     public static final Type<SyncAudioResourcesPacket> TYPE =
         new Type<>(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "sync_audio_resources"));
 
+    private static final StreamCodec<ByteBuf, String> NAME = ByteBufCodecs.stringUtf8(AudioLimits.MAX_RESOURCE_NAME_CHARS);
+    private static final StreamCodec<ByteBuf, String> URL = ByteBufCodecs.stringUtf8(AudioLimits.MAX_RESOURCE_URL_CHARS);
+
     public static final StreamCodec<ByteBuf, SyncAudioResourcesPacket> CODEC = StreamCodec.composite(
         ByteBufCodecs.collection(
             ArrayList::new,
-            StreamCodec.composite(
-                UUIDCodec.STREAM_CODEC,
-                AudioResource::id,
-                ByteBufCodecs.stringUtf8(AudioLimits.MAX_RESOURCE_NAME_CHARS),
-                AudioResource::name,
-                ByteBufCodecs.stringUtf8(AudioLimits.MAX_RESOURCE_URL_CHARS),
-                AudioResource::url,
-                ByteBufCodecs.VAR_LONG,
-                AudioResource::durationMs,
-                ByteBufCodecs.VAR_LONG,
-                AudioResource::sizeBytes,
-                AudioResource::new
+            StreamCodec.of(
+                (buf, resource) -> {
+                    UUIDCodec.STREAM_CODEC.encode(buf, resource.id());
+                    NAME.encode(buf, resource.name());
+                    URL.encode(buf, resource.url());
+                    ByteBufCodecs.VAR_LONG.encode(buf, resource.durationMs());
+                    ByteBufCodecs.VAR_LONG.encode(buf, resource.sizeBytes());
+                    UUIDCodec.STREAM_CODEC.encode(buf, resource.addedBy());
+                    NAME.encode(buf, resource.addedByName());
+                },
+                buf -> new AudioResource(
+                    UUIDCodec.STREAM_CODEC.decode(buf),
+                    NAME.decode(buf),
+                    URL.decode(buf),
+                    ByteBufCodecs.VAR_LONG.decode(buf),
+                    ByteBufCodecs.VAR_LONG.decode(buf),
+                    UUIDCodec.STREAM_CODEC.decode(buf),
+                    NAME.decode(buf)
+                )
             ),
             AudioLimits.MAX_RESOURCE_COUNT
         ),

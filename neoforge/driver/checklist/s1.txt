@@ -1,0 +1,238 @@
+join 127.0.0.1:PORT
+wait 80
+fly on
+cmd tp @s 0 120 0 0 0
+wait 40
+gui 3
+cmd setblock -2 120 2 phonon:speaker
+cmd phonon add long http://127.0.0.1:51990/long.wav
+wait 240
+use -2 120 2
+wait 30
+dclick 100 54
+wait 6
+wait 60
+pstate s1_playing -2 120 2
+wait 20
+pstate s1_a0 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a1 -2 120 2
+wait 20
+pstate s1_a2 -2 120 2
+wait 20
+pstate s1_a3 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a4 -2 120 2
+wait 20
+pstate s1_a5 -2 120 2
+wait 20
+pstate s1_a6 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a7 -2 120 2
+wait 20
+pstate s1_a8 -2 120 2
+wait 20
+pstate s1_a9 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a10 -2 120 2
+wait 20
+pstate s1_a11 -2 120 2
+wait 20
+pstate s1_a12 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a13 -2 120 2
+wait 20
+pstate s1_a14 -2 120 2
+wait 20
+pstate s1_a15 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a16 -2 120 2
+wait 20
+pstate s1_a17 -2 120 2
+wait 20
+pstate s1_a18 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a19 -2 120 2
+wait 20
+pstate s1_a20 -2 120 2
+wait 20
+pstate s1_a21 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a22 -2 120 2
+wait 20
+pstate s1_a23 -2 120 2
+wait 20
+pstate s1_a24 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a25 -2 120 2
+wait 20
+pstate s1_a26 -2 120 2
+wait 20
+pstate s1_a27 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a28 -2 120 2
+wait 20
+pstate s1_a29 -2 120 2
+wait 20
+pstate s1_a30 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a31 -2 120 2
+wait 20
+pstate s1_a32 -2 120 2
+wait 20
+pstate s1_a33 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a34 -2 120 2
+wait 20
+pstate s1_a35 -2 120 2
+wait 20
+pstate s1_a36 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a37 -2 120 2
+wait 20
+pstate s1_a38 -2 120 2
+wait 20
+pstate s1_a39 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a40 -2 120 2
+wait 20
+pstate s1_a41 -2 120 2
+wait 20
+pstate s1_a42 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a43 -2 120 2
+wait 20
+pstate s1_a44 -2 120 2
+wait 20
+pstate s1_a45 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a46 -2 120 2
+wait 20
+pstate s1_a47 -2 120 2
+wait 20
+pstate s1_a48 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a49 -2 120 2
+wait 20
+pstate s1_a50 -2 120 2
+wait 20
+pstate s1_a51 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a52 -2 120 2
+wait 20
+pstate s1_a53 -2 120 2
+wait 20
+pstate s1_a54 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a55 -2 120 2
+wait 20
+pstate s1_a56 -2 120 2
+wait 20
+pstate s1_a57 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a58 -2 120 2
+wait 20
+pstate s1_a59 -2 120 2
+wait 20
+pstate s1_a60 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a61 -2 120 2
+wait 20
+pstate s1_a62 -2 120 2
+wait 20
+pstate s1_a63 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a64 -2 120 2
+wait 20
+pstate s1_a65 -2 120 2
+wait 20
+pstate s1_a66 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a67 -2 120 2
+wait 20
+pstate s1_a68 -2 120 2
+wait 20
+pstate s1_a69 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a70 -2 120 2
+wait 20
+pstate s1_a71 -2 120 2
+wait 20
+pstate s1_a72 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_a73 -2 120 2
+wait 20
+pstate s1_a74 -2 120 2
+click 215 52
+wait 40
+wait 20
+pstate s1_seek0 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek1 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek2 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek3 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek4 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek5 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek6 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek7 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek8 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+wait 20
+pstate s1_seek9 -2 120 2
+cmd tp Dev2 0 120 1 0 0
+press Pause
+wait 100
+pstate s1_pause -2 120 2
+press Resume
+wait 40
+pstate s1_after -2 120 2
+press Stop
+wait 40
+pstate s1_stopped -2 120 2
+key escape
+wait 10
+cmd phonon remove nosuch
+wait 40
+cmd stop
+wait 40
+quit

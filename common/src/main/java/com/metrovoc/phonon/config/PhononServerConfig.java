@@ -2,7 +2,9 @@ package com.metrovoc.phonon.config;
 
 import com.metrovoc.phonon.audio.AudioLimits;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 
 /**
  * Server-side configuration values.
@@ -19,6 +21,7 @@ public final class PhononServerConfig {
     public static final int DEFAULT_DOWNLOAD_READ_TIMEOUT = 300;
     public static final int DEFAULT_MAX_AUDIO_SIZE_MB = 512;
     public static final int MAX_AUDIO_SIZE_MB = AudioLimits.MAX_AUDIO_SIZE_MB;
+    public static final int DEFAULT_AUDIO_QUALITY = 5;
 
     // Transfer settings
     private static IntSupplier chunkSize = () -> DEFAULT_CHUNK_SIZE;
@@ -29,6 +32,18 @@ public final class PhononServerConfig {
     private static IntSupplier downloadConnectTimeoutSeconds = () -> DEFAULT_DOWNLOAD_CONNECT_TIMEOUT;
     private static IntSupplier downloadReadTimeoutSeconds = () -> DEFAULT_DOWNLOAD_READ_TIMEOUT;
     private static IntSupplier maxAudioSizeMB = () -> DEFAULT_MAX_AUDIO_SIZE_MB;
+    private static IntSupplier audioQuality = () -> DEFAULT_AUDIO_QUALITY;
+
+    // Tool settings
+    private static BooleanSupplier allowToolInstall = () -> true;
+
+    // Permission settings
+    private static BooleanSupplier ownerOnlySpeakers = () -> false;
+    private static BooleanSupplier anyoneCanAddTracks = () -> false;
+    private static BooleanSupplier anyoneCanControlStations = () -> false;
+    private static BooleanSupplier autoUpdateYtDlp = () -> false;
+    private static Supplier<String> downloadProxy = () -> "";
+    private static Supplier<String> cookiesFile = () -> "";
 
     // Getters
     public static int getChunkSize() { return chunkSize.getAsInt(); }
@@ -37,6 +52,14 @@ public final class PhononServerConfig {
     public static int getDownloadConnectTimeoutSeconds() { return downloadConnectTimeoutSeconds.getAsInt(); }
     public static int getDownloadReadTimeoutSeconds() { return downloadReadTimeoutSeconds.getAsInt(); }
     public static int getMaxAudioSizeMB() { return maxAudioSizeMB.getAsInt(); }
+    public static int getAudioQuality() { return audioQuality.getAsInt(); }
+    public static boolean getAllowToolInstall() { return allowToolInstall.getAsBoolean(); }
+    public static boolean getOwnerOnlySpeakers() { return ownerOnlySpeakers.getAsBoolean(); }
+    public static boolean getAnyoneCanAddTracks() { return anyoneCanAddTracks.getAsBoolean(); }
+    public static boolean getAnyoneCanControlStations() { return anyoneCanControlStations.getAsBoolean(); }
+    public static boolean getAutoUpdateYtDlp() { return autoUpdateYtDlp.getAsBoolean(); }
+    public static String getDownloadProxy() { return downloadProxy.get(); }
+    public static String getCookiesFile() { return cookiesFile.get(); }
 
     // Setters (called by platform-specific config registration)
     public static void setChunkSize(IntSupplier supplier) { chunkSize = supplier; }
@@ -45,4 +68,12 @@ public final class PhononServerConfig {
     public static void setDownloadConnectTimeoutSeconds(IntSupplier supplier) { downloadConnectTimeoutSeconds = supplier; }
     public static void setDownloadReadTimeoutSeconds(IntSupplier supplier) { downloadReadTimeoutSeconds = supplier; }
     public static void setMaxAudioSizeMB(IntSupplier supplier) { maxAudioSizeMB = supplier; }
+    public static void setAudioQuality(IntSupplier supplier) { audioQuality = supplier; }
+    public static void setAllowToolInstall(BooleanSupplier supplier) { allowToolInstall = supplier; }
+    public static void setOwnerOnlySpeakers(BooleanSupplier supplier) { ownerOnlySpeakers = supplier; }
+    public static void setAnyoneCanAddTracks(BooleanSupplier supplier) { anyoneCanAddTracks = supplier; }
+    public static void setAnyoneCanControlStations(BooleanSupplier supplier) { anyoneCanControlStations = supplier; }
+    public static void setAutoUpdateYtDlp(BooleanSupplier supplier) { autoUpdateYtDlp = supplier; }
+    public static void setDownloadProxy(Supplier<String> supplier) { downloadProxy = supplier; }
+    public static void setCookiesFile(Supplier<String> supplier) { cookiesFile = supplier; }
 }

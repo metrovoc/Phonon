@@ -6,6 +6,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 
 /** Dependency-free client configuration screen. */
@@ -56,10 +57,10 @@ public final class PhononConfigScreen extends Screen {
         );
 
         int buttonY = top + ROW_HEIGHT * 3 + 18;
-        addRenderableWidget(Button.builder(Component.literal("Done"), button -> saveAndClose())
+        addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> saveAndClose())
             .bounds(left, buttonY, 106, FIELD_HEIGHT)
             .build());
-        addRenderableWidget(Button.builder(Component.literal("Cancel"), button -> onClose())
+        addRenderableWidget(Button.builder(CommonComponents.GUI_CANCEL, button -> onClose())
             .bounds(left + 114, buttonY, 106, FIELD_HEIGHT)
             .build());
     }
@@ -71,8 +72,15 @@ public final class PhononConfigScreen extends Screen {
         java.util.function.Predicate<String> filter
     ) {
         EditBox field = new EditBox(font, x, y, FIELD_WIDTH, FIELD_HEIGHT, Component.empty());
-        field.setFilter(filter);
+        String[] lastValid = {value};
         field.setValue(value);
+        field.setResponder(text -> {
+            if (filter.test(text)) {
+                lastValid[0] = text;
+            } else {
+                field.setValue(lastValid[0]);
+            }
+        });
         addRenderableWidget(field);
         return field;
     }

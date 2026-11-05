@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    " I ",
+    "ISI",
+    "CRC"
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "S": "phonon:speaker",
+    "C": "minecraft:copper_ingot",
+    "R": "minecraft:redstone"
+  },
+  "result": {
+    "id": "phonon:boombox",
+    "count": 1
+  }
+}

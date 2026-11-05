@@ -16,6 +16,10 @@ public record PlaybackState(
     long positionAtAnchorMs,
     float speed
 ) {
+    private static final long CLOCK_RUNNING = Long.MIN_VALUE;
+    private static volatile long clockPausedSinceNanos = CLOCK_RUNNING;
+    private static volatile long clockPausedTotalNanos;
+
     private static final float MAX_SPEED = 16.0f;
     public static final PlaybackState STOPPED = new PlaybackState(null, 0, 0, 0f);
 
@@ -30,7 +34,23 @@ public record PlaybackState(
 
     /** Monotonic playback clock, unaffected by wall-clock corrections. */
     public static long nowMs() {
-        return System.nanoTime() / 1_000_000L;
+        long since = clockPausedSinceNanos;
+        long reading = since != CLOCK_RUNNING ? since : System.nanoTime();
+        return (reading - clockPausedTotalNanos) / 1_000_000L;
+    }
+
+    /**
+     * Holds the clock while a singleplayer game is paused. The sound engine and the integrated server stop too,
+     * so playback resumes where it left off. Multiplayer games never pause.
+     */
+    public static void setClockPaused(boolean paused) {
+        long since = clockPausedSinceNanos;
+        if (paused && since == CLOCK_RUNNING) {
+            clockPausedSinceNanos = System.nanoTime();
+        } else if (!paused && since != CLOCK_RUNNING) {
+            clockPausedTotalNanos += System.nanoTime() - since;
+            clockPausedSinceNanos = CLOCK_RUNNING;
+        }
     }
 
     public long getCurrentPositionMs() {

@@ -1,10 +1,29 @@
 # Changelog
 
-## Unreleased
+## 0.3.1-beta.1
+
+For Minecraft 1.21.1, up from 0.3.0-beta.4. It also carries the fixes from the 0.3.0 section below, which this game version had not received.
+
+### Changes
 
 - On a station, the speaker screen shows who runs it beside Now Playing, and the audio meter stays clear.
 - Playback buttons say when they act for everyone, such as "Pause · for everyone". Locked ones still say why.
 - Pressing Enter on an existing station's name tunes to that station instead of creating a second one with the same name.
+- Long playback no longer grows native memory.
+
+### Test evidence
+
+- Target: Minecraft 1.21.1, NeoForge 21.1.235, Java 21, tested on macOS on Apple Silicon.
+- 63 automated tests pass, and the scripted checklist passes in the real client and on a dedicated server: playback controls, several speakers, 1 MB cache eviction, resource reload, reconnecting, and a server restart.
+- Two clients on a dedicated server stayed in sync: -28 ms at late join and 4 ms after a seek.
+- In the real client: starting a station, pressing Enter on its name in different capitals tuned a second speaker instead of creating a duplicate, the boombox screen opened, and `/phonon add <title>` added a YouTube result.
+
+### Not tested
+
+- Nobody has listened to this build.
+- Windows and Linux.
+- Playlists and permission locks with two players on this target.
+- In-game search on SoundCloud and Bilibili on this target.
 
 ## 0.3.0
 

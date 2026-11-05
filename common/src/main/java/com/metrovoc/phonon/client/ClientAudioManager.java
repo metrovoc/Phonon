@@ -43,7 +43,7 @@ public final class ClientAudioManager {
     }
 
     public Optional<AudioResource> getResource(UUID id) {
-        return Optional.ofNullable(resourcesById.get(id));
+        return id == null ? Optional.empty() : Optional.ofNullable(resourcesById.get(id));
     }
 
     public List<AudioResource> getAllResources() {

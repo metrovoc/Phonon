@@ -2,10 +2,10 @@ package com.metrovoc.phonon.client.audio;
 
 import net.minecraft.client.sounds.AudioStream;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.BufferUtils;
 
 import javax.sound.sampled.AudioFormat;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.ShortBuffer;
 import java.util.concurrent.TimeUnit;
 
@@ -25,6 +25,7 @@ public final class StreamingAudioStream implements AudioStream {
     private int readCursor;
     private long samplesToSkip;
     private boolean closed;
+    private final StreamTap tap;
 
     public StreamingAudioStream(SharedAudioBuffer buffer, long targetPositionMs) {
         this.buffer = buffer;
@@ -43,6 +44,7 @@ public final class StreamingAudioStream implements AudioStream {
         }
 
         format = new AudioFormat(sampleRate, 16, 1, true, false);
+        tap = new StreamTap(sampleRate, targetPositionMs);
         readCursor = header.length;
 
         long skipMs = Math.max(0, targetPositionMs - buffer.getStreamStartPositionMs());
@@ -59,20 +61,21 @@ public final class StreamingAudioStream implements AudioStream {
     @Override
     public ByteBuffer read(int bufferSize) {
         if (closed || bufferSize <= 0) {
-            return MemoryUtil.memAlloc(0);
+            return BufferUtils.createByteBuffer(0);
         }
 
         int sampleCapacity = Math.max(1, bufferSize / Short.BYTES);
-        ByteBuffer output = MemoryUtil.memAlloc(sampleCapacity * Short.BYTES)
-            .order(ByteOrder.nativeOrder());
+        // SoundBuffer drops PCM after upload; returned buffers must own a GC cleaner.
+        ByteBuffer output = BufferUtils.createByteBuffer(sampleCapacity * Short.BYTES);
         ShortBuffer pcm = output.asShortBuffer();
 
         fill(pcm);
 
         int decodedSamples = pcm.position();
+        tap.record(pcm, 0, decodedSamples);
         if (decodedSamples == 0) {
-            MemoryUtil.memFree(output);
-            return MemoryUtil.memAlloc(0);
+            output.limit(0);
+            return output;
         }
 
         output.position(0);
@@ -142,6 +145,10 @@ public final class StreamingAudioStream implements AudioStream {
         closed = true;
         decoder.close();
         MemoryUtil.memFree(discardBuffer);
+    }
+
+    public StreamTap tap() {
+        return tap;
     }
 
     public boolean isClosed() {

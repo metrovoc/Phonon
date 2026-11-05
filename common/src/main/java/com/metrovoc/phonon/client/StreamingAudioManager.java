@@ -7,8 +7,10 @@ import com.metrovoc.phonon.platform.PlatformHelper;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -28,6 +30,7 @@ public final class StreamingAudioManager {
     private final Map<Long, AudioDownloadSession> sessions = new HashMap<>();
     private final Map<UUID, List<AudioDownloadSession>> sessionsByResource = new HashMap<>();
     private final Map<Long, List<Consumer<AudioDownloadSession>>> readyCallbacks = new HashMap<>();
+    private final Set<Long> pendingRetries = new HashSet<>();
     private final ScheduledExecutorService maintenanceExecutor = Executors.newScheduledThreadPool(2, runnable -> {
         Thread thread = new Thread(runnable, "Phonon-StreamingMaintenance");
         thread.setDaemon(true);
@@ -81,7 +84,8 @@ public final class StreamingAudioManager {
         }
 
         if (!session.receiveHeader(headerBytes, sampleRate, streamStartPositionMs, cacheable)) {
-            Phonon.LOGGER.warn("Ignoring duplicate or invalid start for audio stream {}", streamId);
+            Phonon.LOGGER.warn("Rejected duplicate or invalid start for audio stream {}", streamId);
+            failSession(session);
         }
     }
 
@@ -93,7 +97,7 @@ public final class StreamingAudioManager {
 
         if (!session.receiveChunk(chunkIndex, data)) {
             Phonon.LOGGER.warn("Rejected out-of-order chunk {} for audio stream {}", chunkIndex, streamId);
-            removeSession(session, true);
+            failSession(session);
             return;
         }
 
@@ -102,6 +106,35 @@ public final class StreamingAudioManager {
             notifyReady(streamId, session);
             persistCache(session);
         }
+    }
+
+    public void receiveFailure(long streamId, boolean retryable) {
+        AudioDownloadSession session = sessions.get(streamId);
+        if (session == null || pendingRetries.contains(streamId)) {
+            return;
+        }
+        long delay = retryable ? session.nextRetryDelayMs() : -1;
+        if (delay < 0 || session.getRefCount() == 0) {
+            failSession(session);
+            return;
+        }
+        pendingRetries.add(streamId);
+        maintenanceExecutor.schedule(() -> PlatformHelper.INSTANCE.runOnClient(() -> {
+            if (!pendingRetries.remove(streamId) || sessions.get(streamId) != session) {
+                return;
+            }
+            if (session.getRefCount() == 0) {
+                removeSession(session, false);
+                return;
+            }
+            PlatformHelper.INSTANCE.requestAudioFromServer(
+                streamId, session.getResourceId(), session.getRequestedPositionMs());
+        }), delay, TimeUnit.MILLISECONDS);
+    }
+
+    private void failSession(AudioDownloadSession session) {
+        removeSession(session, true);
+        ClientSpeakerManager.getInstance().streamFailed(session.getStreamId());
     }
 
     private void notifyReady(long streamId, AudioDownloadSession session) {
@@ -173,6 +206,7 @@ public final class StreamingAudioManager {
     private void removeSession(AudioDownloadSession session, boolean cancelServerTransfer) {
         sessions.remove(session.getStreamId());
         readyCallbacks.remove(session.getStreamId());
+        pendingRetries.remove(session.getStreamId());
 
         List<AudioDownloadSession> resourceSessions = sessionsByResource.get(session.getResourceId());
         if (resourceSessions != null) {

@@ -186,8 +186,9 @@ public final class PhononSteps {
                 throw new IllegalStateException(e);
             }
             boolean active = sound != null && mc.getSoundManager().isActive((net.minecraft.client.resources.sounds.SoundInstance) sound);
-            LOG.info("[check] {} playing={} paused={} stopped={} posMs={} vol={} soundActive={}", a[0], s.isPlaying(), s.isPaused(),
-                s.isStopped(), s.getCurrentPositionMs(), ClientSpeakerManager.getInstance().getSpeakerVolume(new com.metrovoc.phonon.audio.Receiver.Block(pos)), active);
+            LOG.info("[check] {} playing={} paused={} stopped={} posMs={} vol={} soundActive={} wall={}", a[0], s.isPlaying(), s.isPaused(),
+                s.isStopped(), s.getCurrentPositionMs(), ClientSpeakerManager.getInstance().getSpeakerVolume(new com.metrovoc.phonon.audio.Receiver.Block(pos)), active,
+                System.currentTimeMillis());
         });
         Driver.STEPS.put("config", (mc, arg) -> mc.gui.setScreen(new com.metrovoc.phonon.config.PhononConfigScreen(null)));
         Driver.STEPS.put("pdrift", (mc, arg) -> {

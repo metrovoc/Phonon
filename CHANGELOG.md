@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0-beta.1
+
+For Minecraft 26.2, up from 0.3.1.
+
+### Changes
+
+- Phonon runs on Fabric as well as NeoForge, with the same blocks, items, commands and settings. It needs Fabric API.
+  Settings are in `config/phonon-server.json` and `config/phonon-client.json`, and Mod Menu shows a button for the
+  client settings.
+- A Fabric client whose Phonon can't talk to the server's is told to install the server's version when it joins, as
+  NeoForge already does.
+
+Fabric and NeoForge players can't join each other's servers, since the loaders differ. On NeoForge nothing changes
+for players.
+
+### Test evidence
+
+- Targets: Minecraft 26.2 with NeoForge 26.2.0.93, and with Fabric Loader 0.20.1 and Fabric API 0.161.0+26.2. Java 25, tested on macOS on Apple Silicon.
+- 63 automated tests pass.
+- The scripted checklist passes on both loaders in the real client and on a dedicated server: playback controls, several speakers, stations and the boombox, 1 MB cache eviction, resource reload, reconnecting and a server restart.
+- Two clients on a dedicated server stayed in sync. Fabric: -20 ms at late join and -2 ms after a seek. NeoForge: -30 ms and -20 ms.
+- Production dedicated servers for both loaders, set up by NeoForge's installer and Fabric's server launcher, start with the release jar, run `/phonon reload` and stop cleanly.
+
 ## 0.3.1
 
 For Minecraft 26.2, up from 0.3.0.

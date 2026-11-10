@@ -2,9 +2,10 @@ import re,sys,statistics as st
 def rd(p):
     o=[]
     for l in open(p,errors='replace'):
-        m=re.search(r'\[\d+\w+\d+ (\d+):(\d+):(\d+)\.(\d+)\].*\[check\] (\S+) playing=(\w+) paused=(\w+).*posMs=(\d+).*soundActive=(\w+)',l)
+        # The time each check was taken: its wall= field, or else the log line's (NeoForge logs milliseconds).
+        m=re.search(r'^\S*?\[(?:\d+\w+\d+ )?(\d+):(\d+):(\d+)(?:\.(\d+))?\].*\[check\] (\S+) playing=(\w+) paused=(\w+).*posMs=(\d+).*soundActive=(\w+)(?: wall=(\d+))?',l)
         if m:
-            t=(int(m[1])*3600+int(m[2])*60+int(m[3]))*1000+int(m[4])
+            t=int(m[10]) if m[10] else (int(m[1])*3600+int(m[2])*60+int(m[3]))*1000+int(m[4] or 0)
             o.append(dict(n=m[5],t=t,playing=m[6]=='true',paused=m[7]=='true',pos=int(m[8]),snd=m[9]=='true',off=int(m[8])-t))
     return o
 a,b=rd(sys.argv[1]),rd(sys.argv[2])

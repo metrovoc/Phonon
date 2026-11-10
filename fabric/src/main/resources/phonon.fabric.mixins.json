@@ -1,7 +1,0 @@
-{
-  "required": true,
-  "package": "com.metrovoc.phonon.mixin",
-  "compatibilityLevel": "JAVA_21",
-  "client": ["ChannelMixin"],
-  "injectors": { "defaultRequire": 1 }
-}

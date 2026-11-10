@@ -23,3 +23,8 @@ eclipse
 run
 runs
 run-smoke
+
+# Stonecutter
+versions/*/build
+versions/*/run
+versions/*/logs

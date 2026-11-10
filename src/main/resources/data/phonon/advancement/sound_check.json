@@ -1,0 +1,16 @@
+{
+  "parent": "minecraft:adventure/root",
+  "display": {
+    "icon": { "id": "phonon:speaker" },
+    "title": { "translate": "advancements.phonon.sound_check.title" },
+    "description": { "translate": "advancements.phonon.sound_check.description" }
+  },
+  "criteria": {
+    "placed_speaker": {
+      "trigger": "minecraft:placed_block",
+      "conditions": {
+        "location": { "type": "minecraft:match_block", "blocks": "phonon:speaker" }
+      }
+    }
+  }
+}

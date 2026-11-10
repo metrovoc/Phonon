@@ -175,5 +175,6 @@
   "gui.phonon.search.ask_operator": "Ask an operator to run /phonon tools update.",
   "gui.phonon.search.cloud_note": "Common on cloud servers. See /phonon tools help",
   "gui.phonon.search.failed": "That didn't work.",
-  "gui.phonon.search.add_failed": "Couldn't add this"
+  "gui.phonon.search.add_failed": "Couldn't add this",
+  "phonon.disconnect.version": "Phonon on this server is a different version. Install the same Phonon version as the server."
 }

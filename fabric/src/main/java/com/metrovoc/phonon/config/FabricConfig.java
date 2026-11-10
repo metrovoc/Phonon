@@ -14,7 +14,8 @@ import java.nio.file.Path;
 
 /**
  * Phonon's settings on Fabric, as JSON files in the config folder with the same sections, keys and limits as
- * NeoForge's TOML files. Missing or invalid values fall back to defaults and are written back.
+ * NeoForge's TOML files. Out-of-range values are clamped, missing or invalid ones fall back to defaults, and the
+ * result is written back. A file that is not valid JSON is left alone, and the defaults are used.
  */
 public final class FabricConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
@@ -27,7 +28,8 @@ public final class FabricConfig {
 
     public static void loadServer() {
         Path path = file("phonon-server.json");
-        Values v = new Values(read(path));
+        JsonObject root = read(path);
+        Values v = new Values(root == null ? new JsonObject() : root);
 
         int chunkSize = v.integer("transfer", "chunkSize", PhononServerConfig.DEFAULT_CHUNK_SIZE, 64 * 1024, 512 * 1024);
         int maxBytesPerTick = v.integer("transfer", "maxBytesPerTick", PhononServerConfig.DEFAULT_MAX_BYTES_PER_TICK, 64 * 1024, 4 * 1024 * 1024);
@@ -59,16 +61,21 @@ public final class FabricConfig {
         PhononServerConfig.setAnyoneCanAddTracks(() -> anyoneCanAddTracks);
         PhononServerConfig.setAnyoneCanControlStations(() -> anyoneCanControlStations);
 
-        write(path, v.root);
+        if (root != null) {
+            write(path, v.root);
+        }
     }
 
     public static void loadClient() {
         Path path = file("phonon-client.json");
-        Values v = new Values(read(path));
+        JsonObject root = read(path);
+        Values v = new Values(root == null ? new JsonObject() : root);
         apply(v.string("cache", "directory", PhononClientConfig.DEFAULT_CACHE_DIRECTORY),
             v.integer("cache", "maxSizeMB", PhononClientConfig.DEFAULT_MAX_CACHE_SIZE_MB, 0, 10240),
             v.decimal("audio", "maxDistance", PhononClientConfig.DEFAULT_MAX_AUDIO_DISTANCE, 16.0, 256.0));
-        write(path, v.root);
+        if (root != null) {
+            write(path, v.root);
+        }
     }
 
     /** Saves settings from the config screen. */
@@ -97,10 +104,10 @@ public final class FabricConfig {
         }
         try {
             JsonElement parsed = JsonParser.parseString(Files.readString(path));
-            return parsed.isJsonObject() ? parsed.getAsJsonObject() : new JsonObject();
+            return parsed.isJsonObject() ? parsed.getAsJsonObject() : null;
         } catch (IOException | RuntimeException e) {
-            Phonon.LOGGER.warn("Couldn't read {}, using defaults", path, e);
-            return new JsonObject();
+            Phonon.LOGGER.warn("Couldn't read {}, using defaults until it is fixed", path, e);
+            return null;
         }
     }
 
@@ -133,7 +140,7 @@ public final class FabricConfig {
                 }
             } catch (RuntimeException ignored) {
             }
-            value = value < min || value > max ? fallback : value;
+            value = Math.clamp(value, min, max);
             s.addProperty(key, value);
             return value;
         }
@@ -147,7 +154,7 @@ public final class FabricConfig {
                 }
             } catch (RuntimeException ignored) {
             }
-            value = !Double.isFinite(value) || value < min || value > max ? fallback : value;
+            value = Double.isFinite(value) ? Math.clamp(value, min, max) : fallback;
             s.addProperty(key, value);
             return value;
         }

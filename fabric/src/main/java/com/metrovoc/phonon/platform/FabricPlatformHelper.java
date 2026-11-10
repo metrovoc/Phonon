@@ -56,7 +56,7 @@ public class FabricPlatformHelper implements PlatformHelper {
 
     @Override
     public SpeakerSoundInstance newSpeakerSound(AudioStream stream, Receiver receiver, float volume) {
-        return new FabricSpeakerSound(stream, receiver, volume);
+        return FabricSpeakerSound.create(stream, receiver, volume);
     }
 
     @Override

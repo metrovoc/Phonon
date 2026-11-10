@@ -175,5 +175,6 @@
   "gui.phonon.search.ask_operator": "请管理员运行 /phonon tools update。",
   "gui.phonon.search.cloud_note": "云服务器上很常见。请查看 /phonon tools help",
   "gui.phonon.search.failed": "操作失败。",
-  "gui.phonon.search.add_failed": "无法添加"
+  "gui.phonon.search.add_failed": "无法添加",
+  "phonon.disconnect.version": "此服务器上的 Phonon 版本不同。请安装与服务器相同版本的 Phonon。"
 }

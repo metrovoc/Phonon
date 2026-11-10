@@ -49,7 +49,7 @@ public class NeoForgePlatformHelper implements PlatformHelper {
 
     @Override
     public SpeakerSoundInstance newSpeakerSound(AudioStream stream, Receiver receiver, float volume) {
-        return new NeoForgeSpeakerSound(stream, receiver, volume);
+        return NeoForgeSpeakerSound.create(stream, receiver, volume);
     }
 
     @Override

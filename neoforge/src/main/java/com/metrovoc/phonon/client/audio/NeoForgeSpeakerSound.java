@@ -9,8 +9,16 @@ import java.util.concurrent.CompletableFuture;
 
 /** Hands the speaker's stream to the sound engine through NeoForge's stream hook. */
 public final class NeoForgeSpeakerSound extends SpeakerSoundInstance {
-    public NeoForgeSpeakerSound(AudioStream stream, Receiver receiver, float volume) {
+    private NeoForgeSpeakerSound(AudioStream stream, Receiver receiver, float volume) {
         super(stream, receiver, volume);
+    }
+
+    /**
+     * Typed as the base class so the platform helper, which a dedicated server loads too, never names this class in
+     * a way that makes the JVM load client-only sound classes to verify it.
+     */
+    public static SpeakerSoundInstance create(AudioStream stream, Receiver receiver, float volume) {
+        return new NeoForgeSpeakerSound(stream, receiver, volume);
     }
 
     @Override

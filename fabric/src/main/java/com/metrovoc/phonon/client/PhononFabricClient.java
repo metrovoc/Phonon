@@ -3,7 +3,6 @@ package com.metrovoc.phonon.client;
 import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.config.FabricConfig;
 import com.metrovoc.phonon.config.PhononClientConfig;
-import com.metrovoc.phonon.network.PhononFabricNetwork;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -22,7 +21,7 @@ public final class PhononFabricClient implements ClientModInitializer {
     public void onInitializeClient() {
         FabricConfig.loadClient();
         PhononClientConfig.setStore(FabricConfig::saveClient);
-        PhononFabricNetwork.registerClientHandlers();
+        PhononFabricClientNetwork.register();
 
         ClientLifecycleEvents.CLIENT_STARTED.register(client -> PhononClient.setup());
         ClientTickEvents.END_CLIENT_TICK.register(client -> PhononClient.tick());

@@ -31,20 +31,14 @@ jobs:
       - name: Build and test
         run: ./gradlew clean build --console=plain
 
-      - name: Locate mod artifact
-        id: artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          artifact="$(find neoforge/build/libs -maxdepth 1 -type f -name '*.jar' \
-            ! -name '*-sources.jar' ! -name '*-javadoc.jar' ! -name '*-dev.jar' -print -quit)"
-          test -n "${artifact}"
-          echo "path=${artifact}" >> "${GITHUB_OUTPUT}"
-
-      - name: Upload mod artifact
+      - name: Upload mod artifacts
         uses: actions/upload-artifact@v4
         with:
           name: phonon-${{ github.sha }}
-          path: ${{ steps.artifact.outputs.path }}
+          path: |
+            neoforge/build/libs/*.jar
+            fabric/build/libs/*.jar
+            !**/*-sources.jar
+            !**/*-javadoc.jar
           if-no-files-found: error
           retention-days: 14

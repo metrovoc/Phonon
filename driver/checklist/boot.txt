@@ -1,0 +1,34 @@
+world 12345
+cmd gamerule send_command_feedback true
+cmd gamerule spawn_mobs false
+cmd gamerule advance_time false
+cmd time set noon
+gui 3
+wait 20
+missing phonon
+cmd recipe give @s phonon:speaker
+cmd recipe give @s phonon:boombox
+cmd phonon add short http://127.0.0.1:51990/short.ogg
+wait 100
+fly on
+cmd tp @s 0 120 0 0 0
+wait 40
+cmd setblock 1 120 2 phonon:speaker
+wait 20
+use 1 120 2
+wait 30
+shot boot_screen
+dclick 100 54
+wait 40
+passert 1 120 2 playing short
+shot boot_playing
+key escape
+wait 10
+cmd give @s phonon:boombox
+wait 10
+slot phonon:boombox
+ptooltip
+shot boot_boombox
+reload
+wait 200
+quit

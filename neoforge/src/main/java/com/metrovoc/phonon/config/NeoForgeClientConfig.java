@@ -66,4 +66,13 @@ public class NeoForgeClientConfig {
         PhononClientConfig.setMaxCacheSizeMB(INSTANCE.maxCacheSizeMB::get);
         PhononClientConfig.setMaxAudioDistance(INSTANCE.maxAudioDistance::get);
     }
+
+    /** Saves settings from the config screen. */
+    public static void save(String cacheDirectory, int maxCacheSizeMB, double maxAudioDistance) {
+        INSTANCE.cacheDirectory.set(cacheDirectory);
+        INSTANCE.maxCacheSizeMB.set(maxCacheSizeMB);
+        INSTANCE.maxAudioDistance.set(maxAudioDistance);
+        SPEC.save();
+        bind();
+    }
 }

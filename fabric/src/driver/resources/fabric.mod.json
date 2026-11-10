@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "driver",
+  "version": "1.0.0",
+  "name": "Driver",
+  "description": "Plays scripts in the development client.",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["driver.FabricHook"]
+  },
+  "depends": {
+    "fabric-api": "*"
+  }
+}

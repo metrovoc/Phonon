@@ -1,11 +1,13 @@
 // The driver: a development-only source set that plays scripts in the client. Never packaged.
 //
 //     apply from: 'driver.gradle'     (in build.gradle, after the neoForge block)
-//     ./gradlew runDriver -Pscript=driver/smoke.txt [-Pmonitor="Display name"]
+//     ./gradlew runDriver -Pscript=../driver/smoke.txt [-Pmonitor="Display name"]
 //
 // Screenshots and clips land in run/driver/screenshots, the log in run/driver/logs/latest.log.
 sourceSets {
-    driver
+    driver {
+        java.srcDir project(':common').file('src/driver/java')
+    }
 }
 
 configurations {

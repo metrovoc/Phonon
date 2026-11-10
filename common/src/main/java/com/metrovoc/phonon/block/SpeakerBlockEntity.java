@@ -90,7 +90,7 @@ public class SpeakerBlockEntity extends BlockEntity implements StationListener {
     }
 
     @Override
-    public void broadcast(Object packet) {
+    public void broadcast(net.minecraft.network.protocol.common.custom.CustomPacketPayload packet) {
         PlatformHelper.INSTANCE.sendToAllTracking(level, worldPosition, packet);
     }
 

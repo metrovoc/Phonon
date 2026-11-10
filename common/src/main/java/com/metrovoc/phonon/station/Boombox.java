@@ -118,7 +118,7 @@ public final class Boombox implements StationListener {
     }
 
     @Override
-    public void broadcast(Object packet) {
+    public void broadcast(net.minecraft.network.protocol.common.custom.CustomPacketPayload packet) {
         forEachHearing(player -> PlatformHelper.INSTANCE.sendToPlayer(player, packet));
     }
 

@@ -1,6 +1,15 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'Fabric'
+                    url = uri('https://maven.fabricmc.net')
+                }
+            }
+            filter { includeGroupAndSubgroups('net.fabricmc') }
+        }
     }
 }
 
@@ -20,3 +29,4 @@ if (envVersion) {
 rootProject.name = 'Phonon'
 include('common')
 include('neoforge')
+include('fabric')

@@ -24,5 +24,5 @@ public interface StationListener {
     void setVolume(float volume);
 
     /** Sends a packet to every player who can hear it. */
-    void broadcast(Object packet);
+    void broadcast(net.minecraft.network.protocol.common.custom.CustomPacketPayload packet);
 }

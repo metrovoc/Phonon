@@ -1,143 +1,42 @@
 package com.metrovoc.phonon.network;
 
 import com.metrovoc.phonon.Constants;
-import com.metrovoc.phonon.network.packets.*;
-import net.neoforged.bus.api.SubscribeEvent;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-/**
- * Network registration for NeoForge.
- * All packet types registered in one place.
- */
-public class PhononNetwork {
+/** Registers {@link PhononPayloads} with NeoForge. */
+public final class PhononNetwork {
+    private PhononNetwork() {}
 
-    @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(Constants.MOD_ID)
-            .versioned("3.4.0")
+            .versioned(PhononPayloads.VERSION)
             .optional();
+        PhononPayloads.TO_CLIENT.forEach(entry -> toClient(registrar, entry));
+        PhononPayloads.TO_SERVER.forEach(entry -> toServer(registrar, entry));
+    }
 
-        // Server -> Client packets
-        registrar.playToClient(
-            SyncAudioResourcesPacket.TYPE,
-            SyncAudioResourcesPacket.CODEC,
-            SyncAudioResourcesPacket::handle
-        );
+    private static <T extends CustomPacketPayload> void toClient(PayloadRegistrar registrar, PhononPayloads.Entry<T> entry) {
+        registrar.playToClient(entry.type(), entry.codec(), (payload, context) -> entry.handler().accept(payload, wrap(context)));
+    }
 
-        registrar.playToClient(
-            SyncSpeakerStatePacket.TYPE,
-            SyncSpeakerStatePacket.CODEC,
-            SyncSpeakerStatePacket::handle
-        );
+    private static <T extends CustomPacketPayload> void toServer(PayloadRegistrar registrar, PhononPayloads.Entry<T> entry) {
+        registrar.playToServer(entry.type(), entry.codec(), (payload, context) -> entry.handler().accept(payload, wrap(context)));
+    }
 
-        registrar.playToClient(
-            AudioChunkPacket.TYPE,
-            AudioChunkPacket.CODEC,
-            AudioChunkPacket::handle
-        );
+    private static PacketContext wrap(IPayloadContext context) {
+        return new PacketContext() {
+            @Override
+            public net.minecraft.world.entity.player.Player player() {
+                return context.player();
+            }
 
-        registrar.playToClient(
-            SyncSpeakerVolumePacket.TYPE,
-            SyncSpeakerVolumePacket.CODEC,
-            SyncSpeakerVolumePacket::handle
-        );
-
-        registrar.playToClient(
-            AudioStreamStartPacket.TYPE,
-            AudioStreamStartPacket.CODEC,
-            AudioStreamStartPacket::handle
-        );
-
-        registrar.playToClient(
-            AudioStreamFailedPacket.TYPE,
-            AudioStreamFailedPacket.CODEC,
-            AudioStreamFailedPacket::handle
-        );
-
-        registrar.playToServer(
-            SearchPacket.TYPE,
-            SearchPacket.CODEC,
-            SearchPacket::handle
-        );
-
-        registrar.playToClient(
-            AddFailedPacket.TYPE,
-            AddFailedPacket.CODEC,
-            AddFailedPacket::handle
-        );
-
-        registrar.playToClient(
-            SyncPermissionsPacket.TYPE,
-            SyncPermissionsPacket.CODEC,
-            SyncPermissionsPacket::handle
-        );
-
-        registrar.playToClient(
-            SearchResultsPacket.TYPE,
-            SearchResultsPacket.CODEC,
-            SearchResultsPacket::handle
-        );
-
-        registrar.playToClient(
-            SearchThumbnailPacket.TYPE,
-            SearchThumbnailPacket.CODEC,
-            SearchThumbnailPacket::handle
-        );
-
-        registrar.playToClient(
-            SyncBoomboxPlacePacket.TYPE,
-            SyncBoomboxPlacePacket.CODEC,
-            SyncBoomboxPlacePacket::handle
-        );
-
-        registrar.playToClient(
-            SyncStationPacket.TYPE,
-            SyncStationPacket.CODEC,
-            SyncStationPacket::handle
-        );
-
-        registrar.playToClient(
-            SyncStationsPacket.TYPE,
-            SyncStationsPacket.CODEC,
-            SyncStationsPacket::handle
-        );
-
-        registrar.playToClient(
-            SyncLibraryJobsPacket.TYPE,
-            SyncLibraryJobsPacket.CODEC,
-            SyncLibraryJobsPacket::handle
-        );
-
-        // Client -> Server packets
-        registrar.playToServer(
-            RequestAudioPacket.TYPE,
-            RequestAudioPacket.CODEC,
-            RequestAudioPacket::handle
-        );
-
-        registrar.playToServer(
-            CancelAudioStreamPacket.TYPE,
-            CancelAudioStreamPacket.CODEC,
-            CancelAudioStreamPacket::handle
-        );
-
-        registrar.playToServer(
-            SpeakerActionPacket.TYPE,
-            SpeakerActionPacket.CODEC,
-            SpeakerActionPacket::handle
-        );
-
-        registrar.playToServer(
-            SpeakerSeekPacket.TYPE,
-            SpeakerSeekPacket.CODEC,
-            SpeakerSeekPacket::handle
-        );
-
-        registrar.playToServer(
-            SpeakerVolumePacket.TYPE,
-            SpeakerVolumePacket.CODEC,
-            SpeakerVolumePacket::handle
-        );
+            @Override
+            public void enqueueWork(Runnable work) {
+                context.enqueueWork(work);
+            }
+        };
     }
 }

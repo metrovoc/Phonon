@@ -30,6 +30,15 @@ repositories {
         filter { includeGroupAndSubgroups('org.spongepowered') }
     }
     exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Fabric'
+                url = 'https://maven.fabricmc.net'
+            }
+        }
+        filter { includeGroupAndSubgroups('net.fabricmc') }
+    }
+    exclusiveContent {
         forRepositories(
                 maven {
                     name = 'ParchmentMC'
@@ -41,6 +50,15 @@ repositories {
                 }
         )
         filter { includeGroup('org.parchmentmc.data') }
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Modrinth'
+                url = 'https://api.modrinth.com/maven'
+            }
+        }
+        filter { includeGroup('maven.modrinth') }
     }
     maven {
         name = 'BlameJared'
@@ -98,12 +116,17 @@ processResources {
             'description'                  : project.description,
             'neoforge_version'             : neoforge_version,
             'neoforge_loader_version_range': neoforge_loader_version_range,
+            'fabric_loader_version'        : fabric_loader_version,
+            'fabric_version'               : fabric_version,
             'credits'                      : credits,
             'java_version'                 : java_version
     ]
 
     filesMatching(['META-INF/neoforge.mods.toml']) {
         expand expandProps
+    }
+    filesMatching(['fabric.mod.json']) {
+        expand expandProps.collectEntries { key, value -> [(key): value instanceof String ? value.replace('\n', '\\n') : value] }
     }
     inputs.properties(expandProps)
 }

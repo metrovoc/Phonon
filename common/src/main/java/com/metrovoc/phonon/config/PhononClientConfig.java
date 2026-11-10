@@ -24,6 +24,8 @@ public final class PhononClientConfig {
     // Audio settings
     private static DoubleSupplier maxAudioDistance = () -> DEFAULT_MAX_AUDIO_DISTANCE;
 
+    private static ClientConfigStore store = (directory, cacheSizeMB, audioDistance) -> {};
+
     // Getters
     public static String getCacheDirectory() { return cacheDirectory.get(); }
     public static int getMaxCacheSizeMB() { return maxCacheSizeMB.getAsInt(); }
@@ -33,4 +35,11 @@ public final class PhononClientConfig {
     public static void setCacheDirectory(Supplier<String> supplier) { cacheDirectory = supplier; }
     public static void setMaxCacheSizeMB(IntSupplier supplier) { maxCacheSizeMB = supplier; }
     public static void setMaxAudioDistance(DoubleSupplier supplier) { maxAudioDistance = supplier; }
+
+    /** How the loader saves settings changed on the config screen. */
+    public static void setStore(ClientConfigStore configStore) { store = configStore; }
+
+    public static void save(String directory, int cacheSizeMB, double audioDistance) {
+        store.save(directory, cacheSizeMB, audioDistance);
+    }
 }

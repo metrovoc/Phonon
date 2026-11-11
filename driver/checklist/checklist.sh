@@ -68,7 +68,7 @@ prodserver() {
     rm -f "$S"/mods/*.jar; start=("$JAVA" -Xmx2G "@libraries/net/neoforged/neoforge/$v/unix_args.txt" nogui)
   fi
   cp "$JAR" "$S/mods/"; rm -rf "$S/world" "$S/logs" "$S/crash-reports"; echo 'eula=true' > "$S/eula.txt"
-  printf "online-mode=false\nserver-port=%s\nlevel-seed=12345\n" "$PORT" > "$S/server.properties"
+  printf "online-mode=false\nwhite-list=false\nserver-port=%s\nlevel-seed=12345\n" "$PORT" > "$S/server.properties"
   echo "=== production dedicated server, Minecraft $mc ($(basename "$JAR"))" >> "$O"
   (cd "$S" && { for _ in $(seq 1 150); do sleep 2; grep -q 'Done (' logs/latest.log 2>/dev/null && break; done
     echo 'phonon reload'; sleep 8; echo stop; } | cap 400 "${start[@]}" > "$RD/prodserver.log" 2>&1)
@@ -113,7 +113,7 @@ echo "cache: $(du -sk "$RD/driver/phonon_cache" | cut -f1) KB" >> "$O"
 cachesize 512
 
 echo 'eula=true' > "$RD/eula.txt"
-printf "online-mode=false\ngamemode=creative\nforce-gamemode=true\nlevel-seed=12345\nspawn-protection=0\nallow-flight=true\nserver-port=%s\nspawn-monsters=false\nmax-tick-time=-1\n" "$PORT" > "$RD/server.properties"
+printf "online-mode=false\nwhite-list=false\ngamemode=creative\nforce-gamemode=true\nlevel-seed=12345\nspawn-protection=0\nallow-flight=true\nserver-port=%s\nspawn-monsters=false\nmax-tick-time=-1\n" "$PORT" > "$RD/server.properties"
 echo '[{"uuid":"380df991-f603-344c-a090-369bad2a924a","name":"Dev","level":4,"bypassesPlayerLimit":false}]' > "$RD/ops.json"
 for phase in 1 2; do
   echo "=== dedicated server, phase $phase" >> "$O"; server "$phase"; client "mp$phase.txt"; filter "$L" >> "$O"; errors "$L" >> "$O"; stopserver
@@ -126,6 +126,7 @@ gradle second 300 :$NODE:runDriver -Pscript="$(script s2.txt)" -Pgdir=run/driver
 wait "$C1"; wait "$C2"
 grep -E '\[check\] s1_(playing|pause|after|stopped) |\[driver\] done|step failed' "$L" | sed -E 's/^.*(\[check\]|\[driver\] done|step failed)/\1/' | cut -c1-110 >> "$O"; errors "$L" >> "$O"
 errors "$L2" >> "$O"; grep -E 'step\(s\)' "$L2" | sed 's/^.*\[driver\]/client2 /' >> "$O"
+grep -E 'step failed' "$L2" | sed 's/^.*\[driver\] /FAILED: client2 /' | cut -c1-190 >> "$O"
 python3 "$C/sync.py" "$L" "$L2" >> "$O" 2>&1; stopserver
 prodserver
 echo "=== finished" >> "$O"; cat "$O"

@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.4.0-beta.3
+
+For every Minecraft release from 1.21.1 to 26.3, up from 0.4.0-beta.1.
+
+### Changes
+
+- Phonon runs on Minecraft 1.21.1 through 26.3, on both NeoForge and Fabric. One file covers each loader and group of
+  Minecraft releases; for example, the file for 1.21.3 also runs on 1.21.2.
+- On Fabric, Phonon names the oldest Fabric API it runs with, so an older one is reported when the game starts
+  instead of crashing.
+
+On Fabric for Minecraft 1.21.10 and older, a server's library and station lists must fit in one 1 MiB packet, as
+Fabric API there can't split larger ones; that is several thousand tracks. On Fabric for 1.21.1, the speaker's light
+strip doesn't glow in the dark.
+
+### Test evidence
+
+- Targets: 23 builds, one per loader and group of Minecraft releases, each against that group's newest NeoForge or
+  Fabric API. Java 21 for 1.21.x and Java 25 for 26.x, tested on macOS on Apple Silicon.
+- Every build compiles and passes the 63 automated tests.
+- Every build passes the short boot test in the real client: a speaker plays in singleplayer, the boombox tooltip
+  shows, and every name has a translation.
+- On every release from 1.21.1 to 26.3, a production dedicated server for each loader starts with the release jar,
+  runs `/phonon reload` and stops cleanly. Releases that share a jar, such as 1.21.2, are booted with the oldest
+  loader version that jar allows.
+- On 26.3 the full scripted checklist passes on both loaders in the real client and on a dedicated server: playback
+  controls, several speakers, stations and the boombox, 1 MB cache eviction, resource reload, reconnecting and a
+  server restart. Two clients stayed in sync after a seek: NeoForge +20 ms, Fabric +3 ms.
+
 ## 0.4.0-beta.1
 
 For Minecraft 26.2, up from 0.3.1.

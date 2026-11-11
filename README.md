@@ -21,8 +21,9 @@ Listen together in Minecraft. Play your music through speakers and boomboxes, an
 
 Install Phonon on both the client and the server, with either [NeoForge](https://neoforged.net) or
 [Fabric](https://fabricmc.net) and [Fabric API](https://modrinth.com/mod/fabric-api). Download from
-[Modrinth](https://modrinth.com/mod/phonon) or [GitHub](https://github.com/metrovoc/Phonon/releases), and choose the
-file whose name has your loader and exact Minecraft version. Fabric builds start with Minecraft 26.2.
+[Modrinth](https://modrinth.com/mod/phonon) or [GitHub](https://github.com/metrovoc/Phonon/releases). Phonon
+supports every Minecraft release from 1.21.1 to 26.3 on both loaders. Choose the file for your loader whose
+Minecraft versions include yours; a file named for 1.21.3, for example, also runs on 1.21.2.
 
 On Fabric, the settings are in `config/phonon-server.json` and `config/phonon-client.json`, and
 [Mod Menu](https://modrinth.com/mod/modmenu) adds a button for the client settings.

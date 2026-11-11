@@ -3,7 +3,7 @@
 # Tables for releases without a node of their own (such as 1.21.2) hold what the boot test installs there.
 mod.id = "phonon"
 mod.name = "Phonon"
-mod.version = "0.4.0-beta.1"
+mod.version = "0.4.0-beta.3"
 mod.group = "com.metrovoc.phonon"
 mod.author = "metrovoc"
 mod.license = "GPL-3.0"

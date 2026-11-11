@@ -2,6 +2,7 @@
 
 import json
 import os
+import tomllib
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -27,8 +28,7 @@ def request(method, suffix="", data=None, content_type="application/json"):
 
 
 body = (ROOT / "README.md").read_text()
-summary = next(line.split("=", 1)[1] for line in (ROOT / "gradle.properties").read_text().splitlines()
-               if line.startswith("description="))
+summary = tomllib.loads((ROOT / "stonecutter.properties.toml").read_text())["mod"]["description"]
 request("PATCH", data=json.dumps({"body": body, "description": summary}).encode())
 project = json.loads(request("GET"))
 existing = {item.get("title"): item for item in project["gallery"]}

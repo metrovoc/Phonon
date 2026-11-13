@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Carpets, slabs and other thin blocks muffle a speaker only when the sound actually passes through them. A carpeted
+  floor used to muffle a speaker as much as a stone wall. Powder snow muffles on every Minecraft version.
+- A boombox you carry stays centred while you walk, instead of panning from ear to ear.
+
 ## 0.4.0-beta.3
 
 For every Minecraft release from 1.21.1 to 26.3, up from 0.4.0-beta.1.

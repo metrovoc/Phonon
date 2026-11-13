@@ -6,12 +6,19 @@ import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.Receiver;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
 import com.metrovoc.phonon.config.PhononClientConfig;
+import com.metrovoc.phonon.mixin.ChannelAccessor;
+import com.metrovoc.phonon.mixin.SoundEngineAccessor;
+import com.metrovoc.phonon.mixin.SoundManagerAccessor;
 import com.mojang.blaze3d.audio.Channel;
+import net.minecraft.client.sounds.ChannelAccess;
+import net.minecraft.client.sounds.SoundEngine;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.Sound;
@@ -26,11 +33,11 @@ import net.minecraft.util.Mth;
 import net.minecraft.util.valueproviders.ConstantFloat;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.PowderSnowBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
-import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -108,11 +115,34 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     }
 
     private void moveToSource() {
-        sourceVec = ClientSpeakerManager.getInstance().sourcePosition(receiver);
+        ClientSpeakerManager speakers = ClientSpeakerManager.getInstance();
+        sourceVec = speakers.sourcePosition(receiver);
         sourcePos = BlockPos.containing(sourceVec);
-        x = sourceVec.x;
-        y = sourceVec.y;
-        z = sourceVec.z;
+        // A boombox the listener carries plays at their ears. Placing it at their eyes each tick would leave it
+        // just off to one side of the per-frame listener while they walk, which pans it hard left or right.
+        boolean carried = speakers.carriedHere(receiver);
+        Vec3 played = carried ? Vec3.ZERO : sourceVec;
+        x = played.x;
+        y = played.y;
+        z = played.z;
+        if (carried != relative) {
+            relative = carried;
+            queueRelative();
+        }
+    }
+
+    /**
+     * Switches a playing sound between the world and the listener's ears, for a boombox picked up or put down. It goes
+     * through the sound's own queue, so it lands before the engine's position update for this tick and after the last.
+     * A sound not playing yet needs nothing: the engine reads {@link #isRelative()} when it starts it.
+     */
+    private void queueRelative() {
+        SoundEngine engine = ((SoundManagerAccessor) Minecraft.getInstance().getSoundManager()).phonon$getSoundEngine();
+        ChannelAccess.ChannelHandle handle = ((SoundEngineAccessor) engine).phonon$getInstanceToChannel().get(this);
+        if (handle != null) {
+            boolean atEars = relative;
+            handle.execute(channel -> channel.setRelative(atEars));
+        }
     }
 
     @Override
@@ -187,13 +217,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
 
     /** Called when the sound engine has given this sound its OpenAL source. */
     public void attachChannel(Channel channel) {
-        try {
-            Field field = Channel.class.getDeclaredField("source");
-            field.setAccessible(true);
-            channelSource = field.getInt(channel);
-        } catch (ReflectiveOperationException e) {
-            Phonon.LOGGER.warn("Cannot muffle speakers on this game version", e);
-        }
+        channelSource = ((ChannelAccessor) channel).phonon$getSource();
     }
 
     private void updateMuffle(boolean underWater) {
@@ -266,7 +290,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         int occlusionInterval = dist <= 16.0 ? NEAR_OCCLUSION_INTERVAL : FAR_OCCLUSION_INTERVAL;
         if (tickCounter >= occlusionInterval) {
             tickCounter = 0;
-            targetOcclusion = ClientSpeakerManager.getInstance().carriedHere(receiver)
+            targetOcclusion = relative
                 ? 1.0f
                 : calculateOcclusion(level, sourceVec, listenerPos);
         }
@@ -300,7 +324,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
     }
 
     private float traceRay(Level level, Vec3 start, Vec3 end) {
-        TransmissionTrace trace = new TransmissionTrace(level);
+        TransmissionTrace trace = new TransmissionTrace(level, start, end);
         return BlockGetter.traverseBlocks(
             start,
             end,
@@ -339,11 +363,15 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
 
     private final class TransmissionTrace {
         private final Level level;
+        private final Vec3 start;
+        private final Vec3 end;
         private int layers;
         private float transmission = 1.0f;
 
-        private TransmissionTrace(Level level) {
+        private TransmissionTrace(Level level, Vec3 start, Vec3 end) {
             this.level = level;
+            this.start = start;
+            this.end = end;
         }
 
         private Float visit(BlockPos pos) {
@@ -352,7 +380,17 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
             }
 
             BlockState state = level.getBlockState(pos);
-            if (!state.canOcclude() && state.getCollisionShape(level, pos).isEmpty()) {
+            if (state.isAir()) {
+                return null;
+            }
+            // Only what the ray passes through: carpets, slabs and fences in its cell but beside it don't count
+            // A solid block without a collision box still stands in the way, and so does powder snow, which newer
+            // versions no longer count as solid
+            VoxelShape shape = state.getCollisionShape(level, pos);
+            if (shape.isEmpty() && (state.canOcclude() || state.getBlock() instanceof PowderSnowBlock)) {
+                shape = Shapes.block();
+            }
+            if (shape.isEmpty() || shape.clip(start, end, pos) == null) {
                 return null;
             }
 

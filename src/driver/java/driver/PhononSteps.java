@@ -283,6 +283,15 @@ public final class PhononSteps {
                     var sound = (com.metrovoc.phonon.client.audio.SpeakerSoundInstance) ((java.util.Map<?, ?>) sounds.get(player)).get(r);
                     var at = manager.sourcePosition(r);
                     var view = com.metrovoc.phonon.client.ClientStations.getInstance().stationOf(r);
+                    int alRelative = -1;
+                    if (sound != null) {
+                        var source = com.metrovoc.phonon.client.audio.SpeakerSoundInstance.class.getDeclaredField("channelSource");
+                        source.setAccessible(true);
+                        int al = source.getInt(sound);
+                        alRelative = al == 0 ? -1 : org.lwjgl.openal.AL10.alGetSourcei(al, org.lwjgl.openal.AL10.AL_SOURCE_RELATIVE);
+                    }
+                    LOG.info("[check] {} atEars={} alRelative={} played={},{},{}", arg.trim(), sound != null && sound.isRelative(), alRelative,
+                        sound == null ? 0 : sound.getX(), sound == null ? 0 : sound.getY(), sound == null ? 0 : sound.getZ());
                     LOG.info("[check] {} wall={} posMs={} playing={} paused={} soundActive={} sound={} written={} src={},{},{} carriedHere={} dist={} vol={} station={} shared={} queue={}",
                         arg.trim(), System.currentTimeMillis(), s.getCurrentPositionMs(), s.isPlaying(), s.isPaused(),
                         sound != null && mc.getSoundManager().isActive(sound), sound == null ? 0 : System.identityHashCode(sound),

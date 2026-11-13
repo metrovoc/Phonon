@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
+
+For every Minecraft release from 1.21.1 to 26.3, on NeoForge and Fabric, up from 0.3.1. This release promotes the 0.4
+beta line, which brought Fabric and every Minecraft release from 1.21.1; the changes below are new since 0.4.0-beta.3.
 
 ### Changes
 
@@ -16,6 +19,33 @@
 - Carpets, slabs and other thin blocks muffle a speaker only when the sound actually passes through them. A carpeted
   floor used to muffle a speaker as much as a stone wall. Powder snow muffles on every Minecraft version.
 - A boombox you carry stays centred while you walk, instead of panning from ear to ear.
+
+Clients and servers must both update, because the settings sent to players changed.
+
+On Fabric for Minecraft 1.21.10 and older, a server's library and station lists must fit in one 1 MiB packet, as
+Fabric API there can't split larger ones; that is several thousand tracks. On Fabric for 1.21.1, the speaker's light
+strip doesn't glow in the dark.
+
+### Test evidence
+
+- Targets: 23 builds, one per loader and group of Minecraft releases, each against that group's newest NeoForge or
+  Fabric API. Java 21.0.6 for 1.21.x and Java 25.0.3 for 26.x, tested on November 12, 2026 on macOS on Apple Silicon,
+  at commit `aba8762`.
+- Every build compiles and passes the 65 automated tests.
+- Every build passes the short boot test in the real client: a speaker plays in singleplayer, the boombox tooltip
+  shows, and every name has a translation.
+- On every release from 1.21.1 to 26.3, a production dedicated server for each loader starts with the build's jar,
+  runs `/phonon reload` and stops cleanly. Once in five boots on Minecraft 1.21.2 with NeoForge 21.2.1-beta, the
+  server stopped but its process didn't exit; a thread that NeoForge starts before loading mods kept it open.
+- On 26.3 the full scripted checklist passes on both loaders in the real client and on a dedicated server: playback
+  controls, several speakers, stations and the boombox, 1 MB cache eviction, resource reload, reconnecting and a
+  server restart. Two clients stayed in sync after a seek: NeoForge -6 ms, Fabric +6 ms.
+- Measured in the real client on 1.21.1 and 26.3, both loaders: a carpeted floor no longer muffles a speaker, a stone
+  wall, glass and powder snow do, and turning off `muffleBehindWalls` removes the muffling. A carried boombox plays at
+  the listener's ears.
+- `/phonon config` was used on both loaders: changing, resetting and range errors, the proxy password hidden, and the
+  audio tool settings refused below owner permission.
+- Not soaked: this release went out after code review and the checks above, without a long-running server test.
 
 ## 0.4.0-beta.3
 

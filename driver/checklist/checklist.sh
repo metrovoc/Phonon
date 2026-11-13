@@ -35,9 +35,14 @@ else
   trap 'kill $HS 2>/dev/null' EXIT
 fi
 script() { sed -e "s/PORT/$PORT/g" -e "s/51990/$WWW/g" "$C/$1" > "$T/$1"; echo "$T/$1"; }
-gradle() { local cache=$1 limit=$2; shift 2; cap "$limit" ./gradlew --no-daemon --console=plain --project-cache-dir "$RD/gradle-$cache" "$@" -q; }
+# The client uses the project's own Gradle cache. The server and the second client run beside it, so each needs a
+# cache of its own; those stay in build/ between runs, since filling one means setting up Minecraft again.
+gradle() {
+  local cache=$1 limit=$2; shift 2
+  cap "$limit" ./gradlew --no-daemon --console=plain ${cache:+--project-cache-dir "$P/build/gradle-$cache"} "$@" -q
+}
 client() {
-  gradle client 480 :$NODE:runDriver -Pscript="$(script "$1")" ${MONITOR:+-Pmonitor="$MONITOR"} > "$RD/client-$1.log" 2>&1; local e=$?
+  gradle "" 480 :$NODE:runDriver -Pscript="$(script "$1")" ${MONITOR:+-Pmonitor="$MONITOR"} > "$RD/client-$1.log" 2>&1; local e=$?
   grep -q '\[driver\] done' "$L" 2>/dev/null || echo "FAILED: client $1 never finished (exit $e, see client-$1.log)" >> "$O"
   ls "$RD/driver/crash-reports" 2>/dev/null | sed 's/^/crash report: /' >> "$O"
 }

@@ -16,7 +16,7 @@ import com.metrovoc.phonon.network.PacketContext;
  * sounds, so every player hears speakers the same way.
  */
 public record SyncSettingsPacket(boolean ownerOnlySpeakers, boolean anyoneCanAddTracks, boolean anyoneCanControlStations,
-                                 boolean muffleBehindWalls) implements CustomPacketPayload {
+                                 boolean muffleBehindWalls, int hearingDistance) implements CustomPacketPayload {
     public static final Type<SyncSettingsPacket> TYPE =
         new Type<>(Identifier.fromNamespaceAndPath(Constants.MOD_ID, "sync_settings"));
 
@@ -25,12 +25,14 @@ public record SyncSettingsPacket(boolean ownerOnlySpeakers, boolean anyoneCanAdd
         ByteBufCodecs.BOOL, SyncSettingsPacket::anyoneCanAddTracks,
         ByteBufCodecs.BOOL, SyncSettingsPacket::anyoneCanControlStations,
         ByteBufCodecs.BOOL, SyncSettingsPacket::muffleBehindWalls,
+        ByteBufCodecs.VAR_INT, SyncSettingsPacket::hearingDistance,
         SyncSettingsPacket::new
     );
 
     public static SyncSettingsPacket current() {
         return new SyncSettingsPacket(PhononServerConfig.getOwnerOnlySpeakers(), PhononServerConfig.getAnyoneCanAddTracks(),
-            PhononServerConfig.getAnyoneCanControlStations(), PhononServerConfig.getMuffleBehindWalls());
+            PhononServerConfig.getAnyoneCanControlStations(), PhononServerConfig.getMuffleBehindWalls(),
+            PhononServerConfig.getHearingDistance());
     }
 
     @Override
@@ -41,7 +43,7 @@ public record SyncSettingsPacket(boolean ownerOnlySpeakers, boolean anyoneCanAdd
     public static void handle(SyncSettingsPacket packet, PacketContext ctx) {
         ctx.enqueueWork(() -> {
             ClientStations.getInstance().setPermissions(packet.ownerOnlySpeakers, packet.anyoneCanAddTracks, packet.anyoneCanControlStations);
-            ClientSpeakerManager.getInstance().setMuffleBehindWalls(packet.muffleBehindWalls);
+            ClientSpeakerManager.getInstance().setSound(packet.muffleBehindWalls, packet.hearingDistance);
         });
     }
 }

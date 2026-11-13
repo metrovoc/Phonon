@@ -6,7 +6,7 @@ import com.metrovoc.phonon.audio.Receiver;
 import com.metrovoc.phonon.block.SpeakerBlockEntity;
 import com.metrovoc.phonon.client.audio.StreamingAudioStream;
 import com.metrovoc.phonon.platform.PlatformHelper;
-import com.metrovoc.phonon.config.PhononClientConfig;
+import com.metrovoc.phonon.config.PhononServerConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.network.chat.Component;
@@ -33,6 +33,7 @@ public final class ClientSpeakerManager {
     private final Map<Receiver, Long> activeStreams = new HashMap<>();
     private boolean holdNowPlaying;
     private boolean muffleBehindWalls = true;
+    private int hearingDistance = PhononServerConfig.DEFAULT_HEARING_DISTANCE;
     private Receiver heldNowPlaying;
     private final Set<Receiver> buffering = new HashSet<>();
     private final Set<Receiver> failed = new HashSet<>();
@@ -146,7 +147,7 @@ public final class ClientSpeakerManager {
     /** The same "Now Playing" line a jukebox shows, for players close enough to hear it. */
     private void announce(Receiver pos, UUID resourceId) {
         Minecraft minecraft = Minecraft.getInstance();
-        double range = PhononClientConfig.getMaxAudioDistance();
+        double range = hearingDistance;
         if (minecraft.player == null || minecraft.player.position().distanceToSqr(sourcePosition(pos)) > range * range) {
             return;
         }
@@ -298,12 +299,19 @@ public final class ClientSpeakerManager {
         return muffleBehindWalls;
     }
 
-    public void setMuffleBehindWalls(boolean muffle) {
+    /** How far away, in blocks, this server lets players hear a speaker. */
+    public int hearingDistance() {
+        return hearingDistance;
+    }
+
+    public void setSound(boolean muffle, int distance) {
         muffleBehindWalls = muffle;
+        hearingDistance = distance;
     }
 
     public void clear() {
         muffleBehindWalls = true;
+        hearingDistance = PhononServerConfig.DEFAULT_HEARING_DISTANCE;
         for (Receiver pos : List.copyOf(speakers.keySet())) {
             stopAndRelease(pos);
         }

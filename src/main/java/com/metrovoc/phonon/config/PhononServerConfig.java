@@ -23,6 +23,7 @@ public final class PhononServerConfig {
     public static final int DEFAULT_MAX_AUDIO_SIZE_MB = 512;
     public static final int MAX_AUDIO_SIZE_MB = AudioLimits.MAX_AUDIO_SIZE_MB;
     public static final int DEFAULT_AUDIO_QUALITY = 5;
+    public static final int DEFAULT_HEARING_DISTANCE = 64;
 
     // Transfer settings
     private static IntSupplier chunkSize = () -> DEFAULT_CHUNK_SIZE;
@@ -44,6 +45,7 @@ public final class PhononServerConfig {
     private static BooleanSupplier anyoneCanControlStations = () -> false;
     private static BooleanSupplier autoUpdateYtDlp = () -> false;
     private static BooleanSupplier muffleBehindWalls = () -> true;
+    private static IntSupplier hearingDistance = () -> DEFAULT_HEARING_DISTANCE;
     private static Supplier<String> downloadProxy = () -> "";
     private static Supplier<String> cookiesFile = () -> "";
 
@@ -87,6 +89,7 @@ public final class PhononServerConfig {
         Setting.toggle("permissions", "anyoneCanAddTracks", false, PhononServerConfig::getAnyoneCanAddTracks),
         Setting.toggle("permissions", "anyoneCanControlStations", false, PhononServerConfig::getAnyoneCanControlStations),
         Setting.toggle("sound", "muffleBehindWalls", true, PhononServerConfig::getMuffleBehindWalls),
+        Setting.number("sound", "hearingDistance", DEFAULT_HEARING_DISTANCE, 16, 128, PhononServerConfig::getHearingDistance),
         Setting.number("download", "audioQuality", DEFAULT_AUDIO_QUALITY, 0, 10, PhononServerConfig::getAudioQuality),
         Setting.number("download", "maxAudioSizeMB", DEFAULT_MAX_AUDIO_SIZE_MB, 16, MAX_AUDIO_SIZE_MB, PhononServerConfig::getMaxAudioSizeMB),
         Setting.number("download", "connectTimeoutSeconds", DEFAULT_DOWNLOAD_CONNECT_TIMEOUT, 5, 120, PhononServerConfig::getDownloadConnectTimeoutSeconds),
@@ -124,6 +127,7 @@ public final class PhononServerConfig {
     public static boolean getAnyoneCanControlStations() { return anyoneCanControlStations.getAsBoolean(); }
     public static boolean getAutoUpdateYtDlp() { return autoUpdateYtDlp.getAsBoolean(); }
     public static boolean getMuffleBehindWalls() { return muffleBehindWalls.getAsBoolean(); }
+    public static int getHearingDistance() { return hearingDistance.getAsInt(); }
     public static String getDownloadProxy() { return downloadProxy.get(); }
     public static String getCookiesFile() { return cookiesFile.get(); }
 
@@ -141,6 +145,7 @@ public final class PhononServerConfig {
     public static void setAnyoneCanControlStations(BooleanSupplier supplier) { anyoneCanControlStations = supplier; }
     public static void setAutoUpdateYtDlp(BooleanSupplier supplier) { autoUpdateYtDlp = supplier; }
     public static void setMuffleBehindWalls(BooleanSupplier supplier) { muffleBehindWalls = supplier; }
+    public static void setHearingDistance(IntSupplier supplier) { hearingDistance = supplier; }
     public static void setDownloadProxy(Supplier<String> supplier) { downloadProxy = supplier; }
     public static void setCookiesFile(Supplier<String> supplier) { cookiesFile = supplier; }
 }

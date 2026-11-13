@@ -5,7 +5,6 @@ import com.metrovoc.phonon.audio.PlaybackState;
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.audio.Receiver;
 import com.metrovoc.phonon.client.ClientSpeakerManager;
-import com.metrovoc.phonon.config.PhononClientConfig;
 import com.metrovoc.phonon.mixin.ChannelAccessor;
 import com.metrovoc.phonon.mixin.SoundEngineAccessor;
 import com.metrovoc.phonon.mixin.SoundManagerAccessor;
@@ -271,7 +270,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
 
     private void updateAcoustics(Level level, Vec3 listenerPos, boolean underWater) {
         double distanceSquared = listenerPos.distanceToSqr(sourceVec);
-        float maxDistance = (float) PhononClientConfig.getMaxAudioDistance();
+        float maxDistance = ClientSpeakerManager.getInstance().hearingDistance();
 
         if (distanceSquared > maxDistance * maxDistance) {
             this.volume = 0;

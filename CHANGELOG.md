@@ -8,6 +8,8 @@
   and the audio tool settings need owner permission.
 - A new server setting, `muffleBehindWalls`, lets a server turn off muffling, so every player hears speakers
   unobstructed, like a jukebox.
+- How far away players hear a speaker is now the server's `hearingDistance`, the same for everyone, in place of each
+  player's Max Audio Distance setting.
 
 ### Fixes
 

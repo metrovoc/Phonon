@@ -18,7 +18,6 @@ public final class PhononConfigScreen extends Screen {
     private final Screen parent;
     private EditBox cacheDirectory;
     private EditBox maxCacheSize;
-    private EditBox maxAudioDistance;
 
     public PhononConfigScreen(Screen parent) {
         super(Component.translatable("config.phonon.title"));
@@ -49,14 +48,7 @@ public final class PhononConfigScreen extends Screen {
             value -> value.matches("\\d{0,5}")
         );
 
-        maxAudioDistance = numericField(
-            left,
-            top + ROW_HEIGHT * 2 + 14,
-            Double.toString(PhononClientConfig.getMaxAudioDistance()),
-            value -> value.matches("\\d{0,3}(\\.\\d{0,2})?")
-        );
-
-        int buttonY = top + ROW_HEIGHT * 3 + 18;
+        int buttonY = top + ROW_HEIGHT * 2 + 18;
         addRenderableWidget(Button.builder(CommonComponents.GUI_DONE, button -> saveAndClose())
             .bounds(left, buttonY, 106, FIELD_HEIGHT)
             .build());
@@ -97,14 +89,8 @@ public final class PhononConfigScreen extends Screen {
             0,
             10_240
         );
-        double audioDistance = parseDouble(
-            maxAudioDistance.getValue(),
-            PhononClientConfig.DEFAULT_MAX_AUDIO_DISTANCE,
-            16.0,
-            256.0
-        );
 
-        PhononClientConfig.save(directory, cacheSize, audioDistance);
+        PhononClientConfig.save(directory, cacheSize);
 
         Minecraft minecraft = Minecraft.getInstance();
         AudioCache.getInstance().initialize(minecraft.gameDirectory.toPath());
@@ -119,16 +105,6 @@ public final class PhononConfigScreen extends Screen {
         }
     }
 
-    private static double parseDouble(String value, double fallback, double minimum, double maximum) {
-        try {
-            double parsed = Double.parseDouble(value);
-            return Double.isFinite(parsed)
-                ? Math.max(minimum, Math.min(maximum, parsed))
-                : fallback;
-        } catch (NumberFormatException ignored) {
-            return fallback;
-        }
-    }
 
     @Override
     //? if >=26.1 {
@@ -146,8 +122,6 @@ public final class PhononConfigScreen extends Screen {
             left, top, 0xFFA0A0A0);
         graphics.text(font, Component.translatable("config.phonon.client.maxCacheSizeMB"),
             left, top + ROW_HEIGHT, 0xFFA0A0A0);
-        graphics.text(font, Component.translatable("config.phonon.client.maxAudioDistance"),
-            left, top + ROW_HEIGHT * 2, 0xFFA0A0A0);
     }
 
     @Override

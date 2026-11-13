@@ -50,6 +50,7 @@ public final class FabricConfig {
         boolean anyoneCanAddTracks = v.bool("permissions", "anyoneCanAddTracks", false);
         boolean anyoneCanControlStations = v.bool("permissions", "anyoneCanControlStations", false);
         boolean muffleBehindWalls = v.bool("sound", "muffleBehindWalls", true);
+        int hearingDistance = v.integer("sound", "hearingDistance", PhononServerConfig.DEFAULT_HEARING_DISTANCE, 16, 128);
 
         PhononServerConfig.setChunkSize(() -> chunkSize);
         PhononServerConfig.setMaxBytesPerTick(() -> maxBytesPerTick);
@@ -66,6 +67,7 @@ public final class FabricConfig {
         PhononServerConfig.setAnyoneCanAddTracks(() -> anyoneCanAddTracks);
         PhononServerConfig.setAnyoneCanControlStations(() -> anyoneCanControlStations);
         PhononServerConfig.setMuffleBehindWalls(() -> muffleBehindWalls);
+        PhononServerConfig.setHearingDistance(() -> hearingDistance);
 
         if (root != null) {
             write(path, v.root);
@@ -98,31 +100,28 @@ public final class FabricConfig {
         JsonObject root = read(path);
         Values v = new Values(root == null ? new JsonObject() : root);
         apply(v.string("cache", "directory", PhononClientConfig.DEFAULT_CACHE_DIRECTORY),
-            v.integer("cache", "maxSizeMB", PhononClientConfig.DEFAULT_MAX_CACHE_SIZE_MB, 0, 10240),
-            v.decimal("audio", "maxDistance", PhononClientConfig.DEFAULT_MAX_AUDIO_DISTANCE, 16.0, 256.0));
+            v.integer("cache", "maxSizeMB", PhononClientConfig.DEFAULT_MAX_CACHE_SIZE_MB, 0, 10240));
+        // Hearing distance moved to the server settings
+        v.root.remove("audio");
         if (root != null) {
             write(path, v.root);
         }
     }
 
     /** Saves settings from the config screen. */
-    public static void saveClient(String cacheDirectory, int maxCacheSizeMB, double maxAudioDistance) {
+    public static void saveClient(String cacheDirectory, int maxCacheSizeMB) {
         JsonObject root = new JsonObject();
         JsonObject cache = new JsonObject();
         cache.addProperty("directory", cacheDirectory);
         cache.addProperty("maxSizeMB", maxCacheSizeMB);
-        JsonObject audio = new JsonObject();
-        audio.addProperty("maxDistance", maxAudioDistance);
         root.add("cache", cache);
-        root.add("audio", audio);
         write(file("phonon-client.json"), root);
-        apply(cacheDirectory, maxCacheSizeMB, maxAudioDistance);
+        apply(cacheDirectory, maxCacheSizeMB);
     }
 
-    private static void apply(String cacheDirectory, int maxCacheSizeMB, double maxAudioDistance) {
+    private static void apply(String cacheDirectory, int maxCacheSizeMB) {
         PhononClientConfig.setCacheDirectory(() -> cacheDirectory);
         PhononClientConfig.setMaxCacheSizeMB(() -> maxCacheSizeMB);
-        PhononClientConfig.setMaxAudioDistance(() -> maxAudioDistance);
     }
 
     private static JsonObject read(Path path) {
@@ -168,20 +167,6 @@ public final class FabricConfig {
             } catch (RuntimeException ignored) {
             }
             value = Math.clamp(value, min, max);
-            s.addProperty(key, value);
-            return value;
-        }
-
-        double decimal(String section, String key, double fallback, double min, double max) {
-            JsonObject s = section(section);
-            double value = fallback;
-            try {
-                if (s.has(key)) {
-                    value = s.get(key).getAsDouble();
-                }
-            } catch (RuntimeException ignored) {
-            }
-            value = Double.isFinite(value) ? Math.clamp(value, min, max) : fallback;
             s.addProperty(key, value);
             return value;
         }

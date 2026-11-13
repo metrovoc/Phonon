@@ -130,6 +130,7 @@ cookies file and whether yt-dlp updates itself, need owner permission (level 4).
 | `anyoneCanAddTracks` | Lets every player add songs. Players can delete only what they added |
 | `anyoneCanControlStations` | Lets anyone tuned to a station change what it plays. Otherwise only its creator and operators can |
 | `muffleBehindWalls` | Walls between a player and a speaker muffle it. Turn off to hear speakers unobstructed, like a jukebox |
+| `hearingDistance` | How far away, in blocks, players hear a speaker, from 16 to 128 (64 by default) |
 | `audioQuality` | Vorbis quality of newly added audio, from 0 (smallest) to 10 (best) |
 
 ## Credits

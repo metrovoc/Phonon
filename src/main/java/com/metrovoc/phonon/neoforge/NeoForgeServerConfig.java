@@ -44,6 +44,7 @@ public class NeoForgeServerConfig {
 
     // Sound settings
     public final ModConfigSpec.BooleanValue muffleBehindWalls;
+    public final ModConfigSpec.IntValue hearingDistance;
 
     private NeoForgeServerConfig(ModConfigSpec.Builder builder) {
         builder.push("transfer");
@@ -147,6 +148,10 @@ public class NeoForgeServerConfig {
             .comment("Walls and other blocks between a player and a speaker muffle and quieten it, for every player.")
             .define("muffleBehindWalls", true);
 
+        hearingDistance = builder
+            .comment("How far away, in blocks, players hear a speaker. Speakers past the server's view distance stay silent.")
+            .defineInRange("hearingDistance", PhononServerConfig.DEFAULT_HEARING_DISTANCE, 16, 128);
+
         builder.pop();
     }
 
@@ -178,5 +183,6 @@ public class NeoForgeServerConfig {
         PhononServerConfig.setDownloadProxy(INSTANCE.downloadProxy::get);
         PhononServerConfig.setCookiesFile(INSTANCE.cookiesFile::get);
         PhononServerConfig.setMuffleBehindWalls(INSTANCE.muffleBehindWalls::get);
+        PhononServerConfig.setHearingDistance(INSTANCE.hearingDistance::get);
     }
 }

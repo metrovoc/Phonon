@@ -71,8 +71,6 @@
   "config.phonon.client.cacheDirectory.tooltip": "缓存音频文件的目录名（相对于游戏目录）",
   "config.phonon.client.maxCacheSizeMB": "最大缓存大小（MB）",
   "config.phonon.client.maxCacheSizeMB.tooltip": "最大缓存大小（兆字节）。设为 0 表示不限制。",
-  "config.phonon.client.maxAudioDistance": "最大音频距离",
-  "config.phonon.client.maxAudioDistance.tooltip": "能听到音频的最大距离（方块）",
   "gui.phonon.speaker.previous": "上一首",
   "gui.phonon.speaker.next": "下一首",
   "gui.phonon.speaker.buffering": "正在缓冲……",

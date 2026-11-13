@@ -1,6 +1,5 @@
 package com.metrovoc.phonon.config;
 
-import java.util.function.DoubleSupplier;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
@@ -15,31 +14,25 @@ public final class PhononClientConfig {
     // Defaults
     public static final String DEFAULT_CACHE_DIRECTORY = "phonon_cache";
     public static final int DEFAULT_MAX_CACHE_SIZE_MB = 512;
-    public static final double DEFAULT_MAX_AUDIO_DISTANCE = 64.0;
 
     // Cache settings
     private static Supplier<String> cacheDirectory = () -> DEFAULT_CACHE_DIRECTORY;
     private static IntSupplier maxCacheSizeMB = () -> DEFAULT_MAX_CACHE_SIZE_MB;
 
-    // Audio settings
-    private static DoubleSupplier maxAudioDistance = () -> DEFAULT_MAX_AUDIO_DISTANCE;
-
-    private static ClientConfigStore store = (directory, cacheSizeMB, audioDistance) -> {};
+    private static ClientConfigStore store = (directory, cacheSizeMB) -> {};
 
     // Getters
     public static String getCacheDirectory() { return cacheDirectory.get(); }
     public static int getMaxCacheSizeMB() { return maxCacheSizeMB.getAsInt(); }
-    public static double getMaxAudioDistance() { return maxAudioDistance.getAsDouble(); }
 
     // Setters (called by platform-specific config registration)
     public static void setCacheDirectory(Supplier<String> supplier) { cacheDirectory = supplier; }
     public static void setMaxCacheSizeMB(IntSupplier supplier) { maxCacheSizeMB = supplier; }
-    public static void setMaxAudioDistance(DoubleSupplier supplier) { maxAudioDistance = supplier; }
 
     /** How the loader saves settings changed on the config screen. */
     public static void setStore(ClientConfigStore configStore) { store = configStore; }
 
-    public static void save(String directory, int cacheSizeMB, double audioDistance) {
-        store.save(directory, cacheSizeMB, audioDistance);
+    public static void save(String directory, int cacheSizeMB) {
+        store.save(directory, cacheSizeMB);
     }
 }

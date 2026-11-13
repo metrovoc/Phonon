@@ -144,7 +144,7 @@ public final class AddFlow {
     }
 
     /** Bracketed, clickable chat text that runs a command, like vanilla's chat actions. */
-    static MutableComponent action(String command, Component label) {
+    public static MutableComponent action(String command, Component label) {
         return ComponentUtils.wrapInSquareBrackets(label).withStyle(style -> style
             .withColor(ChatFormatting.GREEN)
             //? if >=1.21.5 {

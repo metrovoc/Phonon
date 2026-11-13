@@ -42,6 +42,9 @@ public class NeoForgeServerConfig {
     public final ModConfigSpec.BooleanValue ownerOnlySpeakers;
     public final ModConfigSpec.BooleanValue anyoneCanAddTracks;
 
+    // Sound settings
+    public final ModConfigSpec.BooleanValue muffleBehindWalls;
+
     private NeoForgeServerConfig(ModConfigSpec.Builder builder) {
         builder.push("transfer");
 
@@ -137,6 +140,22 @@ public class NeoForgeServerConfig {
             .define("anyoneCanControlStations", false);
 
         builder.pop();
+
+        builder.push("sound");
+
+        muffleBehindWalls = builder
+            .comment("Walls and other blocks between a player and a speaker muffle and quieten it, for every player.")
+            .define("muffleBehindWalls", true);
+
+        builder.pop();
+    }
+
+    /** Saves a setting changed in game. */
+    @SuppressWarnings("unchecked")
+    public static void set(String section, String key, Object value) {
+        ((ModConfigSpec.ConfigValue<Object>) SPEC.getValues().get(java.util.List.of(section, key))).set(value);
+        SPEC.save();
+        bind();
     }
 
     /**
@@ -158,5 +177,6 @@ public class NeoForgeServerConfig {
         PhononServerConfig.setAutoUpdateYtDlp(INSTANCE.autoUpdateYtDlp::get);
         PhononServerConfig.setDownloadProxy(INSTANCE.downloadProxy::get);
         PhononServerConfig.setCookiesFile(INSTANCE.cookiesFile::get);
+        PhononServerConfig.setMuffleBehindWalls(INSTANCE.muffleBehindWalls::get);
     }
 }

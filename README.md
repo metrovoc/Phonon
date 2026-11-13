@@ -109,6 +109,9 @@ All commands need operator permission.
 | `/phonon list` | View registered audio |
 | `/phonon remove <name>` | Remove audio |
 | `/phonon reload` | Reload configuration and import new files from the music folder |
+| `/phonon config` | Show the server settings, with buttons to switch them on or off |
+| `/phonon config <setting> <value>` | Change a server setting and save it |
+| `/phonon config <setting> reset` | Put a server setting back to its default |
 | `/phonon tools` | Show audio tool versions, and which sites last worked or were blocked |
 | `/phonon tools install` | Install yt-dlp, FFmpeg and Deno into the game folder |
 | `/phonon tools update` | Update Phonon's yt-dlp, installing it first if it's only on the system |
@@ -116,11 +119,17 @@ All commands need operator permission.
 
 ## Server settings
 
+They apply to every player. Operators can change them in game with `/phonon config`, which also covers download,
+proxy and transfer settings, and hides a proxy's password. The audio tool settings, which choose the proxy, the
+cookies file and whether yt-dlp updates itself, need owner permission (level 4). Settings are saved in
+`config/phonon-server.toml` on NeoForge or `config/phonon-server.json` on Fabric.
+
 | Setting | What it does |
 |---------|--------------|
 | `ownerOnlySpeakers` | Limits a speaker to whoever placed it and operators |
 | `anyoneCanAddTracks` | Lets every player add songs. Players can delete only what they added |
 | `anyoneCanControlStations` | Lets anyone tuned to a station change what it plays. Otherwise only its creator and operators can |
+| `muffleBehindWalls` | Walls between a player and a speaker muffle it. Turn off to hear speakers unobstructed, like a jukebox |
 | `audioQuality` | Vorbis quality of newly added audio, from 0 (smallest) to 10 (best) |
 
 ## Credits

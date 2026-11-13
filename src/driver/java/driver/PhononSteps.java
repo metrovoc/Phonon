@@ -213,6 +213,18 @@ public final class PhononSteps {
             written.setLong(tap, written.getLong(tap) - Long.parseLong(a[3]));
             LOG.info("[check] skewed writtenMs={}", tap.writtenMs());
         });
+        Driver.STEPS.put("pgm", (mc, arg) -> {
+            // Runs a command as the player with gamemaster permission (level 2) instead of owner
+            var server = mc.getSingleplayerServer();
+            server.execute(() -> {
+                var source = server.getPlayerList().getPlayers().getFirst().createCommandSourceStack()
+                    //? if >=1.21.11 {
+                    .withPermission(net.minecraft.server.permissions.LevelBasedPermissionSet.GAMEMASTER);
+                    //?} else
+                    /*.withPermission(2);*/
+                server.getCommands().performPrefixedCommand(source, arg.trim());
+            });
+        });
         Driver.STEPS.put("pmuffle", (mc, arg) -> {
             var f = com.metrovoc.phonon.client.audio.AudioPlayer.class.getDeclaredField("playingSounds");
             f.setAccessible(true);

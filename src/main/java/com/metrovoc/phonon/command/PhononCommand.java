@@ -1,7 +1,10 @@
 package com.metrovoc.phonon.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -9,6 +12,7 @@ import com.metrovoc.phonon.audio.AudioManager;
 import com.metrovoc.phonon.audio.AudioPersistence;
 import com.metrovoc.phonon.audio.AudioResource;
 import com.metrovoc.phonon.config.PhononServerConfig;
+import com.metrovoc.phonon.network.packets.SyncSettingsPacket;
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.platform.PlatformHelper;
 import com.metrovoc.phonon.server.AddFlow;
@@ -60,6 +64,7 @@ public class PhononCommand {
             .then(Commands.literal("reload")
                 .executes(PhononCommand::reloadConfig)
             )
+            .then(configCommand())
             .then(Commands.literal("tools")
                 .executes(PhononCommand::showTools)
                 .then(Commands.literal("help")
@@ -202,6 +207,7 @@ public class PhononCommand {
             PlatformHelper.INSTANCE.reloadServerConfig();
 
             MinecraftServer server = source.getServer();
+            PlatformHelper.INSTANCE.sendToAllPlayers(server, SyncSettingsPacket.current());
             List<AudioResource> resources = AudioPersistence.load(AudioLibrary.dataFile(server));
             AudioManager.getInstance().loadResources(resources);
             PlatformHelper.INSTANCE.broadcastAudioResources(server);
@@ -217,6 +223,73 @@ public class PhononCommand {
             source.sendFailure(Component.translatable("phonon.reload.failed", String.valueOf(e.getMessage())));
             return 0;
         }
+    }
+
+    private static LiteralArgumentBuilder<CommandSourceStack> configCommand() {
+        LiteralArgumentBuilder<CommandSourceStack> config = Commands.literal("config").executes(PhononCommand::listSettings);
+        for (PhononServerConfig.Setting setting : PhononServerConfig.SETTINGS) {
+            var value = switch (setting.kind()) {
+                case SWITCH -> Commands.argument("value", BoolArgumentType.bool())
+                    .executes(ctx -> setSetting(ctx, setting, BoolArgumentType.getBool(ctx, "value")));
+                case NUMBER -> Commands.argument("value", IntegerArgumentType.integer(setting.min(), setting.max()))
+                    .executes(ctx -> setSetting(ctx, setting, IntegerArgumentType.getInteger(ctx, "value")));
+                case TEXT -> Commands.argument("value", StringArgumentType.greedyString())
+                    .executes(ctx -> setSetting(ctx, setting, StringArgumentType.getString(ctx, "value").trim()));
+            };
+            config.then(Commands.literal(setting.key())
+                .requires(source -> mayChange(source, setting))
+                .then(Commands.literal("reset").executes(ctx -> setSetting(ctx, setting, setting.fallback())))
+                .then(value));
+        }
+        return config;
+    }
+
+    private static boolean mayChange(CommandSourceStack source, PhononServerConfig.Setting setting) {
+        //? if >=1.21.11 {
+        return !setting.ownersOnly() || source.permissions().hasPermission(Permissions.COMMANDS_OWNER);
+        //?} else
+        /*return !setting.ownersOnly() || source.hasPermission(4);*/
+    }
+
+    private static int listSettings(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        tell(source, Component.translatable("phonon.config.header").withStyle(ChatFormatting.GOLD));
+        for (PhononServerConfig.Setting setting : PhononServerConfig.SETTINGS) {
+            Object value = setting.current().get();
+            var line = Component.literal("  " + setting.key() + ": ").withStyle(ChatFormatting.GRAY)
+                .append(shown(setting.shown()).withStyle(ChatFormatting.WHITE));
+            switch (setting.kind()) {
+                case SWITCH -> {
+                    if (mayChange(source, setting)) {
+                        line.append(" ").append(AddFlow.action("/phonon config " + setting.key() + " " + !(Boolean) value,
+                            Component.translatable(Boolean.TRUE.equals(value) ? "phonon.config.turn_off" : "phonon.config.turn_on")));
+                    }
+                }
+                case NUMBER -> line.append(Component.literal(" (" + setting.min() + "–" + setting.max() + ")").withStyle(ChatFormatting.DARK_GRAY));
+                case TEXT -> {}
+            }
+            tell(source, line);
+        }
+        return PhononServerConfig.SETTINGS.size();
+    }
+
+    private static net.minecraft.network.chat.MutableComponent shown(String value) {
+        return value.isEmpty() ? Component.translatable("phonon.config.none") : Component.literal(value);
+    }
+
+    private static int setSetting(CommandContext<CommandSourceStack> ctx, PhononServerConfig.Setting setting, Object value) {
+        CommandSourceStack source = ctx.getSource();
+        try {
+            PhononServerConfig.set(setting, value);
+        } catch (RuntimeException e) {
+            Phonon.LOGGER.error("Couldn't save {}", setting.key(), e);
+            source.sendFailure(Component.translatable("phonon.config.failed", setting.key(), String.valueOf(e.getMessage())));
+            return 0;
+        }
+        PlatformHelper.INSTANCE.sendToAllPlayers(source.getServer(), SyncSettingsPacket.current());
+        source.sendSuccess(() -> Component.translatable("phonon.config.set", setting.key(), shown(setting.shown()))
+            .withStyle(ChatFormatting.GREEN), true);
+        return 1;
     }
 
     private static void reportImport(CommandSourceStack source, String file, AudioFailure failure) {

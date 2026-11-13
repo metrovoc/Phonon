@@ -11,7 +11,7 @@ import java.util.function.BiConsumer;
 /** Every packet Phonon sends, in one place, for each loader to register. */
 public final class PhononPayloads {
     /** Bump when any packet's layout changes. */
-    public static final String VERSION = "3.4.0";
+    public static final String VERSION = "3.5.0";
 
     public record Entry<T extends CustomPacketPayload>(
         CustomPacketPayload.Type<T> type,
@@ -27,7 +27,7 @@ public final class PhononPayloads {
         new Entry<>(AudioStreamStartPacket.TYPE, AudioStreamStartPacket.CODEC, AudioStreamStartPacket::handle),
         new Entry<>(AudioStreamFailedPacket.TYPE, AudioStreamFailedPacket.CODEC, AudioStreamFailedPacket::handle),
         new Entry<>(AddFailedPacket.TYPE, AddFailedPacket.CODEC, AddFailedPacket::handle),
-        new Entry<>(SyncPermissionsPacket.TYPE, SyncPermissionsPacket.CODEC, SyncPermissionsPacket::handle),
+        new Entry<>(SyncSettingsPacket.TYPE, SyncSettingsPacket.CODEC, SyncSettingsPacket::handle),
         new Entry<>(SearchResultsPacket.TYPE, SearchResultsPacket.CODEC, SearchResultsPacket::handle),
         new Entry<>(SearchThumbnailPacket.TYPE, SearchThumbnailPacket.CODEC, SearchThumbnailPacket::handle),
         new Entry<>(SyncBoomboxPlacePacket.TYPE, SyncBoomboxPlacePacket.CODEC, SyncBoomboxPlacePacket::handle),

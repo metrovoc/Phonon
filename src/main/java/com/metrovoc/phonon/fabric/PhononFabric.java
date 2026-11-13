@@ -30,6 +30,7 @@ public final class PhononFabric implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTING.register(starting -> {
             server = starting;
             FabricConfig.loadServer();
+            com.metrovoc.phonon.config.PhononServerConfig.setStore(FabricConfig::setServer);
             PhononServerEvents.serverAboutToStart(starting);
         });
         ServerLifecycleEvents.SERVER_STARTED.register(PhononServerEvents::serverStarted);

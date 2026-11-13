@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changes
+
+- Operators can view and change every server setting in game with `/phonon config`. A proxy's password stays hidden,
+  and the audio tool settings need owner permission.
+- A new server setting, `muffleBehindWalls`, lets a server turn off muffling, so every player hears speakers
+  unobstructed, like a jukebox.
+
 ### Fixes
 
 - Carpets, slabs and other thin blocks muffle a speaker only when the sound actually passes through them. A carpeted

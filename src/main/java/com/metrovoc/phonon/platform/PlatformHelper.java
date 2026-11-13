@@ -18,7 +18,7 @@ import com.metrovoc.phonon.network.packets.SpeakerVolumePacket;
 import com.metrovoc.phonon.network.packets.SyncAudioResourcesPacket;
 import com.metrovoc.phonon.network.packets.SyncBoomboxPlacePacket;
 import com.metrovoc.phonon.network.packets.SyncLibraryJobsPacket;
-import com.metrovoc.phonon.network.packets.SyncPermissionsPacket;
+import com.metrovoc.phonon.network.packets.SyncSettingsPacket;
 import com.metrovoc.phonon.network.packets.SyncSpeakerStatePacket;
 import com.metrovoc.phonon.network.packets.SyncStationPacket;
 import com.metrovoc.phonon.network.packets.SyncStationsPacket;
@@ -139,7 +139,7 @@ public interface PlatformHelper {
 
     /** Tells a player the server's rules, so their screen can show what they may do. */
     default void sendPermissions(ServerPlayer player) {
-        sendToPlayer(player, SyncPermissionsPacket.current());
+        sendToPlayer(player, SyncSettingsPacket.current());
     }
 
     default void sendSearch(int searchId, SearchSource source, String text, boolean updateFirst) {

@@ -290,7 +290,7 @@ public class SpeakerSoundInstance extends AbstractTickableSoundInstance {
         int occlusionInterval = dist <= 16.0 ? NEAR_OCCLUSION_INTERVAL : FAR_OCCLUSION_INTERVAL;
         if (tickCounter >= occlusionInterval) {
             tickCounter = 0;
-            targetOcclusion = relative
+            targetOcclusion = relative || !ClientSpeakerManager.getInstance().muffleBehindWalls()
                 ? 1.0f
                 : calculateOcclusion(level, sourceVec, listenerPos);
         }

@@ -4,7 +4,7 @@ import com.metrovoc.phonon.Constants;
 import com.metrovoc.phonon.Phonon;
 import com.metrovoc.phonon.PhononServerEvents;
 
-import com.metrovoc.phonon.network.packets.SyncPermissionsPacket;
+import com.metrovoc.phonon.network.packets.SyncSettingsPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -37,6 +37,7 @@ public class PhononNeoForge {
         //?} else
         /*modContainer.registerConfig(ModConfig.Type.SERVER, NeoForgeServerConfig.SPEC);*/
         modContainer.registerConfig(ModConfig.Type.CLIENT, NeoForgeClientConfig.SPEC);
+        com.metrovoc.phonon.config.PhononServerConfig.setStore(NeoForgeServerConfig::set);
 
         if (FMLEnvironment.getDist() == Dist.CLIENT) {
             PhononNeoForgeClient.init(modBus, modContainer);
@@ -74,7 +75,7 @@ public class PhononNeoForge {
         if (event.getConfig().getSpec() == NeoForgeServerConfig.SPEC) {
             NeoForgeServerConfig.bind();
             if (ServerLifecycleHooks.getCurrentServer() != null) {
-                PacketDistributor.sendToAllPlayers(SyncPermissionsPacket.current());
+                PacketDistributor.sendToAllPlayers(SyncSettingsPacket.current());
             }
             Phonon.LOGGER.info("Server config loaded/reloaded");
         } else if (event.getConfig().getSpec() == NeoForgeClientConfig.SPEC) {

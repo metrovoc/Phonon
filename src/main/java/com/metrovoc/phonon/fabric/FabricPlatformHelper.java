@@ -62,9 +62,5 @@ public class FabricPlatformHelper implements PlatformHelper {
     @Override
     public void reloadServerConfig() {
         FabricConfig.loadServer();
-        MinecraftServer server = com.metrovoc.phonon.fabric.PhononFabric.server();
-        if (server != null) {
-            sendToAllPlayers(server, com.metrovoc.phonon.network.packets.SyncPermissionsPacket.current());
-        }
     }
 }

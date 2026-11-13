@@ -12,6 +12,7 @@ import com.metrovoc.phonon.Phonon;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -48,6 +49,7 @@ public final class FabricConfig {
         boolean ownerOnlySpeakers = v.bool("permissions", "ownerOnlySpeakers", false);
         boolean anyoneCanAddTracks = v.bool("permissions", "anyoneCanAddTracks", false);
         boolean anyoneCanControlStations = v.bool("permissions", "anyoneCanControlStations", false);
+        boolean muffleBehindWalls = v.bool("sound", "muffleBehindWalls", true);
 
         PhononServerConfig.setChunkSize(() -> chunkSize);
         PhononServerConfig.setMaxBytesPerTick(() -> maxBytesPerTick);
@@ -63,10 +65,32 @@ public final class FabricConfig {
         PhononServerConfig.setOwnerOnlySpeakers(() -> ownerOnlySpeakers);
         PhononServerConfig.setAnyoneCanAddTracks(() -> anyoneCanAddTracks);
         PhononServerConfig.setAnyoneCanControlStations(() -> anyoneCanControlStations);
+        PhononServerConfig.setMuffleBehindWalls(() -> muffleBehindWalls);
 
         if (root != null) {
             write(path, v.root);
         }
+    }
+
+    /** Saves a server setting changed in game, keeping the rest of the file. */
+    public static void setServer(String section, String key, Object value) {
+        Path path = file("phonon-server.json");
+        JsonObject root = read(path);
+        if (root == null) {
+            throw new IllegalStateException(path.getFileName() + " isn't valid JSON");
+        }
+        JsonObject s = new Values(root).section(section);
+        switch (value) {
+            case Boolean flag -> s.addProperty(key, flag);
+            case Number number -> s.addProperty(key, number);
+            default -> s.addProperty(key, value.toString());
+        }
+        try {
+            Files.writeString(path, GSON.toJson(root) + "\n");
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        loadServer();
     }
 
     public static void loadClient() {

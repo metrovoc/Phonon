@@ -32,6 +32,7 @@ public final class ClientSpeakerManager {
     private final Map<Receiver, Float> speakerVolumes = new HashMap<>();
     private final Map<Receiver, Long> activeStreams = new HashMap<>();
     private boolean holdNowPlaying;
+    private boolean muffleBehindWalls = true;
     private Receiver heldNowPlaying;
     private final Set<Receiver> buffering = new HashSet<>();
     private final Set<Receiver> failed = new HashSet<>();
@@ -292,7 +293,17 @@ public final class ClientSpeakerManager {
         stopAndRelease(pos);
     }
 
+    /** Whether this server muffles speakers behind walls. */
+    public boolean muffleBehindWalls() {
+        return muffleBehindWalls;
+    }
+
+    public void setMuffleBehindWalls(boolean muffle) {
+        muffleBehindWalls = muffle;
+    }
+
     public void clear() {
+        muffleBehindWalls = true;
         for (Receiver pos : List.copyOf(speakers.keySet())) {
             stopAndRelease(pos);
         }
